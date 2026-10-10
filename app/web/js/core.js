@@ -397,7 +397,7 @@ function hairTex(hex,dir,kind){
 function hairMat(hex,dir='v',kind='strand'){
   const k='hm|'+hex+dir+kind;if(matCache.has(k))return matCache.get(k);
   const map=hairTex(hex,dir,kind);
-  const m=new THREE.MeshPhysicalMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0022:.004,roughness:.9,metalness:0,sheen:.08,sheenRoughness:.7,sheenColor:lin(shade(hex,.12)),envMapIntensity:.3,
+  const m=new THREE.MeshPhysicalMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0022:.004,roughness:kind==='strand'?.78:.88,metalness:0,sheen:kind==='strand'?.2:.1,sheenRoughness:.45,sheenColor:lin(shade(hex,.22)),envMapIntensity:.38,
     side:THREE.DoubleSide,vertexColors:true,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
   matCache.set(k,m);return m;
 }

@@ -15,27 +15,32 @@ function hairTexP(){return HTEX[S.hair.texture]||HTEX.straight;}
 const hairLen=(a,b)=>lerp(a,b,clamp(S.hair.len!=null?S.hair.len:0.5,0,1));
 /* ---------- shell over the scalp ---------- */
 function hairShell(G,mat,hf,o={}){
-  const T=hairTexP(),hc=BC.headC;
-  const g=surf(128,40,(u,v)=>{
+  const T=hairTexP(),hc=BC.headC,SH=[];
+  const g=surf(128,40,(u,v)=>{let shd=1;
     const ph=u*TAU,thMax=Math.acos(clamp(hairlineNy(ph)+(o.line||0),-0.98,0.98)),th=v*thMax,ny=Math.cos(th),d=angFront(ph);
     const dir=headPt(th,ph,0,false).sub(hc).normalize();
     let h=hf(ny,d,ph,dir);
     h*=lerp(1,T.vol,smooth(h/0.02));
     if(o.noise!==0) h+=(o.noise||1)*T.amp*fbm(dir.x*T.f,dir.y*T.f,dir.z*T.f)*smooth(h/0.006);
     /* combed clumps running from the crown */
-    if(h>0.006&&o.noise!==0)h+=0.0016*(o.clump!=null?o.clump:1)*foldP(Math.atan2(dir.z,dir.x)*26+3*fbm(dir.x*2,dir.y*2,dir.z*2))*smooth((h-0.006)/0.01);
+    if(h>0.006&&o.noise!==0){const cf=foldP(Math.atan2(dir.z,dir.x)*26+3*fbm(dir.x*2,dir.y*2,dir.z*2)),k=smooth((h-0.006)/0.01);h+=0.0028*(o.clump!=null?o.clump:1)*cf*k;shd=lerp(1,lerp(0.74,1.05,cf*0.5+0.5),k);}
     if(o.messy) h+=o.messy*Math.abs(nz3(dir.x*9+1,dir.y*9,dir.z*9))*smooth((ny-0.38)/0.3);
     const band=o.band||(h>0.03?0.32:h>0.015?0.22:0.17);h*=lerp(o.edge!=null?o.edge:0.35,1,Math.sqrt(smooth((1-v)/band)));
     const hl=hatLineNy(ph);if(hl!=null&&ny>hl-0.05)h=Math.min(h,0.0045);
+    SH.push(shd*lerp(0.82,1,smooth(h/0.008)));
     return headPt(th,ph,Math.max(h,0.0012),false);
   },{wrapU:true,uRep:12,vRep:2,noAO:true});
-  G.add(mk(g,mat));
+  hairShade(g,SH);G.add(mk(g,mat));
 }
+/* depth in the hair: partings and roots darker, the crowns of the clumps lighter (multiplies the vertex colours) */
+function hairShade(g,SH){const c=g.attributes.color;if(!c||SH.length!==c.count)return;for(let i=0;i<c.count;i++){c.setXYZ(i,c.getX(i)*SH[i],c.getY(i)*SH[i],c.getZ(i)*SH[i]);}c.needsUpdate=true;}
 /* ---------- hanging sheet (bob, long hair, mullet, fringe) ---------- */
 function hairSheet(G,mat,o){
-  const T=hairTexP(),hc=BC.headC,nu=o.nu||96,nv=o.nv||48,cols=[];
+  const T=hairTexP(),hc=BC.headC,nu=o.nu||96,nv=o.nv||48,cols=[],shs=[];
   for(let i=0;i<=nu;i++){
-    const u=i/nu,ph0=lerp(o.ph0,o.ph1,u),y0=o.y0(ph0),y1=o.y1(ph0),col=[];let Rp=null,tb=0;
+    const u=i/nu,ph0=lerp(o.ph0,o.ph1,u),y0=o.y0(ph0),col=[],shc=[];let Rp=null,tb=0,y1=o.y1(ph0);
+    /* the ends are not cut with a ruler: a soft, uneven line (longer and shorter sections) */
+    {const ct=0.5+0.5*Math.sin(ph0*7+1.6*fbm(ph0*2,1.3,2.1));y1-=0.016*ct*smooth((y0-y1-0.06)/0.12);}
     /* hair does not lie flat out to the shoulder tip: over the shoulders it falls in front of or behind them */
     const sx=Math.cos(ph0)>=0?1:-1,af=angFront(ph0),toFront=af<1.42,tgt=toFront?FRONT-sx*(0.42+0.3*smooth((af-0.9)/0.5)):BACKA+sx*(0.25+0.5*smooth((Math.PI-af)/1.9)),dph=Math.atan2(Math.sin(tgt-ph0),Math.cos(tgt-ph0));
     for(let j=0;j<=nv;j++){
@@ -50,13 +55,15 @@ function hairSheet(G,mat,o){
       let Rw=R+(o.flare||0)*smooth(v)*smooth(v);
       if(T.wave)Rw+=0.0028*T.wave*Math.sin((y0-y)*(36+T.wave*22)+ph*3)*smooth(v/0.3);
       /* hair falls in clumps: rounded ridges with narrow partings, growing towards the ends */
-      const cl=foldP(ph0*22+2.2*fbm(ph0*3,y*3,1))*0.5+0.5;Rw+=(0.0012+0.0035*smooth(v/0.5))*(cl-0.5)+0.0012*fbm(ph*9,y*14,2)-0.006*smooth((v-0.88)/0.12);
+      const cl=foldP(ph0*22+2.2*fbm(ph0*3,y*3,1))*0.5+0.5;Rw+=(0.0022+0.0055*smooth(v/0.5))*(1-0.75*smooth((v-0.78)/0.22))*(cl-0.5)+0.0012*fbm(ph*9,y*14,2)-0.006*smooth((v-0.88)/0.12);
+      shc.push(lerp(0.7,1.05,cl)*lerp(0.84,1,smooth(v/0.25)));
       const pw=ph+(T.wave?0.01*T.wave*Math.sin((y0-y)*28+ph*5)*smooth(v/0.3):0);
       col.push(V3(Math.cos(pw)*Rw,y,hc.z+Math.sin(pw)*Rw));
     }
-    cols.push(col);
+    cols.push(col);shs.push(shc);
   }
-  G.add(mk(surf(nu,nv,(u,v)=>cols[Math.round(u*nu)][Math.round(v*nv)],{uRep:o.uRep||10,vRep:2,noAO:true}),mat));
+  const SH=[],g=surf(nu,nv,(u,v)=>{const i=Math.round(u*nu),j=Math.round(v*nv);SH.push(shs[i][j]);return cols[i][j];},{uRep:o.uRep||10,vRep:2,noAO:true});
+  hairShade(g,SH);G.add(mk(g,mat));
 }
 function tubeAlong(curve,n,rf,o={}){
   const fr=curve.computeFrenetFrames(n,false),out=[];

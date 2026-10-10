@@ -149,3 +149,20 @@ Kolejne rundy:
 - Nie są błędami: duży biały krzyż w goth to nadruk koszulki; „pętla” od klamry w oldmoney to sznurek lnianych spodni.
 - Zostało: cienka linia na styku powłoki i dołu nogawki; drobna nierówność krawędzi pachy kamizelki; ciemne ukośne „rysy”
   na jeansach w trenczu (prawdopodobnie cień szalika – niezbadane); pasek torby gorp (nie zbadany z bliska).
+
+## Runda 6 (2026-10-10, uwagi użytkownika po uruchomieniu na Ubuntu)
+- **Płynność:** u użytkownika Electron nie widział GPU (log: `wayland … drmGetDevices2() has not found any devices`), więc
+  renderował SwiftShaderem. Zmiany: `app/main.js` na Wayland wymusza `--ozone-platform=x11` (XWayland; `FITME_OZONE=wayland`
+  przywraca natywny) i wypisuje w terminalu `[Fitme] GPU: …`; `core.js` `GL_INFO` wykrywa renderowanie programowe → domyślnie
+  tryb `perf` + komunikat; `app.js` adaptacyjna rozdzielczość (×0,5 podczas obracania, gdy klatki >34 ms; ostra klatka po 200 ms).
+  Profil SwiftShader (std): pusta scena 78 ms, pełna 946 ms; najdroższe: mapa otoczenia (~430 ms), cienie (~190 ms).
+  NIE POTWIERDZONE u użytkownika, czy GPU zadziałało po zmianie — poproś o linię `[Fitme] GPU:`.
+- Okulary: zauszniki po powierzchni głowy (headPt) za ucho; `hairOverTemples` unosi włosy nad nimi.
+- Szalik: tagowany `userData.scarf`, `shScarfOut` wypycha go nad dopasowane ubrania (przesunięcie per komórka kąt×wysokość).
+- Łańcuch portfela: większe ogniwa (R 6,2 mm, drut 1,7 mm, rozstaw 10,5 mm) — wcześniej z daleka wyglądał jak pręt.
+- Kieszenie naszywane (`userData.pocket`): `shPocketOnFabric` obraca je w bok, jeśli wystają poza poły rozpiętej kurtki.
+- Włosy (lekko): głębsze pasma, cieniowanie wierzchołków (`hairShade`), nieregularny dół (niska częstotliwość), połysk
+  strand roughness .78 / sheen .2 (użytkownik w rundzie 2 chciał matowe włosy — nie przesadzać).
+- Próbowano „membrany” krocza (otoczka wypukła per rząd) — brak widocznej różnicy, wycofane.
+- Do zrobienia: ramoneska `goth` — pasek u dołu wygląda jak półprzezroczyste szkło z odłamkami; fryzury nadal „proceduralne”
+  (większa przebudowa: karty pasm z alfą); doły nogawek (użytkownik: „nierealistyczne, na razie przejdzie”).
