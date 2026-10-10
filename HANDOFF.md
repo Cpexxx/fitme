@@ -122,7 +122,11 @@ Kolejne rundy:
 ## Stan na 2026-10-10 (sesja w chmurze)
 - Kontener w chmurze startuje **pusty**. Kod trzeba dostarczyć: archiwum `scratch-2026-10-05-039e5e11.7z` od użytkownika
   (rozpakowanie: `pip install py7zr`, potem `py7zr.SevenZipFile(p).extractall(dir)`) albo repo GitHub, jeśli powstanie.
-- W archiwum **nie ma** `tools/mh` ani `tools/qa`. Bez `tools/mh` nie da się przegenerować `mhdata.js`.
+- `tools/mh` i `tools/qa` są już w repo `Cpexxx/fitme` (tools/mh odtworzone: process.py + recipe.json z Drive `claudescratch/mh`,
+  pliki MakeHuman CC0 z github.com/makehumancommunity/makehuman, rozmiary sprawdzone 1:1 z Drive).
+  `cd tools/mh && python3 process.py` (numpy, ~4 s) daje mhdata.js identyczny z js/mhdata.js poza kolejnością/wyborem
+  lustrzanych wierzchołków w `anch` (remisy w np.argsort, różnica <2 mm) — nie podmieniaj bez potrzeby.
+- Repo: https://github.com/Cpexxx/fitme (gałąź main). W nowej sesji: add_repo Cpexxx/fitme i git clone.
 - Harness QA: `tools/qa/render.js` (Playwright z `/opt/node-tools`, SwiftShader, przechwytuje CDN do `app/web/vendor`).
   Uruchomienie: `node tools/qa/render.js spec.js out/`. Spec: `{W,H,shots:[{name, inspo:'<id>' | state:s=>{…}, cams:[…]}]}`.
   Kamery: full/side/back/q/upper/upperq/uside/legs/head/feet. Stan bazowy pochodzi z `INSPO[].state` albo `DEFAULT`.

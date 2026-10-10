@@ -1,0 +1,41 @@
+{
+ "m": {
+  "caucasian-male-young": 1,
+  "universal-male-young-averagemuscle-averageweight": 1.0,
+  "male-young-averagemuscle-averageweight-idealproportions": 1,
+  "male-young-averagemuscle-averageweight-maxheight": 0.4,
+  "torso-vshape-incr": 0.25,
+  "measure-shoulder-dist-incr": 0.25,
+  "measure-neck-circ-incr": 0.4,
+  "neck-scale-horiz-incr": 0.3,
+  "neck-scale-depth-incr": 0.2,
+  "measure-waist-circ-decr": 0.2,
+  "stomach-navel-in": 0.5,
+  "measure-neck-height-incr": 0.3,
+  "l-upperleg-muscle-incr": 0.45,
+  "r-upperleg-muscle-incr": 0.45,
+  "l-lowerleg-muscle-incr": 0.55,
+  "r-lowerleg-muscle-incr": 0.55,
+  "l-lowerleg-fat-incr": 0.2,
+  "r-lowerleg-fat-incr": 0.2
+ },
+ "f": {
+  "caucasian-female-young": 1,
+  "universal-female-young-averagemuscle-averageweight": 1.0,
+  "female-young-averagemuscle-averageweight-idealproportions": 1,
+  "female-young-averagemuscle-averageweight-maxheight": 0.4,
+  "measure-waist-circ-decr": 0.25,
+  "measure-hips-circ-decr": -0.25,
+  "measure-thigh-circ-incr": 0.3,
+  "measure-neck-height-incr": 0.3,
+  "stomach-navel-in": 0.4,
+  "l-upperleg-fat-incr": 0.35,
+  "r-upperleg-fat-incr": 0.35,
+  "l-lowerleg-fat-incr": 0.5,
+  "r-lowerleg-fat-incr": 0.5,
+  "l-lowerleg-muscle-incr": 0.25,
+  "r-lowerleg-muscle-incr": 0.25,
+  "female-young-averagemuscle-averageweight-maxcup-averagefirmness": 0.25,
+  "female-young-averagemuscle-averageweight-averagecup-maxfirmness": 0.15
+ }
+}
