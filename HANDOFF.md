@@ -166,3 +166,8 @@ Kolejne rundy:
 - Próbowano „membrany” krocza (otoczka wypukła per rząd) — brak widocznej różnicy, wycofane.
 - Do zrobienia: ramoneska `goth` — pasek u dołu wygląda jak półprzezroczyste szkło z odłamkami; fryzury nadal „proceduralne”
   (większa przebudowa: karty pasm z alfą); doły nogawek (użytkownik: „nierealistyczne, na razie przejdzie”).
+- Diagnoza u użytkownika: Ubuntu w **maszynie wirtualnej Hyper-V** (`systemd-detect-virt` = microsoft), `/dev/dri` ma tylko
+  `card1` (hyperv_drm), brak `renderD*` → brak GPU w VM. `ignore-gpu-blocklist` powodował crash procesu GPU (exit 139),
+  bez niego WebGL był „blocklisted” (brak manekina). Teraz `main.js`: Linux bez `renderD*` → `--use-gl=angle
+  --use-angle=swiftshader --enable-unsafe-swiftshader`; log `[Fitme] WebGL: {...}` po starcie. Przetestowane pod Xvfb (bez GPU):
+  manekin się renderuje, tryb perf. Płynnie będzie tylko na hoście Windows (prawdziwe GPU).

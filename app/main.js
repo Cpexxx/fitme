@@ -3,6 +3,7 @@
    and the high quality mode (denser body and garments, 4K shadows) switched on by default. */
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 /* forcing past Chromium's GPU blocklist helps on Windows; on Linux it makes the GPU process crash on drivers Chromium
    rejects for a reason (exit code 139 three times -> GPU switched off for good). FITME_GPU_FORCE=1 brings it back. */
@@ -12,6 +13,15 @@ if (process.platform !== 'linux' || process.env.FITME_GPU_FORCE === '1') {
   app.commandLine.appendSwitch('enable-zero-copy');
 }
 app.commandLine.appendSwitch('force_high_performance_gpu');
+/* Linux without a GPU render node (virtual machines such as Hyper-V / VirtualBox without 3D, no driver): the GPU process
+   would crash or WebGL would be blocklisted (no mannequin at all). Go straight to SwiftShader (WebGL on the CPU) instead. */
+const hasRenderNode = () => { try { return fs.readdirSync('/dev/dri').some(f => f.startsWith('renderD')); } catch (e) { return false; } };
+if (process.platform === 'linux' && process.env.FITME_GPU_FORCE !== '1' && !hasRenderNode()) {
+  app.commandLine.appendSwitch('use-gl', 'angle');
+  app.commandLine.appendSwitch('use-angle', 'swiftshader');
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  console.log('[Fitme] Brak GPU (/dev/dri/renderD*): renderowanie programowe SwiftShader.');
+}
 /* Linux + Wayland: Chromium's Wayland backend often cannot reach the GPU (no DRM render node -> CPU rendering, a few FPS).
    XWayland (X11) uses the normal GL driver. FITME_OZONE=wayland keeps the native backend. */
 if (process.platform === 'linux' && (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') && process.env.FITME_OZONE !== 'wayland') {
@@ -46,6 +56,11 @@ function createWindow() {
     if (/^https?:\/\//.test(url)) { e.preventDefault(); shell.openExternal(url); }
   });
   win.loadFile(path.join(__dirname, 'web', 'fitme.html'));
+  /* after start: did the page get WebGL, on which renderer, in which quality (printed in the terminal) */
+  win.webContents.once('did-finish-load', () => setTimeout(() => {
+    win.webContents.executeJavaScript("JSON.stringify({webgl:typeof glOK!=='undefined'?glOK:null,renderer:typeof GL_INFO!=='undefined'?GL_INFO.name:null,software:typeof GL_INFO!=='undefined'?GL_INFO.soft:null,quality:typeof QUALITY!=='undefined'?QUALITY:null})")
+      .then(r => console.log('[Fitme] WebGL: ' + r)).catch(e => console.log('[Fitme] WebGL: ? ' + e.message));
+  }, 4000));
 }
 
 Menu.setApplicationMenu(null);
