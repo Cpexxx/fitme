@@ -181,5 +181,7 @@ Kolejne rundy:
   `gh release download` nie działa — GraphQL zablokowany), rozpakuj i `xvfb-run -a Fitme-linux-x64/fitme.sh`; w logu
   `[Fitme] WebGL: {"webgl":true,...}`. Stan Actions: `gh api repos/Cpexxx/fitme/commits/<sha>/check-runs`.
 - W paczce Linux bez GPU potrzebne `disable-gpu-sandbox` (inaczej SwiftShader/Vulkan nie startuje → brak WebGL).
-- Repo prywatne → GitHub Pages niedostępne za darmo (wersja przeglądarkowa pod linkiem wymaga publicznego repo lub hostingu).
+- Repo jest PUBLICZNE (od 2026-10-10). Wersja przeglądarkowa: https://cpexxx.github.io/fitme/ — job `pages` w build.yml
+  wypycha fitme.html (+ index.html) i js/ na gałąź `gh-pages`; GitHub wdraża ją sam (sprawdzone: check-run `deploy` success).
+  Z kontenera github.io jest niedostępne (proxy) — stan wdrożenia: `gh api repos/Cpexxx/fitme/commits/gh-pages/check-runs`.
 - Do zrobienia: ramoneska `goth` — przy rozpiętych połach poszarpane narożniki powłoki pod paskiem (pasek przesunięty na dół).
