@@ -118,7 +118,7 @@ function buildOuter(G,P=S.outer){
   if(T.belt){const y0=1.025,y1=1.065,bm=md;
     if(close==='closed'){G.add(mk(tube(vSamples(y0,y1,4,y=>addE(rf0(y),0.007)),{seg:84,mod}),bm));const b=at(0,(y0+y1)/2,0.012);const bk=mk(new THREE.TorusGeometry(0.022,0.004,8,4),plain(shade(P.color,-0.4),.4));bk.position.copy(b);bk.rotation.z=Math.PI/4;G.add(bk);}
     else{G.add(mk(patch(y=>rf0(y),-Math.PI+0.35,-0.35,y0,y1,0.007,{nv:4,seg:40,mod}),bm));for(const sd of [-1,1]){const p0=at(sd*rf0(1.04).rx*0.96,1.04,0.008),pts=[p0];for(let k=1;k<=5;k++)pts.push(p0.clone().add(V3(sd*0.004*k,-0.06*k,0.006*k)));G.add(mk(ribbon(pts,pts.map(()=>V3(0,0,1)),0.038),bm));}}}
-  if(T.beltWaist){G.add(mk(tube(vSamples(hem+0.012,hem+0.042,3,y=>ringF(y,0.006)),{seg:84,mod}),md));const b=at(-0.11,hem+0.027,0.01);const bk=mk(new THREE.BoxGeometry(0.03,0.026,0.004),metalMat('silver'));bk.position.copy(b);bk.quaternion.copy(qFromTo(VZ,radialN(b)));G.add(bk);}
+  if(T.beltWaist){/* the belt runs along the very bottom: it covers the shell's cut edge (above it a band of uneven hem showed) */G.add(mk(tube(vSamples(hem-0.008,hem+0.024,3,y=>ringF(y,0.006)),{seg:84,mod}),md));const b=at(-0.11,hem+0.008,0.01);const bk=mk(new THREE.BoxGeometry(0.03,0.026,0.004),metalMat('silver'));bk.position.copy(b);bk.quaternion.copy(qFromTo(VZ,radialN(b)));G.add(bk);}
   /* sleeves */
   let sleeveF=null;
   if(sleeves){

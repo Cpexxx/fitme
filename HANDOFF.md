@@ -171,3 +171,15 @@ Kolejne rundy:
   bez niego WebGL był „blocklisted” (brak manekina). Teraz `main.js`: Linux bez `renderD*` → `--use-gl=angle
   --use-angle=swiftshader --enable-unsafe-swiftshader`; log `[Fitme] WebGL: {...}` po starcie. Przetestowane pod Xvfb (bez GPU):
   manekin się renderuje, tryb perf. Płynnie będzie tylko na hoście Windows (prawdziwe GPU).
+
+## Wydania (od 2026-10-10) — dwie wersje po każdej poprawce
+- `.github/workflows/build.yml`: każdy push na `main` (zmiany w js/, fitme.html, app/) buduje na GitHub Actions paczkę Windows
+  (windows-latest, `npm run package`) i Linux (ubuntu-latest, `npm run package:linux` + `fitme.sh` z `--no-sandbox`) i podmienia
+  wydanie `latest`: https://github.com/Cpexxx/fitme/releases/tag/latest (Fitme-windows.zip, Fitme-linux.tar.gz).
+- Użytkownik testuje Windows (host, prawdziwe GPU = „dobry sprzęt”) i Ubuntu w Hyper-V (bez GPU = „słaby sprzęt”).
+- Weryfikacja w chmurze: pobierz asset przez REST (`gh api -H "Accept: application/octet-stream" repos/Cpexxx/fitme/releases/assets/<id>`,
+  `gh release download` nie działa — GraphQL zablokowany), rozpakuj i `xvfb-run -a Fitme-linux-x64/fitme.sh`; w logu
+  `[Fitme] WebGL: {"webgl":true,...}`. Stan Actions: `gh api repos/Cpexxx/fitme/commits/<sha>/check-runs`.
+- W paczce Linux bez GPU potrzebne `disable-gpu-sandbox` (inaczej SwiftShader/Vulkan nie startuje → brak WebGL).
+- Repo prywatne → GitHub Pages niedostępne za darmo (wersja przeglądarkowa pod linkiem wymaga publicznego repo lub hostingu).
+- Do zrobienia: ramoneska `goth` — przy rozpiętych połach poszarpane narożniki powłoki pod paskiem (pasek przesunięty na dół).
