@@ -101,7 +101,7 @@ function buildBracelets(G){
   for(let k=0;k<n;k++){
     const t=tb-k*0.022,R=wristR(t,side)+0.002,g=localGroup(armMatrix(t,side));
     switch(t0){
-      case 'chain':for(let i=0;i<30;i++){const a=i/30*TAU,l=mk(new THREE.TorusGeometry(0.0034,0.0011,6,10),metal);l.position.set(Math.cos(a)*R,0,Math.sin(a)*R);l.rotation.y=-a;if(i%2)l.rotateX(Math.PI/2);g.add(l);}break;
+      case 'chain':for(let i=0;i<30;i++){const a=i/30*TAU,l=mk(new THREE.TorusGeometry(0.0034,0.0011,6,10),metal);l.position.set(Math.cos(a)*R,0,Math.sin(a)*R);l.rotation.y=-a-Math.PI/2;if(i%2)l.rotateX(Math.PI/2);g.add(l);}break;
       case 'beads':{const bm=plain(['#2a2522','#c9b48a','#7a3b2e'][k%3],0.3,0,'bead',{clearcoat:.8});for(let i=0;i<17;i++){const a=i/17*TAU,s=mk(new THREE.SphereGeometry(0.0062,14,10),i===0?metal:bm);s.position.set(Math.cos(a)*(R+0.002),0,Math.sin(a)*(R+0.002));g.add(s);}break;}
       case 'cuff':g.add(mk(new THREE.CylinderGeometry(R+0.002,R+0.002,0.012,48,1,true,0.4,TAU-0.8),metal));break;
       case 'cord':{const tg=new THREE.TorusGeometry(R,0.0022,8,48);tg.rotateX(Math.PI/2);g.add(mk(tg,plain('#4a2f1e',0.7,0,'cord')));const kn=mk(new THREE.SphereGeometry(0.004,10,8),plain('#4a2f1e',0.7,0,'cord'));kn.position.set(0,0,-R);g.add(kn);break;}
@@ -132,7 +132,9 @@ function buildNecklace(G){
       else pts.push(V3(x,yb+0.012*(-ca),ca*(Math.min(zbk(envN),BC.neckR+0.03)*0.85+0.004)));}
     const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
     if(t0==='pearls'){const pm=plain('#f6f1e7',0.22,0,'pearl',{clearcoat:1,sheen:.6,sheenColor:lin('#ffe9f0')});for(const p of curve.getSpacedPoints(48)){const s=mk(new THREE.SphereGeometry(0.0068,14,10),pm);s.position.copy(p);G.add(s);}}
-    else if(t0==='cuban'){const n=130;for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0052,0.002,6,12),metal);l.position.copy(p);l.quaternion.setFromUnitVectors(VZ,tn);l.rotateZ(i%2?0:Math.PI/2);l.scale.set(1,0.7,1);G.add(l);}}
+    else if(t0==='cuban'){const n=130,ctr=new THREE.Vector3();for(let i=0;i<n;i++)ctr.add(curve.getPointAt(i/n));ctr.divideScalar(n);const out=new THREE.Vector3(),up=new THREE.Vector3(),M4=new THREE.Matrix4();
+      /* cuban links lie flat on the chest: ring plane = chain tangent x outward direction */
+      for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0052,0.002,6,12),metal);l.position.copy(p);out.set(p.x-ctr.x,0,p.z-ctr.z).normalize();up.crossVectors(out,tn).normalize();out.crossVectors(tn,up);M4.makeBasis(tn,up,out);l.quaternion.setFromRotationMatrix(M4);l.rotateX(i%2?0.35:-0.35);l.scale.set(1,0.7,1);G.add(l);}}
     else G.add(mk(new THREE.TubeGeometry(curve,220,0.0016,6,true),metal));
     if(pend){const p=pts[0].clone(),c=new THREE.Group();c.position.set(p.x,p.y-0.004,p.z+0.003);
       if(pend==='cross'){const m1=mk(new THREE.BoxGeometry(0.011,0.05,0.004),metal);m1.position.y=-0.024;c.add(m1);const m2=mk(new THREE.BoxGeometry(0.032,0.01,0.004),metal);m2.position.y=-0.014;c.add(m2);}
@@ -160,7 +162,7 @@ function buildWalletChain(G){
   const span=sd>0?aF-aB:aB-aF;
   const chain=sag=>{const pts=[];for(let i=0;i<=26;i++){const t=i/26,a=sd>0?aF-span*t:aF+span*t,y=wy-0.025-sag*Math.sin(Math.PI*t)-0.04*t;pts.push(envPt(bodyEnv(y,LAYERS),a,y,0.008+0.01*Math.sin(Math.PI*t)));}
     const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),L=curve.getLength(),n=Math.round(L/0.0075);
-    for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0042,0.0012,6,10),metal);l.position.copy(p);l.quaternion.setFromUnitVectors(VZ,tn);l.rotateZ(i%2?0:Math.PI/2);l.scale.set(1,0.62,1);G.add(l);}
+    for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0042,0.0012,6,10),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.62,1);G.add(l);}
     return pts;};
   const p=chain(0.16);if(t0==='double')chain(0.25);
   const clip=mk(new THREE.BoxGeometry(0.008,0.03,0.006),metal);clip.position.copy(p[0]).add(V3(0,0.006,0));clip.quaternion.copy(qFromTo(VZ,radialN(p[0])));G.add(clip);
@@ -285,13 +287,15 @@ function buildGloves(G){
   for(let i=0;i<n;i++){const x=P.getX(i),y=P.getY(i),z=P.getZ(i);if(Math.abs(x)<BC.shX*0.8||y>1.1)continue;const sd=x>=0?1:-1,q=armProj(x*sd,y,z);if(q.t<cuffT)continue;
     if(t0==='fingerless'){const s=(x*sd-BC.W.x)*dir.x+(y-BC.W.y)*dir.y+(z-BC.W.z)*dir.z;if(s>0.098)continue;}
     keep[i]=1;}
-  const map=new Int32Array(n).fill(-1),pos=[],nor=[],idx=[];
+  const map=new Int32Array(n).fill(-1),pos=[],nor=[],idx=[],src=[];
   for(let t=0;t<I.length;t+=3){const a=I[t],b=I[t+1],c=I[t+2];if(!keep[a]||!keep[b]||!keep[c])continue;
-    for(const v of [a,b,c])if(map[v]<0){map[v]=pos.length/3;const nx=N.getX(v),ny=N.getY(v),nz=N.getZ(v);pos.push(P.getX(v)+nx*th,P.getY(v)+ny*th,P.getZ(v)+nz*th);nor.push(nx,ny,nz);}
+    for(const v of [a,b,c])if(map[v]<0){map[v]=pos.length/3;src.push(v);const nx=N.getX(v),ny=N.getY(v),nz=N.getZ(v);pos.push(P.getX(v)+nx*th,P.getY(v)+ny*th,P.getZ(v)+nz*th);nor.push(nx,ny,nz);}
     idx.push(map[a],map[b],map[c]);}
   if(!idx.length)return;
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
   const uv=[];for(let i=0;i<pos.length/3;i++)uv.push(pos[i*3]/TILE*2,pos[i*3+1]/TILE*2);g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);
+  /* the glove keeps its body vertex ids: posed with the hand's own skin weights (a nearest-point lookup grabs the thigh the hand hangs next to) */
+  g.userData.bodySrc=src;g.userData.bodySrcFeet=!!geo.userData.bodyFeet;g.userData.bodySrcN=n;
   G.add(mk(g,mat));
   /* cuff at the wrist opening */
   const cm=t0==='work'?fabric('rib',shade(A.color,0.15)):t0==='knit'?fabric('rib',shade(A.color,-0.08)):mat;

@@ -81,6 +81,7 @@ function poseAssign(G,GS){
     const ud=g.userData;let direct=null;
     if(ud.src&&ud.src.length===n)direct=DW;
     else if(ud.bodyFeet!=null&&ud.bodyPlanN===n)direct=poseDenseWeights(ud.bodyFeet,hi);
+    else if(ud.bodySrc&&ud.bodySrc.length===n){const D=poseDenseWeights(ud.bodySrcFeet,hi);if(D&&D.I.length===ud.bodySrcN*4)direct=D;}
     o.updateMatrixWorld(true);const mw=o.matrixWorld;
     /* small rigid pieces (buttons, rings, chain links, hair locks, eyelets): one lookup at the centre, one transform */
     if(!direct){g.computeBoundingBox();const bb=g.boundingBox;if(bb.max.distanceTo(bb.min)*mw.getMaxScaleOnAxis()<0.11||o.userData.rigid){const c=bb.getCenter(new THREE.Vector3()).applyMatrix4(mw);let y=c.y;if(shoe)y=winv(y-LIFT);
@@ -97,7 +98,7 @@ function poseAssign(G,GS){
     const pos=p.array;
     for(let i=0;i<n;i++){acc.fill(0);let x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2];v.set(x,y,z).applyMatrix4(mw);x=v.x;y=v.y;z=v.z;if(shoe)y=winv(y-LIFT);
       const hw=smooth((y-headY)/0.05);
-      if(direct)addD(direct,ud.src?ud.src[i]:i,1-hw);
+      if(direct)addD(direct,ud.src?ud.src[i]:ud.bodySrc?ud.bodySrc[i]:i,1-hw);
       else if(hw<1){let j=-1;
         if(mode==='arm'){j=H.arm(x,y,z)[0];if(side&&j>=0&&reg[j]!==side){const t=H.trunk(x,y,z)[0];if(t>=0)j=t;}}
         else{const[jt,dt]=mode==='leg'?H.leg(side,x,y,z):H.trunk(x,y,z);j=jt;

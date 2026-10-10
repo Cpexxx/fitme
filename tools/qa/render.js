@@ -42,8 +42,10 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/pn
       r.shadowMap.needsUpdate = true;
       const out = document.createElement('canvas'); out.width = W * cams.length; out.height = H; const cx = out.getContext('2d');
       const k = (state.height || 177) / 177;
-      cams.forEach((c, i) => { const [x, y, z, ty] = CAMS[c]; const cam = new THREE.PerspectiveCamera(c === 'full' || c === 'side' || c === 'back' || c === 'q' ? 26 : 30, W / H, 0.05, 60);
-        cam.position.set(x * k, y * k, z * k); cam.lookAt(0, ty * k, 0); r.shadowMap.needsUpdate = true; r.render(sc, cam); cx.drawImage(r.domElement, i * W, 0); });
+      // Kamera: nazwa z CAMS albo własna tablica [x, y, z, tx, ty, tz, fov] (zbliżenia; współrzędne skalowane wzrostem).
+      cams.forEach((c, i) => { const custom = Array.isArray(c); const [x, y, z, a, b, d] = custom ? c : CAMS[c]; const tx = custom ? a : 0, ty = custom ? b : a, tz = custom ? d : 0;
+        const cam = new THREE.PerspectiveCamera(custom ? (c[6] || 20) : c === 'full' || c === 'side' || c === 'back' || c === 'q' ? 26 : 30, W / H, custom ? 0.02 : 0.05, 60);
+        cam.position.set(x * k, y * k, z * k); cam.lookAt(tx * k, ty * k, tz * k); r.shadowMap.needsUpdate = true; r.render(sc, cam); cx.drawImage(r.domElement, i * W, 0); });
       return { url: out.toDataURL('image/png'), ms };
     };
     window.__state = (fn, inspo) => { let s = clone(inspo ? INSPO.find(f => f.id === inspo).state : DEFAULT); if (fn) { const r = fn(s); if (r) s = r; } return sanitize(s); };

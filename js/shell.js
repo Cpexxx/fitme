@@ -544,6 +544,8 @@ const foldP=ph=>2*Math.pow(0.5+0.5*Math.sin(ph),1.7)-1;
 function shFolds(B,L){
   const n=B.n,C=B.C,reg=B.reg,Nn=B.N,X=L.X,E=L.E,act=L.act,P=B.P,heavy=L.name==='outer'?1.25:L.name==='mid'?1.1:1;
   for(let v=0;v<n;v++){if(!act[v])continue;const r=reg[v],th=C[v*3],xx=C[v*3+1],e=E[v],loose=smooth((e-0.005)/0.035),soft=0.35+0.65*loose;let d=0;
+    /* ring folds parallel to a cut edge (cuff, trouser break) fade out over the last cm: otherwise the cut runs across ridges and frays */
+    const edgeK=smooth(L.f[v]/0.03);
     if(r===0){const y=xx,sn=Math.sin(th),cs=Math.cos(th);
       /* vertical hanging folds below the chest (more for loose garments, they spread towards the hem) */
       const ph=th*9+1.9*Math.sin(th*2.3+y*4.1)+0.9*Math.sin(y*7.3+th*5.1);
@@ -559,19 +561,21 @@ function shFolds(B,L){
       const pe=t*68+2.6*Math.sin(th*1.4+t*9),pe2=t*55-2.2*Math.sin(th*1.7-t*7);
       d+=(0.0016+0.0055*loose)*gauss(t-0.52,0.11)*(0.6*foldP(pe)+0.4*foldP(pe2))*(0.65+0.35*Math.sin(th*2+1));
       /* sleeve bunching at the wrist and under the upper arm */
-      d+=(0.001+0.006*loose)*smooth((t-0.78)/0.12)*foldP(t*80+Math.sin(th*2.2)*2.4);
+      d+=(0.001+0.0035*loose)*smooth((t-0.78)/0.12)*edgeK*foldP(t*52+Math.sin(th*2.2)*2.4);
       d+=loose*0.0035*gauss(t-0.16,0.08)*Math.max(0,-Math.cos(th))*foldP(t*48+th*3);
       d+=0.0012*fbm(Math.cos(th)*1.5,t*6,Math.sin(th)*1.5)*(0.4+loose);}
     else{const y=xx,sn=Math.sin(th);
       /* knee folds at the back, whiskers at the front of the crotch, break above the hem */
       d+=(0.0012+0.004*loose)*gauss(y-0.47,0.06)*foldP(y*85+th*1.6)*(0.5+0.5*Math.max(0,-sn));
       d+=(0.001+0.0028*loose)*gauss(y-0.78,0.045)*Math.max(0,sn)*foldP((y-0.78)*110+Math.cos(th)*9);
-      d+=(0.001+0.005*loose)*gauss(y-0.14,0.08)*foldP(y*95+th*2.2)*(0.6+0.4*Math.sin(th*2.3));
+      d+=(0.001+0.005*loose)*gauss(y-0.14,0.08)*edgeK*foldP(y*95+th*2.2)*(0.6+0.4*Math.sin(th*2.3));
       d+=loose*0.004*smooth((0.7-y)/0.3)*foldP(th*5+1.4*Math.sin(y*6+th*3));
       d+=0.001*fbm(Math.cos(th)*1.5,y*5,sn*1.5)*(0.4+loose);}
     /* where the drape bunched the fabric the folds are deeper; where it hangs taut they almost vanish */
     if(L.comp)d*=0.5+1.3*smooth(L.comp[v]/0.05);
     d*=heavy;
+    /* near a sleeve end the fold depth is capped so the cuff stays a clean ring */
+    if(r>=1&&r<=2)d=clamp(d,-0.008-0.008*edgeK,0.008+0.008*edgeK);
     if(d){X[v*3]+=Nn[v*3]*d;X[v*3+1]+=Nn[v*3+1]*d;X[v*3+2]+=Nn[v*3+2]*d;}}
 }
 /* ---------- cut along f=0 and build the meshes (one per material), with a turned edge ---------- */
@@ -689,7 +693,12 @@ function shCurtain(L,cut,shells,B2,tails,layers){
   const rows=Math.ceil((cut+0.05-hemMin)/0.01)+3,floor=new Float32Array(rows*NA);
   const put=(x,y,z)=>{if(y>cut+0.005||y<hemMin-0.02)return;const j=Math.round((cut-y)/0.01);if(j<0||j>=rows)return;const th=Math.atan2(z,x),i=((Math.floor((th+Math.PI)/TAU*NA)%NA)+NA)%NA,rr=Math.hypot(x,z);for(const k of [i,(i+1)%NA,(i+NA-1)%NA])if(rr>floor[j*NA+k])floor[j*NA+k]=rr;};
   const P=B2.P,rg=B2.reg;for(let v=0;v<B2.n;v++)if(rg[v]===0||rg[v]>=3)put(P[v*3],P[v*3+1],P[v*3+2]);
-  for(const m of shells){const Lm=m.userData.layer;const lo={bottom:1,top:2,mid:3,outer:4}[Lm];if(!(lo<L.rank))continue;const p=m.geometry.attributes.position,mr=m.geometry.userData.reg;for(let i=0;i<p.count;i++)if(!mr||mr[i]===0||mr[i]>=3)put(p.getX(i),p.getY(i),p.getZ(i));}
+  /* lower layers: vertices and points along their edges (their rows are ~1.5 cm apart, the outline rows 1 cm: a row without a sample let the curtain sink into the trousers) */
+  for(const m of shells){const Lm=m.userData.layer;const lo={bottom:1,top:2,mid:3,outer:4}[Lm];if(!(lo<L.rank))continue;const p=m.geometry.attributes.position,mr=m.geometry.userData.reg,ok=i=>!mr||mr[i]===0||mr[i]>=3;
+    for(let i=0;i<p.count;i++)if(ok(i))put(p.getX(i),p.getY(i),p.getZ(i));
+    const ix=m.geometry.index?m.geometry.index.array:null;if(!ix)continue;
+    for(let t=0;t<ix.length;t+=3)for(let k=0;k<3;k++){const a=ix[t+k],b=ix[t+(k+1)%3];if(a>b||!ok(a)||!ok(b))continue;const ay=p.getY(a),by=p.getY(b);if(Math.max(ay,by)<hemMin-0.02||Math.min(ay,by)>cut+0.005)continue;
+      const ax=p.getX(a),az=p.getZ(a),bx=p.getX(b),bz=p.getZ(b),ns=Math.ceil(Math.hypot(bx-ax,by-ay,bz-az)/0.005);for(let s=1;s<ns;s++){const u=s/ns;put(ax+(bx-ax)*u,ay+(by-ay)*u,az+(bz-az)*u);}}}
   /* smooth the outline around and downwards a little: fabric spans the gap between the legs */
   for(let j=0;j<rows;j++){for(let k=0;k<3;k++){const o=j*NA,r0=floor.slice(o,o+NA);for(let i=0;i<NA;i++)floor[o+i]=Math.max(r0[i],(r0[(i+NA-1)%NA]+r0[i]+r0[(i+1)%NA])/3);}}
   let Rsm=Rs.slice();for(let k=0;k<3;k++){const r0=Rsm.slice();for(let i=0;i<NA;i++)Rsm[i]=(r0[(i+NA-1)%NA]+2*r0[i]+r0[(i+1)%NA])/4;}
