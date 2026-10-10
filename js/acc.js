@@ -67,10 +67,25 @@ function buildGlasses(G){
   }
   const br=[V3(-0.012,y+0.006,zf+0.001),V3(0,y+0.009,zf+0.004),V3(0.012,y+0.006,zf+0.001)];G.add(mk(cordGeo(br,thick*0.8,false,6,12),fm));
   if(metalF)G.add(mk(cordGeo([V3(-0.016,y+0.017,zf),V3(0,y+0.019,zf+0.003),V3(0.016,y+0.017,zf)],0.0012,false,6,12),fm));
-  for(const sd of [-1,1]){const ex=BC.hd.rx+0.008,ep=earPos(sd);
-    const pts=[V3(sd*0.06,y+0.008,zf-0.006),V3(sd*(ex+0.002),y+0.006,zf-0.035),V3(sd*(ex+0.004),y+0.002,ep.z+0.02),V3(sd*(ex+0.004),y-0.004,ep.z-0.004),V3(sd*(ex+0.001),y-0.022,ep.z-0.016)];
-    G.add(mk(cordGeo(pts,metalF?0.0014:0.0024,false,6,30),fm));}
+  /* temples run along the side of the head (just clear of it) to behind the ear and bend down there;
+     the hair lies over them, so it is lifted a little where they pass (they used to stand off the head and pierce it) */
+  const tr=metalF?0.0014:0.0024,paths=[],thAt=yy=>Math.acos(clamp((yy-hc.y)/BC.hd.ry,-0.99,0.99));
+  for(const sd of [-1,1]){const h0=V3(sd*0.06,y+0.008,zf-0.006),side=sd>0?0:Math.PI,back=sd>0?-0.32:Math.PI+0.32,a0=Math.atan2(h0.z-hc.z,h0.x-hc.x),pts=[h0];
+    for(let k=1;k<=7;k++){const t=k/7,ph=t<0.8?lerp(a0,side,t/0.8):lerp(side,back,(t-0.8)/0.2),yy=y+0.007-0.006*t;pts.push(headPt(thAt(yy),ph,tr+0.0012));}
+    pts.push(headPt(thAt(y-0.012),lerp(side,back,1.25),tr+0.0012),headPt(thAt(y-0.024),lerp(side,back,1.4),tr+0.001));
+    G.add(mk(cordGeo(pts,tr,false,6,40),fm));paths.push(pts);}
+  hairOverTemples(G,paths,tr);
 }
+function hairOverTemples(G,paths,tr){const hair=[];G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')hair.push(o);});if(!hair.length)return;
+  const hc=BC.headC,Q=[];for(const pts of paths){const c=new THREE.CatmullRomCurve3(pts);for(const p of c.getSpacedPoints(80))Q.push(p);}
+  let y0=9,y1=-9;for(const q of Q){y0=Math.min(y0,q.y);y1=Math.max(y1,q.y);}
+  const R=0.014,v=new THREE.Vector3(),inv=new THREE.Matrix4();G.updateMatrixWorld(true);
+  for(const o of hair){const g=o.geometry,p=g.attributes.position;if(!p)continue;inv.copy(o.matrixWorld).invert();let ch=false;
+    for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);if(v.y<y0-R||v.y>y1+R)continue;
+      let bd=R,bq=null;for(const q of Q){const d=v.distanceTo(q);if(d<bd){bd=d;bq=q;}}if(!bq)continue;
+      const rw=v.distanceTo(hc),rq=bq.distanceTo(hc)+tr+0.0025,w=1-smooth(bd/R);if(rw>=rq||w<=0)continue;
+      const k=(rw+(rq-rw)*w)/rw;v.set(hc.x+(v.x-hc.x)*k,hc.y+(v.y-hc.y)*k,hc.z+(v.z-hc.z)*k).applyMatrix4(inv);p.setXYZ(i,v.x,v.y,v.z);ch=true;}
+    if(ch){p.needsUpdate=true;g.computeVertexNormals();}}}
 function wristR(t,side){return armAt(t)+0.0028;}
 function buildWatch(G){
   const A=S.acc.watch,t0=A.type;if(!t0||t0==='none')return;
@@ -161,8 +176,8 @@ function buildWalletChain(G){
   const aF=sd>0?FRONT-0.5:FRONT+0.5,aB=sd>0?BACKA+0.56:BACKA-0.56;
   const span=sd>0?aF-aB:aB-aF;
   const chain=sag=>{const pts=[];for(let i=0;i<=26;i++){const t=i/26,a=sd>0?aF-span*t:aF+span*t,y=wy-0.025-sag*Math.sin(Math.PI*t)-0.04*t;pts.push(envPt(bodyEnv(y,LAYERS),a,y,0.008+0.01*Math.sin(Math.PI*t)));}
-    const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),L=curve.getLength(),n=Math.round(L/0.0075);
-    for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0042,0.0012,6,10),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.62,1);G.add(l);}
+    const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),L=curve.getLength(),n=Math.round(L/0.0105);
+    for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0062,0.0017,8,14),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.66,1);G.add(l);}
     return pts;};
   const p=chain(0.16);if(t0==='double')chain(0.25);
   const clip=mk(new THREE.BoxGeometry(0.008,0.03,0.006),metal);clip.position.copy(p[0]).add(V3(0,0.006,0));clip.quaternion.copy(qFromTo(VZ,radialN(p[0])));G.add(clip);
@@ -202,6 +217,8 @@ function buildBag(G0){
 }
 function buildScarf(G){
   const A=S.acc.scarf,t0=A.type;if(!t0||t0==='none')return;
+  /* every piece of the scarf is tagged: once the clothes are fitted it is moved out over them (shScarfOut) */
+  const G0=G;G={add:o=>{o.userData.scarf=true;G0.add(o);}};
   const m=fabric('wool',A.color,A.pattern||'solid',A.color2||'#26304a');
   const loose=t0==='long',y0=1.485,y1=1.575;
   const ring=y=>{const t=(y-y0)/(y1-y0),nb=bodyEnv(Math.min(y,1.53),LAYERS),base=Math.max(BC.neckR+0.012,Math.min(nb.rx,BC.neckR+0.035)),r=base+(loose?0.026:0.02)+0.016*Math.sin(Math.PI*t);return{rx:r*1.04,rz:r,rzb:r*1.02};};

@@ -255,7 +255,7 @@ function buildShells(G,GS){
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3)shBlendKept(o,L.newG[ra],ra,cut);if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
-  for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
+  for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
     G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrisOf(o,0),0);});
@@ -280,6 +280,7 @@ function buildShells(G,GS){
   {const shellSet=new Set(shells);for(const L of layers){const cm=L.curtainMesh;if(cm)shellSet.add(cm);}const late=[];G.traverse(o=>{if(o.isMesh&&!shellSet.has(o)&&o.userData.layer&&o.userData.layer!=='none'&&!o.userData.reseated&&!o.userData.kept)late.push(o);});
     for(const o of late){const L=layers.find(l=>l.name===o.userData.layer);if(!L)continue;shBake(o,o.parent||G);shHideCovered(o,L,layers);}}
   shHoodsOut(G,layers);
+  shScarfOut(G);
   shBagsOut(G,layers);
   shUnderSleeves(G);
 }
@@ -300,12 +301,32 @@ const v3=new THREE.Vector3();
 /* bags (strap, body, front pocket) sit on top of the finished outfit: straps per point, the bag body as one piece */
 /* a hood lying on the back comes out over whatever is worn above its garment (a hoodie under a vest or a jacket):
    it is lifted onto their surface instead of being cut where they cover it (that left ragged pieces at the shoulders) */
+/* a patch pocket is placed from the pattern; on an open jacket the fitted front falls further away than the pattern says
+   and the pocket hung past the front edge in mid air: turn it round the body towards the side until it sits on its fabric */
+function shPocketOnFabric(o,L){const SG=L.newG&&L.newG[0];if(!SG||!SG.any)return;if(!SG.S)SG.sdf();
+  const p=o.geometry.attributes.position,c=new Float32Array(3);let cx=0;for(let i=0;i<p.count;i++)cx+=p.getX(i);const sd=cx>=0?1:-1;
+  for(let pass=0;pass<3;pass++){let worst=0,r=0;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const d=SG.sdfAt(c[0],c[1]);if(d<worst){worst=d;r=c[2];}}
+    if(worst>-0.002||!r)break;const th=sd*(0.006-worst)/r,cs=Math.cos(th),sn=Math.sin(th);
+    for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setX(i,x*cs+z*sn);p.setZ(i,-x*sn+z*cs);}}
+  p.needsUpdate=true;o.geometry.computeVertexNormals();}
 function shHoodsOut(G,layers){const hoods=[];G.traverse(o=>{if(o.isMesh&&o.userData.hood)hoods.push(o);});if(!hoods.length)return;G.updateMatrixWorld(true);
   const c=new Float32Array(3),q=new Float32Array(3);
   for(const o of hoods){const L=layers.find(l=>l.name===o.userData.layer),rank=L?L.rank:{bottom:1,top:2,mid:3,outer:4}[o.userData.layer]||0;
     const U=new PGrid(0);G.traverse(m=>{if(!m.isMesh||m===o||m.userData.hood)return;const lr={bottom:1,top:2,mid:3,outer:4}[m.userData.layer];if(!(lr>rank))return;if(m.geometry.userData.axis&&shRegionOfAxis(m.geometry.userData.axis)!==0)return;U.raster(shTrisOf(m,0),0);});
     if(!U.any)continue;shBake(o,G);const p=o.geometry.attributes.position;let ch=false;
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=U.at(c[0],c[1]);if(R>0&&c[2]<R+0.005){shPoint(0,c[0],c[1],R+0.005,q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
+    if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
+/* a scarf is worn over everything: it was laid on the pattern outline, the fitted clothes and their collars can stand
+   past it. The lift is found per (angle, height) cell from its deepest point and applied to the whole cross-section,
+   so the knit keeps its thickness instead of being pressed flat onto the coat */
+function shScarfOut(G){const sc=[];G.traverse(o=>{if(o.isMesh&&o.userData.scarf)sc.push(o);});if(!sc.length)return;G.updateMatrixWorld(true);
+  const U=new PGrid(0);G.traverse(o=>{if(!o.isMesh||o.userData.scarf||!o.userData.layer||o.userData.layer==='none')return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;U.raster(shTrisOf(o,0),0);});
+  if(!U.any)return;const NA=96,Y0=0.9,ST=0.01,NR=90,lift=new Float32Array(NA*NR),c=new Float32Array(3),q=new Float32Array(3),cell=(th,y)=>{const j=Math.round((y-Y0)/ST);if(j<0||j>=NR)return -1;return j*NA+((Math.floor((th/TAU+0.5)*NA)%NA)+NA)%NA;};
+  for(const o of sc)shBake(o,G);
+  for(const o of sc){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=U.at(c[0],c[1]),k=cell(c[0],c[1]);if(R>0&&k>=0)lift[k]=Math.max(lift[k],R+0.004-c[2]);}}
+  /* spread: neighbouring cells move together (no creases), a lifted cell never sinks */
+  for(let it=0;it<3;it++){const L0=lift.slice();for(let j=0;j<NR;j++)for(let i=0;i<NA;i++){let m=L0[j*NA+i];for(const[dj,di] of [[0,1],[0,-1],[1,0],[-1,0]]){const jj=j+dj;if(jj<0||jj>=NR)continue;m=Math.max(m,L0[jj*NA+(i+di+NA)%NA]*0.8);}lift[j*NA+i]=m;}}
+  for(const o of sc){const p=o.geometry.attributes.position;let ch=false;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const k=cell(c[0],c[1]);if(k<0||lift[k]<=0)continue;shPoint(0,c[0],c[1],c[2]+lift[k],q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}
     if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
 function shBagsOut(G,layers){const groups=[];G.traverse(o=>{if(o.userData&&o.userData.bagGroup)groups.push(o);});if(!groups.length)return;
   const U=new PGrid(0);G.updateMatrixWorld(true);G.traverse(o=>{if(!o.isMesh||!o.userData.layer||o.userData.layer==='none')return;let p=o.parent,inBag=false;while(p){if(p.userData&&p.userData.bagGroup){inBag=true;break;}p=p.parent;}if(inBag)return;

@@ -95,7 +95,7 @@ function buildOuter(G,P=S.outer){
   }
   /* pockets */
   const gp=y=>close==='closed'&&!lapel?0:gapX(y)+0.015;
-  const flapX=(x0,x1,y0,y1,mt,o={})=>{for(const sd of [-1,1]){const xa=Math.max(x0,gp(y1)),xb=x1;if(xb-xa<0.03)continue;const e=rf0((y0+y1)/2),a0=sideAng(sd*xa,e),a1=sideAng(sd*xb,e);G.add(mk(patch(rf0,Math.min(a0,a1),Math.max(a0,a1),y0,y1,o.off||0.004,{nv:o.nv||3,seg:8,mod}),mt));
+  const flapX=(x0,x1,y0,y1,mt,o={})=>{for(const sd of [-1,1]){const xa=Math.max(x0,gp(y1)),xb=x1;if(xb-xa<0.03)continue;const e=rf0((y0+y1)/2),a0=sideAng(sd*xa,e),a1=sideAng(sd*xb,e);const pm=mk(patch(rf0,Math.min(a0,a1),Math.max(a0,a1),y0,y1,o.off||0.004,{nv:o.nv||3,seg:8,mod}),mt);pm.userData.pocket=true;G.add(pm);
     if(o.btn){const b=at(sd*(xa+xb)/2,y0+0.008,0.008);buttonAt(G,b,radialN(b),0.005,o.btn);}}};
   const slashLine=(mt,x0,y0,x1,y1,r)=>{for(const sd of [-1,1]){const xa=Math.max(x0,gp(y0)+0.005);const pts=[];for(let k=0;k<=8;k++){const t=k/8;pts.push(at(sd*lerp(xa,x1,t),lerp(y0,y1,t),0.003));}cordsAlong(G,mt,pts,r);}};
   switch(T.pockets){
@@ -104,7 +104,7 @@ function buildOuter(G,P=S.outer){
     case 'zip':slashLine(zipM,0.08,0.98,0.14,1.07,0.0024);break;
     case 'flap':case 'flapHip':{const y=Math.max(hem+0.05,T.pockets==='flapHip'?0.99:0.96);flapX(0.07,0.165,y,y+0.038,md,{btn:T.pockets==='flap'?plain(shade(P.color,-0.35),.4):null});if(T.pockets==='flapHip')slashLine(plain(shade(P.color,-0.4),.9),0.07,y+0.034,0.165,y+0.034,0.0015);break;}
     case 'patch2':case 'patch3':flapX(0.06,0.15,Math.max(hem+0.04,0.9),Math.max(hem+0.04,0.9)+0.12,m,{off:0.003,nv:6});
-      if(T.pockets==='patch3'){const e=rf0(1.25),a0=angAtX(e,0.13),a1=angAtX(e,Math.max(0.05,gp(1.3)));if(a0<a1)G.add(mk(patch(rf0,a0,a1,1.19,1.3,0.003,{nv:5,seg:8,mod}),m));}break;
+      if(T.pockets==='patch3'){const e=rf0(1.25),a0=angAtX(e,0.13),a1=angAtX(e,Math.max(0.05,gp(1.3)));if(a0<a1){const pm=mk(patch(rf0,a0,a1,1.19,1.3,0.003,{nv:5,seg:8,mod}),m);pm.userData.pocket=true;G.add(pm);}}break;
     case 'kangaroo':for(const sd of [-1,1]){const y0=hem+0.055,y1=hem+0.18,xa=Math.max(0.012,gp(y1)),e=rf0((y0+y1)/2),a0=sideAng(sd*xa,e),a1=sideAng(sd*0.15,e);G.add(mk(patch(rf0,Math.min(a0,a1),Math.max(a0,a1),y0,y1,0.004,{nv:6,seg:10,mod}),m));
       const pts=[];for(let k=0;k<=8;k++){const y=lerp(y0+0.01,y1-0.01,k/8);pts.push(at(sd*lerp(0.15,0.125,k/8),y,0.0055));}cordsAlong(G,md,pts,0.003);}break;
   }
