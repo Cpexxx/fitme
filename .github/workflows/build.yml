@@ -1,0 +1,69 @@
+# Buduje Fitme dla Windows i Linuksa po każdym pushu na main i wystawia obie paczki
+# w wydaniu „latest” (zakładka Releases repo): Fitme-windows.zip i Fitme-linux.tar.gz.
+name: Build Fitme
+
+on:
+  push:
+    branches: [main]
+    paths: ['js/**', 'fitme.html', 'app/**', '.github/workflows/build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-fitme
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Paczka Windows
+        working-directory: app
+        run: |
+          npm ci --no-audit --no-fund
+          npm run package
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path app/dist/Fitme-win32-x64 -DestinationPath Fitme-windows.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: Fitme-windows.zip, retention-days: 7 }
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Paczka Linux
+        working-directory: app
+        run: |
+          npm ci --no-audit --no-fund
+          npm run package:linux
+      - name: Skrypt startowy i tar.gz
+        run: |
+          D=app/dist/Fitme-linux-x64
+          printf '#!/bin/sh\n# Start Fitme (Ubuntu 23.10+ blokuje piaskownice Chromium dla aplikacji spoza pakietow)\ncd "$(dirname "$0")"\nexec ./Fitme --no-sandbox "$@"\n' > $D/fitme.sh
+          chmod +x $D/fitme.sh $D/Fitme
+          tar -C app/dist -czf Fitme-linux.tar.gz Fitme-linux-x64
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: Fitme-linux.tar.gz, retention-days: 7 }
+
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
+      - name: Wydanie „latest”
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          MSG=$(printf 'Commit %s (%s)\n\nWindows: rozpakuj Fitme-windows.zip i uruchom Fitme.exe.\nLinux: tar -xzf Fitme-linux.tar.gz, potem ./Fitme-linux-x64/fitme.sh' "${GITHUB_SHA::7}" "$(date -u +'%Y-%m-%d %H:%M UTC')")
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Fitme-windows.zip Fitme-linux.tar.gz --target "$GITHUB_SHA" --title "Fitme – najnowsza wersja" --notes "$MSG" --latest
