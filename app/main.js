@@ -20,6 +20,8 @@ if (process.platform === 'linux' && process.env.FITME_GPU_FORCE !== '1' && !hasR
   app.commandLine.appendSwitch('use-gl', 'angle');
   app.commandLine.appendSwitch('use-angle', 'swiftshader');
   app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  /* in the packaged app the GPU sandbox stops SwiftShader's Vulkan from starting (WebGL off); the app only loads its own files */
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
   console.log('[Fitme] Brak GPU (/dev/dri/renderD*): renderowanie programowe SwiftShader.');
 }
 /* Linux + Wayland: Chromium's Wayland backend often cannot reach the GPU (no DRM render node -> CPU rendering, a few FPS).
