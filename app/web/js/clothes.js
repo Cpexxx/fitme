@@ -46,10 +46,12 @@ function pantsSize(P,waistY){
   return o;
 }
 function pantsSeat(y){return y<1.1?maxE(torsoAt(y),BC.core.hips(Math.max(y,0.8))):torsoAt(y);}
-function beltLoops(G,waistY,hipE,mat,wb){
+function beltLoops(G,waistY,hipE,mat,wb,belted){
   const angs=[FRONT-0.5,FRONT+0.5,FRONT-1.35,FRONT+1.35,BACKA-0.55,BACKA+0.55,BACKA];
-  for(const a of angs){const y=waistY-wb*0.5,e=addE(pantsSeat(y),hipE+0.008),P=envPt(e,a,y,0);
-    const l=mk(new THREE.BoxGeometry(0.009,wb+0.008,0.004),mat);l.position.copy(P);l.quaternion.copy(qFromTo(VZ,radialN(P)));G.add(l);}
+  /* with a belt a loop just wraps it (4 mm beyond each edge, see belt()); without one it lies flat on the waistband */
+  const ya=belted?waistY-0.037:waistY-wb-0.004,yb=belted?waistY:waistY+0.004,off=belted?0.008:0.004;
+  for(const a of angs){const y=(ya+yb)/2,e=addE(pantsSeat(y),hipE+off),P=envPt(e,a,y,0);
+    const l=mk(new THREE.BoxGeometry(0.009,yb-ya,0.004),mat);l.position.copy(P);l.quaternion.copy(qFromTo(VZ,radialN(P)));G.add(l);}
   return angs;
 }
 function belt(G,waistY,hipE,P,front=true){
@@ -152,7 +154,7 @@ function buildPants(G,P,T){
   }
   if(T.pleats&&P.pleats!==false&&!T.jeans)for(const sx of sides)for(const px of [0.056,0.088]){const pts=[];for(let k=0;k<=4;k++)pts.push(onFront(tRf,sx*px,waistY-wbH-0.002-0.045*k/4,0.0012));stitchPts(G,pts,thread);}
   let loops=[];
-  if(T.belt){loops=beltLoops(G,waistY,hipE,mb,wbH);if(P.belt)belt(G,waistY,hipE,P);}
+  if(T.belt){loops=beltLoops(G,waistY,hipE,mb,wbH,!!P.belt);if(P.belt)belt(G,waistY,hipE,P);}
   if(T.strings)drawstrings(G,waistY-0.008,0.13,[-0.024,0.024],y=>addE(pantsSeat(Math.max(y,waistY-0.2)),hipE+0.006));
   if(stripes){for(const a of [0,Math.PI])for(const o of [-0.06,0.06])G.add(mk(patch(tRf,a+o-0.018,a+o+0.018,0.88,waistY-wbH,0.0016,{nv:14,seg:2}),fabric(mat,c2)));}
   PANTS={waistY,hipE,rf:tRf,loops};
@@ -175,7 +177,7 @@ function buildSkirt(G,P,T){
   const thread=mat==='denim'?'#c98a3a':shade(P.color,-0.28);
   if(mat==='denim'){stitchRing(G,hem+0.024,rf,thread,0,mod);for(const sx of [-1,1]){const pts=[];for(let k=0;k<=10;k++){const t=k/10;pts.push(onFront(rf,sx*lerp(0.07,0.9*rf(waistY-0.09).rx,t),waistY-0.04-0.09*Math.pow(t,1.6)));}stitchPts(G,pts,thread);}
     const fly=[[0.03,waistY-0.04],[0.03,waistY-0.13],[0.006,waistY-0.15]].map(([x,y])=>onFront(rf,x,y));stitchPts(G,fly,thread);}
-  if(T.belt){beltLoops(G,waistY,0.014,mb,0.036);if(P.belt)belt(G,waistY,0.014,P);}
+  if(T.belt){beltLoops(G,waistY,0.014,mb,0.036,!!P.belt);if(P.belt)belt(G,waistY,0.014,P);}
   PANTS={waistY,hipE:0.014,rf:y=>addE(pantsSeat(y),0.016),loops:[FRONT-0.5,FRONT+0.5,FRONT-1.35,FRONT+1.35,BACKA-0.55,BACKA+0.55,BACKA]};
   const k=fit.pleat?1.035:1.02;
   LAYERS.push({torso:y=>(y>=hem&&y<=waistY)?mulE(rf(y),k):(y>waistY&&y<=waistY+0.04)?addE(pantsSeat(y),0.014*(1-(y-waistY)/0.04)):null});

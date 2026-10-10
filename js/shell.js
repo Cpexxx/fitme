@@ -252,7 +252,7 @@ function buildShells(G,GS){
   /* parts of the pattern that stay (coat skirts, shirt tails over the hips, trouser hems) count as new fabric too */
   const kept=[];for(const L of layers)for(const o of L.meshes){const ra=shRegionOfAxis(o.geometry.userData.axis),cut=ra===0?L.lowerCut:ra>=3?L.legCut:null;
     if(cut!=null&&ra===0){if(!L.curtain){L.curtain=1;const tails=others.filter(t=>t.userData.tail&&t.userData.layer===L.name);const cm=shCurtain(L,cut,shells,B2,tails,layers);for(const t of tails){if(t.parent)t.parent.remove(t);others.splice(others.indexOf(t),1);}if(cm){G.add(cm);L.curtainMesh=cm;const T3=shTrisOf(cm,0);newU[0].raster(T3,0);L.newG[0].raster(T3,0);}}continue;}
-    if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+    if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3)shBlendKept(o,L.newG[ra],ra,cut);if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L)shHideCovered(o,L,layers);}
@@ -262,10 +262,11 @@ function buildShells(G,GS){
     if(!up.any)continue;const p=cm.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);}}
     p.needsUpdate=true;cm.geometry.computeVertexNormals();}
-  /* fabric of a lower layer that ends up under an upper one is never seen: drop it, so nothing can poke through */
+  /* fabric of a lower layer that ends up under an upper one is never seen: drop it, so nothing can poke through
+     (only 2 cm inside the upper layer's edge: the coverage grid is coarse and hole-filled, at an open front it reached past the fabric and cut teeth into the trousers) */
   for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean))){const L=layers.find(l=>l.name===m.userData.layer);if(!L)continue;
     const up=layers.filter(u=>u.rank>L.rank&&u.newG);if(!up.length)continue;const g=m.geometry,p=g.attributes.position,rg=g.userData.reg,n=p.count,c=new Float32Array(3),cov=new Uint8Array(n);
-    for(let i=0;i<n;i++){const r0=rg?rg[i]:0;shCoord(r0,p.getX(i),p.getY(i),p.getZ(i),c,0);for(const U of up){const G2=U.newG[r0];if(!G2||!G2.any)continue;const R=G2.at(c[0],c[1]);if(R>0&&R>=c[2]-0.03&&U.newG[r0].sdfAt?true:false){}if(R>0&&R>=c[2]-0.03){cov[i]=1;break;}}}
+    for(let i=0;i<n;i++){const r0=rg?rg[i]:0;shCoord(r0,p.getX(i),p.getY(i),p.getZ(i),c,0);for(const U of up){const G2=U.newG[r0];if(!G2||!G2.any)continue;const R=G2.at(c[0],c[1]);if(R>0&&R>=c[2]-0.03){if(!G2.S)G2.sdf();if(G2.sdfAt(c[0],c[1])>0.02){cov[i]=1;break;}}}}
     const ix=g.index.array,keep=[];for(let t=0;t<ix.length;t+=3)if(!(cov[ix[t]]&&cov[ix[t+1]]&&cov[ix[t+2]]))keep.push(ix[t],ix[t+1],ix[t+2]);if(keep.length<ix.length)g.setIndex(keep);}
   /* the long coat skirt is kept from the pattern (cut just under the shell) */
   for(const L of layers){for(const o of L.meshes){if(kept.includes(o)){o.userData.main=false;o.userData.ctx='none';o.userData.kept=true;}else o.parent.remove(o);}}
@@ -713,7 +714,8 @@ function shCurtain(L,cut,shells,B2,tails,layers){
     /* worn under a jacket / sweater: it stays inside it (tucked under its hem) */
     for(const U of layers||[]){if(U.rank<=L.rank||!U.newG||!U.newG[0].any)continue;let Ru=U.newG[0].at(th,y);if(Ru<0&&U.grids[0]&&U.grids[0].at(th,y)>0)Ru=U.newG[0].nearest(th,y);if(Ru>0)R=Math.min(R,Math.max(Ru-0.004,floor[fj*NA+ii]+0.002));}
     shPoint(0,th,y,R,q);pos.push(q[0],q[1],q[2]);uv.push(th*0.15/TILE,y/TILE);reg.push(0);}
-  for(let j=0;j<N;j++)for(let i=0;i<NA;i++){if(!ok[i]||!ok[(i+1)%NA])continue;const a=j*(NA+1)+i,b=a+NA+1;idx.push(a,b,a+1,b,b+1,a+1);}
+  /* columns whose hems differ by a cliff (the front opening of an open jacket) are not joined: each row would become a long slanted sliver */
+  for(let j=0;j<N;j++)for(let i=0;i<NA;i++){const i2=(i+1)%NA;if(!ok[i]||!ok[i2]||Math.abs(hem[i]-hem[i2])>0.025)continue;const a=j*(NA+1)+i,b=a+NA+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();
   /* the seam at the back (u wraps) shares normals */
   const nr=g.attributes.normal;for(let j=0;j<=N;j++){const a=j*(NA+1),b=a+NA;const x=nr.getX(a)+nr.getX(b),y=nr.getY(a)+nr.getY(b),z=nr.getZ(a)+nr.getZ(b),l=Math.hypot(x,y,z)||1;nr.setXYZ(a,x/l,y/l,z/l);nr.setXYZ(b,x/l,y/l,z/l);}
@@ -737,6 +739,14 @@ function shMatchKept(o,L,cut){const g=o.geometry,p=g.attributes.position,n=p.cou
     shPoint(0,c[0],c[1],c[2]*k,q);p.setXYZ(i,q[0],q[1],q[2]);}
   p.needsUpdate=true;g.computeVertexNormals();}
 /* drop the triangles of a kept pattern tube that sit above a height */
+/* a kept trouser hem (stacked / flared) is wider than the fitted shell above it: at the cut it takes the shell's radius and
+   widens to its own over 5 cm, so the join is a smooth flare instead of a step with the shell's edge hanging over it */
+function shBlendKept(o,SG,ra,cut){if(!SG||!SG.any)return;const p=o.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);let moved=false;
+  for(let i=0;i<p.count;i++){shCoord(ra,p.getX(i),p.getY(i),p.getZ(i),c,0);const y=c[1];if(y<cut-0.05)continue;
+    let Rs=SG.at(c[0],cut+0.012);if(Rs<0)Rs=SG.nearest(c[0],cut+0.012);if(Rs<0)continue;
+    const w=y>=cut?1:1-smooth((cut-y)/0.05),R=Math.max(0.02,lerp(c[2],Rs-0.0015,w));if(R>=c[2]&&y<cut)continue;
+    shPoint(ra,c[0],y,R,q);p.setXYZ(i,q[0],q[1],q[2]);moved=true;}
+  if(moved){p.needsUpdate=true;o.geometry.computeVertexNormals();}}
 function shKeepBelow(o,y){const g=o.geometry,p=g.attributes.position,m=o.matrixWorld,v=new THREE.Vector3(),ix=g.index.array,keep=[];
   for(let t=0;t<ix.length;t+=3){let hi=-9;for(let k=0;k<3;k++){v.fromBufferAttribute(p,ix[t+k]).applyMatrix4(m);hi=Math.max(hi,v.y);}if(hi<=y)keep.push(ix[t],ix[t+1],ix[t+2]);}
   g.setIndex(keep);}
