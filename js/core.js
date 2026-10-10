@@ -47,7 +47,10 @@ const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
 const VX=V3(1,0,0),VY=V3(0,1,0),VZ=V3(0,0,1);
 const TILE=0.07;
 /* render quality: the desktop app runs 'high' (denser garments, twice-smoothed body, sharper shadows) */
-const QUALITY=(()=>{let q=null;try{q=localStorage.getItem('fitme.quality');}catch(e){}return ['perf','std','high'].includes(q)?q:(window.FITME_APP?'high':'std');})();
+/* WebGL drawn by the CPU (no GPU driver / no access to it: SwiftShader, llvmpipe): every frame costs ~10-100x more */
+const GL_INFO=(()=>{try{const c=document.createElement('canvas'),gl=c.getContext('webgl2')||c.getContext('webgl');if(!gl)return{name:'',soft:false};const d=gl.getExtension('WEBGL_debug_renderer_info'),name=d?String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)):'';
+  const lose=gl.getExtension('WEBGL_lose_context');if(lose)lose.loseContext();return{name,soft:/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(name)};}catch(e){return{name:'',soft:false};}})();
+const QUALITY=(()=>{let q=null;try{q=localStorage.getItem('fitme.quality');}catch(e){}return ['perf','std','high'].includes(q)?q:GL_INFO.soft?'perf':(window.FITME_APP?'high':'std');})();
 const GEO_Q=QUALITY==='high'?1.6:QUALITY==='perf'?0.8:1;
 const zbk=r=>r.rzb!=null?r.rzb:r.rz;
 const addE=(r,e)=>({rx:r.rx+e,rz:r.rz+e,rzb:zbk(r)+e,n:r.n});

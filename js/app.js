@@ -154,16 +154,18 @@ function applyOpts(sc,r,main){const L=sc.userData.lights,P=LIGHTS[OPT.light]||LI
   if(L){for(const k of ['key','rim','rim2','fill']){L[k].color.setHex(P[k][0]);L[k].intensity=P[k][1];}L.hemi.intensity=P.hemi;L.key.castShadow=!!OPT.shadows;}
   for(const o of sc.userData.ped||[])o.visible=!!OPT.ped;
   r.toneMappingExposure=0.82*OPT.exposure;
-  if(main){const base=QUALITY==='high'?Math.max(window.devicePixelRatio||1,1.5):QUALITY==='perf'?1:(window.devicePixelRatio||1);r.setPixelRatio(clamp(base*OPT.res,0.5,2.5));
+  if(main){const base=QUALITY==='high'?Math.max(window.devicePixelRatio||1,1.5):QUALITY==='perf'?(GL_INFO.soft?0.75:1):(window.devicePixelRatio||1);basePR=clamp(base*OPT.res,0.5,2.5);lowRes=false;r.setPixelRatio(basePR);
     if(controls)controls.autoRotateSpeed=OPT.spinSpeed;const f=$('#fps');if(f)f.hidden=!OPT.fps;r.shadowMap.needsUpdate=true;dirty=true;
     const st=$('#stage');if(st)window.dispatchEvent(new Event('resize'));}
 }
-let fpsN=0,fpsT=0;function fpsTick(){if(!OPT.fps)return;fpsN++;const t=performance.now();if(t-fpsT>500){const f=$('#fps');if(f)f.textContent=Math.round(fpsN*1000/(t-fpsT))+' FPS · '+Math.round(window.__lastBuild||0)+' ms';fpsN=0;fpsT=t;}}
+let fpsN=0,fpsT=0;function fpsTick(){if(!OPT.fps)return;fpsN++;const t=performance.now();if(t-fpsT>500){const f=$('#fps');if(f)f.textContent=Math.round(fpsN*1000/(t-fpsT))+' FPS · '+Math.round(window.__lastBuild||0)+' ms'+(GL_INFO.soft?' · BEZ GPU':'')+(lowRes?' · podgląd':'');fpsN=0;fpsT=t;}}
 const fmtLen=cm=>OPT.units==='in'?(cm/2.54).toFixed(cm<60?1:0).replace('.',',')+' in':Math.round(cm)+' cm';
 const fmtHeight=cm=>{if(OPT.units!=='in')return cm+' cm';const t=Math.round(cm/2.54),ft=Math.floor(t/12);return ft+"'"+(t-ft*12)+'" ('+cm+' cm)';};
 
 /* =============== scene & lighting =============== */
 let renderer=null,scene=null,root=null,camera=null,controls=null,glOK=false,spin=false,dirty=true;
+/* adaptive resolution: while the view moves and frames come slowly, draw at a lower pixel ratio; a sharp frame once it stops */
+let basePR=1,lowRes=false,slowN=0,lastMove=0,lastFrame=0,wasMoving=false;
 let tR=null,tScene=null,tRoot=null,tCam=null;
 const reduceMotion=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 const fly={active:false,t:0};
@@ -208,6 +210,7 @@ function init3D(){
   const stage=$('#stage');renderer=makeRenderer();
   if(!renderer){stage.append(Object.assign(document.createElement('div'),{className:'nogl',textContent:'Ta przeglądarka nie obsługuje WebGL, więc manekin 3D się nie wyświetli. Spróbuj w Chrome, Firefoksie lub Safari z włączoną akceleracją sprzętową.'}));return;}
   glOK=true;stage.prepend(renderer.domElement);
+  if(GL_INFO.soft)setTimeout(()=>toast('Grafika działa bez karty graficznej (renderowanie programowe: '+(GL_INFO.name.match(/swiftshader|llvmpipe|softpipe|software/i)||['?'])[0]+'). Włączyłem tryb wydajności — obraz będzie mniej płynny niż z GPU.'),1500);
   setupScene(scene,renderer);
   camera=new THREE.PerspectiveCamera(26,1,0.05,60);camera.position.set(0.9,1.2,4.9);
   controls=new THREE.OrbitControls(camera,renderer.domElement);
@@ -220,7 +223,12 @@ function init3D(){
   renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
   const loop=()=>{requestAnimationFrame(loop);if(page!=='creator')return;
     if(fly.active){fly.t=Math.min(1,fly.t+1/40);const k=1-Math.pow(1-fly.t,3);camera.position.lerpVectors(fly.fromP,fly.toP,k);controls.target.lerpVectors(fly.fromT,fly.toT,k);if(fly.t>=1)fly.active=false;dirty=true;}
-    controls.autoRotate=spin&&!fly.active;const moved=controls.update();if(moved||dirty||spin||OPT.fps){renderer.render(scene,camera);dirty=false;fpsTick();}};
+    controls.autoRotate=spin&&!fly.active;const moved=controls.update(),now=performance.now();
+    if(moved||spin||fly.active){const dt=now-lastFrame;if(wasMoving){if(dt>34)slowN++;else if(dt<20)slowN=Math.max(0,slowN-1);}lastMove=now;
+      if(!lowRes&&slowN>=3){lowRes=true;renderer.setPixelRatio(Math.max(0.35,basePR*0.5));}}
+    else if(lowRes&&now-lastMove>200){lowRes=false;slowN=0;renderer.setPixelRatio(basePR);dirty=true;}
+    wasMoving=!!(moved||spin||fly.active);
+    if(moved||dirty||spin||OPT.fps){renderer.render(scene,camera);dirty=false;lastFrame=performance.now();fpsTick();}};
   loop();
 }
 function initThumbs(){

@@ -8,6 +8,11 @@ app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('force_high_performance_gpu');
+/* Linux + Wayland: Chromium's Wayland backend often cannot reach the GPU (no DRM render node -> CPU rendering, a few FPS).
+   XWayland (X11) uses the normal GL driver. FITME_OZONE=wayland keeps the native backend. */
+if (process.platform === 'linux' && (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') && process.env.FITME_OZONE !== 'wayland') {
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -42,6 +47,11 @@ function createWindow() {
 Menu.setApplicationMenu(null);
 app.whenReady().then(() => {
   createWindow();
+  /* what the GPU process ended up using: printed in the terminal, useful when the creator stutters */
+  app.getGPUInfo('basic').then(info => {
+    const st = app.getGPUFeatureStatus(), dev = (info.gpuDevice || []).map(d => d.vendorId.toString(16) + ':' + d.deviceId.toString(16) + (d.active ? '*' : '')).join(' ');
+    console.log('[Fitme] GPU: webgl=' + st.webgl + ' webgl2=' + st.webgl2 + ' raster=' + st.gpu_compositing + ' devices=' + (dev || 'none') + ' gl=' + (info.auxAttributes && info.auxAttributes.glRenderer || '?'));
+  }).catch(() => {});
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
