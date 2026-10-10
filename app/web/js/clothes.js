@@ -217,14 +217,14 @@ function standCollar(G,mat,o){
 /* hood lying down on the back */
 function hoodDown(G,mat,o){
   const y0=o.y,gx=Math.max(o.gapX||0,0.04),e0=o.env(y0),g=FRONT-angAtX(e0,gx);
-  G.add(mk(surf(56,22,(u,v)=>{
+  const h=mk(surf(56,22,(u,v)=>{
     const a=lerp(FRONT+g,FRONT-g+TAU,u),db=Math.abs(wrapA(a-BACKA)),drop=lerp(0.03,0.2,smooth(1-db/2.3));
     let rise,off;
     if(v<0.32){const t=v/0.32;rise=0.045*Math.sin(t*Math.PI/2);off=0.004+0.018*t;}
     else{const t=(v-0.32)/0.68;rise=0.045*Math.cos(t*Math.PI/2)-drop*smooth(t);off=0.022+0.008*Math.sin(Math.PI*t)-0.012*smooth(t);}
     const y=y0+rise,env=o.env(Math.min(y,y0-0.002));
     return envPt(env,a,y,Math.max(off,0.006)+0.004*Math.sin(u*Math.PI*9)*v);
-  },{noAO:true}),mat));
+  },{noAO:true}),mat);h.userData.hood=true;G.add(h);
 }
 /* band over the shoulder (tank straps, vests, backpack) */
 function shoulderBand(G,mat,envF,xin,xout,yF,yB,side,off=0.002){

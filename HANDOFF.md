@@ -134,4 +134,18 @@ Kolejne rundy:
   Kamery: full/side/back/q/upper/upperq/uside/legs/head/feet. Stan bazowy pochodzi z `INSPO[].state` albo `DEFAULT`.
 - Render 18 gotowych stylizacji: 0 błędów JS, budowa 1,0–2,6 s.
 - Hook `.claude/hooks/session-start.sh` (tylko chmura) doinstalowuje numpy + py7zr.
-- Do sprawdzenia: drzazgi na brzegach płaszczy (trenchday, minimal), artefakty łańcuszka (goth), plamki (może SwiftShader).
+- render.js: kamera może być tablicą `[x,y,z, tx,ty,tz, fov]` (zbliżenia). Funkcje `state` są serializowane (bez domknięć);
+  w nich można podmieniać globalne funkcje silnika (np. `shFolds=()=>{}`) do testów A/B.
+
+## Runda 5b (2026-10-10, kontrola zbliżeń) — naprawione
+- Postrzępione mankiety płaszczy: fałdy-pierścienie (shFolds) wygaszane przy krawędzi cięcia (`edgeK`), niższa częstotliwość, limit głębokości na rękawie.
+- Rękawiczki w pozach (płat od dłoni do kolana w `office`/hip): rękawiczka niesie `bodySrc` (indeksy wierzchołków ciała), poseAssign bierze wagi ciała.
+- Łańcuchy (portfel, cuban, bransoletka): ogniwa były ustawione w poprzek łańcucha (oś torusa = styczna) → białe kreski.
+- Jeans przez kurtynę trencza: `floor` w shCurtain próbkuje też krawędzie trójkątów niższych warstw (rzędy co 1 cm vs siatka ~1,5 cm).
+- Piła w kroku pod rozpiętą kurtką (`work`): usuwanie zakrytej tkaniny tylko ≥2 cm w głąb wyższej warstwy (sdf na newG).
+- Próg + zęby nad dołem nogawki: `shBlendKept` – zachowana rura nogawki przechodzi płynnie w promień powłoki.
+- Szlufki: przy pasku obejmują pasek (±4 mm), bez paska leżą płasko. Kaptur bluzy pod kamizelką/kurtką: `shHoodsOut` (wypychany, nie cięty).
+- Kurtyna: nie łączy kolumn z „klifem” dołu > 2,5 cm. fitme.html ?v=13. Zestawienie: `qa-runda5-przed-po.png`.
+- Nie są błędami: duży biały krzyż w goth to nadruk koszulki; „pętla” od klamry w oldmoney to sznurek lnianych spodni.
+- Zostało: cienka linia na styku powłoki i dołu nogawki; drobna nierówność krawędzi pachy kamizelki; ciemne ukośne „rysy”
+  na jeansach w trenczu (prawdopodobnie cień szalika – niezbadane); pasek torby gorp (nie zbadany z bliska).

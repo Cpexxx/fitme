@@ -255,7 +255,7 @@ function buildShells(G,GS){
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3)shBlendKept(o,L.newG[ra],ra,cut);if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
-  for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L)shHideCovered(o,L,layers);}
+  for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
     G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrisOf(o,0),0);});
@@ -279,6 +279,7 @@ function buildShells(G,GS){
   /* every remaining piece of a garment (buckles, buttons, rivets - also ones built outside the cloth pass) under a higher layer is hidden */
   {const shellSet=new Set(shells);for(const L of layers){const cm=L.curtainMesh;if(cm)shellSet.add(cm);}const late=[];G.traverse(o=>{if(o.isMesh&&!shellSet.has(o)&&o.userData.layer&&o.userData.layer!=='none'&&!o.userData.reseated&&!o.userData.kept)late.push(o);});
     for(const o of late){const L=layers.find(l=>l.name===o.userData.layer);if(!L)continue;shBake(o,o.parent||G);shHideCovered(o,L,layers);}}
+  shHoodsOut(G,layers);
   shBagsOut(G,layers);
   shUnderSleeves(G);
 }
@@ -297,6 +298,15 @@ function shUnderSleeves(G){const gs=[];G.traverse(o=>{if(o.userData&&o.userData.
     if(o.userData.rigid||n<200){if(keep.length<ix.length*0.6)o.visible=false;}else geo.setIndex(keep);});}}
 const v3=new THREE.Vector3();
 /* bags (strap, body, front pocket) sit on top of the finished outfit: straps per point, the bag body as one piece */
+/* a hood lying on the back comes out over whatever is worn above its garment (a hoodie under a vest or a jacket):
+   it is lifted onto their surface instead of being cut where they cover it (that left ragged pieces at the shoulders) */
+function shHoodsOut(G,layers){const hoods=[];G.traverse(o=>{if(o.isMesh&&o.userData.hood)hoods.push(o);});if(!hoods.length)return;G.updateMatrixWorld(true);
+  const c=new Float32Array(3),q=new Float32Array(3);
+  for(const o of hoods){const L=layers.find(l=>l.name===o.userData.layer),rank=L?L.rank:{bottom:1,top:2,mid:3,outer:4}[o.userData.layer]||0;
+    const U=new PGrid(0);G.traverse(m=>{if(!m.isMesh||m===o||m.userData.hood)return;const lr={bottom:1,top:2,mid:3,outer:4}[m.userData.layer];if(!(lr>rank))return;if(m.geometry.userData.axis&&shRegionOfAxis(m.geometry.userData.axis)!==0)return;U.raster(shTrisOf(m,0),0);});
+    if(!U.any)continue;shBake(o,G);const p=o.geometry.attributes.position;let ch=false;
+    for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=U.at(c[0],c[1]);if(R>0&&c[2]<R+0.005){shPoint(0,c[0],c[1],R+0.005,q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
+    if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
 function shBagsOut(G,layers){const groups=[];G.traverse(o=>{if(o.userData&&o.userData.bagGroup)groups.push(o);});if(!groups.length)return;
   const U=new PGrid(0);G.updateMatrixWorld(true);G.traverse(o=>{if(!o.isMesh||!o.userData.layer||o.userData.layer==='none')return;let p=o.parent,inBag=false;while(p){if(p.userData&&p.userData.bagGroup){inBag=true;break;}p=p.parent;}if(inBag)return;
     if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;U.raster(shTrisOf(o,0),0);});
@@ -738,7 +748,6 @@ function shMatchKept(o,L,cut){const g=o.geometry,p=g.attributes.position,n=p.cou
   for(let i=0;i<n;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const f=(c[0]/TAU+0.5)*NB-0.5,b0=((Math.floor(f)%NB)+NB)%NB,b1=(b0+1)%NB,u=f-Math.floor(f),k=ratio[b0]*(1-u)+ratio[b1]*u;
     shPoint(0,c[0],c[1],c[2]*k,q);p.setXYZ(i,q[0],q[1],q[2]);}
   p.needsUpdate=true;g.computeVertexNormals();}
-/* drop the triangles of a kept pattern tube that sit above a height */
 /* a kept trouser hem (stacked / flared) is wider than the fitted shell above it: at the cut it takes the shell's radius and
    widens to its own over 5 cm, so the join is a smooth flare instead of a step with the shell's edge hanging over it */
 function shBlendKept(o,SG,ra,cut){if(!SG||!SG.any)return;const p=o.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);let moved=false;
@@ -747,6 +756,7 @@ function shBlendKept(o,SG,ra,cut){if(!SG||!SG.any)return;const p=o.geometry.attr
     const w=y>=cut?1:1-smooth((cut-y)/0.05),R=Math.max(0.02,lerp(c[2],Rs-0.0015,w));if(R>=c[2]&&y<cut)continue;
     shPoint(ra,c[0],y,R,q);p.setXYZ(i,q[0],q[1],q[2]);moved=true;}
   if(moved){p.needsUpdate=true;o.geometry.computeVertexNormals();}}
+/* drop the triangles of a kept pattern tube that sit above a height */
 function shKeepBelow(o,y){const g=o.geometry,p=g.attributes.position,m=o.matrixWorld,v=new THREE.Vector3(),ix=g.index.array,keep=[];
   for(let t=0;t<ix.length;t+=3){let hi=-9;for(let k=0;k<3;k++){v.fromBufferAttribute(p,ix[t+k]).applyMatrix4(m);hi=Math.max(hi,v.y);}if(hi<=y)keep.push(ix[t],ix[t+1],ix[t+2]);}
   g.setIndex(keep);}
