@@ -4,9 +4,13 @@
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const path = require('path');
 
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
+/* forcing past Chromium's GPU blocklist helps on Windows; on Linux it makes the GPU process crash on drivers Chromium
+   rejects for a reason (exit code 139 three times -> GPU switched off for good). FITME_GPU_FORCE=1 brings it back. */
+if (process.platform !== 'linux' || process.env.FITME_GPU_FORCE === '1') {
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+}
 app.commandLine.appendSwitch('force_high_performance_gpu');
 /* Linux + Wayland: Chromium's Wayland backend often cannot reach the GPU (no DRM render node -> CPU rendering, a few FPS).
    XWayland (X11) uses the normal GL driver. FITME_OZONE=wayland keeps the native backend. */
