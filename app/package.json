@@ -1,0 +1,16 @@
+{
+  "name": "fitme",
+  "productName": "Fitme",
+  "version": "1.0.0",
+  "description": "Fitme – kreator outfitów 3D (aplikacja desktopowa)",
+  "main": "main.js",
+  "scripts": {
+    "prepare-web": "node build.js",
+    "start": "node build.js && electron .",
+    "package": "node build.js && electron-packager . Fitme --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/build\\.js$ --app-copyright=Fitme"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.5.1"
+  }
+}
