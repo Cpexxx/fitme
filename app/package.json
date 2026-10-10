@@ -7,7 +7,8 @@
   "scripts": {
     "prepare-web": "node build.js",
     "start": "node build.js && electron .",
-    "package": "node build.js && electron-packager . Fitme --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/build\\.js$ --app-copyright=Fitme"
+    "package": "node build.js && electron-packager . Fitme --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/build\\.js$ --app-copyright=Fitme",
+    "package:linux": "node build.js && electron-packager . Fitme --platform=linux --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/build\\.js$ --app-copyright=Fitme"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

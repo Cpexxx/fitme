@@ -74,6 +74,8 @@ podglad-stylizacji.png  ostatni podgląd wysłany użytkownikowi
 
 ## Pakowanie aplikacji desktopowej (Windows)
 `cd app && npm install && npm run package` daje `app/dist/Fitme-win32-x64/Fitme.exe`. Przy EPERM przy rename uruchom ponownie.
+Na Linuksie (użytkownik pracuje teraz na Ubuntu): `npm run package:linux` daje `app/dist/Fitme-linux-x64/Fitme`.
+`app/web` jest generowane przez `node app/build.js` (sprawdzone: wynik = zawartość repo); commituj je razem z `js/`.
 `node_modules` i `dist` nie są w repo (patrz .gitignore).
 
 ## QA / weryfikacja
@@ -131,4 +133,5 @@ Kolejne rundy:
   Uruchomienie: `node tools/qa/render.js spec.js out/`. Spec: `{W,H,shots:[{name, inspo:'<id>' | state:s=>{…}, cams:[…]}]}`.
   Kamery: full/side/back/q/upper/upperq/uside/legs/head/feet. Stan bazowy pochodzi z `INSPO[].state` albo `DEFAULT`.
 - Render 18 gotowych stylizacji: 0 błędów JS, budowa 1,0–2,6 s.
+- Hook `.claude/hooks/session-start.sh` (tylko chmura) doinstalowuje numpy + py7zr.
 - Do sprawdzenia: drzazgi na brzegach płaszczy (trenchday, minimal), artefakty łańcuszka (goth), plamki (może SwiftShader).
