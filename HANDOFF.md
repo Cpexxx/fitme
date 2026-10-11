@@ -185,3 +185,7 @@ Kolejne rundy:
   wypycha fitme.html (+ index.html) i js/ na gałąź `gh-pages`; GitHub wdraża ją sam (sprawdzone: check-run `deploy` success).
   Z kontenera github.io jest niedostępne (proxy) — stan wdrożenia: `gh api repos/Cpexxx/fitme/commits/gh-pages/check-runs`.
 - Do zrobienia: ramoneska `goth` — przy rozpiętych połach poszarpane narożniki powłoki pod paskiem (pasek przesunięty na dół).
+- Linux/Wayland: wymuszenie X11 tylko gdy jest `/dev/dri/renderD*` (GPU). W VM bez GPU X11/XWayland dawał puste okno
+  (sama ikonka na pasku, log `XGetWindowAttributes failed`). Bez GPU zostaje natywny Wayland (test: Xvfb → weston
+  x11-backend pixman → Fitme jako klient Wayland: okno i manekin OK). FITME_OZONE=x11|wayland wymusza. Okno pokazuje się
+  najpóźniej po 4 s, nawet bez `ready-to-show`.

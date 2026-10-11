@@ -26,7 +26,11 @@ if (process.platform === 'linux' && process.env.FITME_GPU_FORCE !== '1' && !hasR
 }
 /* Linux + Wayland: Chromium's Wayland backend often cannot reach the GPU (no DRM render node -> CPU rendering, a few FPS).
    XWayland (X11) uses the normal GL driver. FITME_OZONE=wayland keeps the native backend. */
-if (process.platform === 'linux' && (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') && process.env.FITME_OZONE !== 'wayland') {
+const fsx = require('fs');
+const gpuNode = (() => { try { return fsx.readdirSync('/dev/dri').some(f => f.startsWith('renderD')); } catch (e) { return false; } })();
+/* only when there is a GPU to reach: without one (virtual machine) XWayland showed an empty window (window attributes failed) */
+const wantX11 = process.env.FITME_OZONE === 'x11' || (process.env.FITME_OZONE !== 'wayland' && gpuNode);
+if (process.platform === 'linux' && (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland') && wantX11) {
   app.commandLine.appendSwitch('ozone-platform', 'x11');
 }
 
@@ -49,6 +53,8 @@ function createWindow() {
     }
   });
   win.once('ready-to-show', () => win.show());
+  /* software rendering can be slow to report the first frame: never leave only a taskbar icon */
+  setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 4000);
   /* shop links and other external pages open in the system browser */
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
