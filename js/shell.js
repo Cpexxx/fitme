@@ -257,7 +257,18 @@ function buildShells(G,GS){
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3)shBlendKept(o,L.newG[ra],ra,cut);if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
-  for(const o of others){const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
+  /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
+     of the wide pattern hem (they stood out round the hips like a ribbon) */
+  for(const o of others){if(!o.userData.tail||!o.parent)continue;const L=layers.find(l=>l.name===o.userData.layer),SG=L&&L.newG&&L.newG[0];if(!SG||!SG.any)continue;
+    shBake(o,G);const p=o.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
+    const lowR=new Map(),RAt=th=>{const k=Math.round(th*64);if(lowR.has(k))return lowR.get(k);let R=-1;for(let y=1.05;y>0.6;y-=0.004){const r=SG.at(th,y);if(r<0){if(R>0)break;continue;}R=r;}lowR.set(k,R);return R;};
+    /* the tail hangs straight down from the shell's lower edge at its angle (not pressed into the gap between the legs) */
+    for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=RAt(c[0]);if(R<0)continue;shPoint(0,c[0],c[1],R+0.0008,q);p.setXYZ(i,q[0],q[1],q[2]);}
+    /* and over the trousers under it (they showed through the tail's lower edge) */
+    for(const U of layers){if(U.rank>=L.rank||!U.newG)continue;for(const r of [0,3,4]){const UG=U.newG[r];if(!UG||!UG.any)continue;
+      for(let i=0;i<p.count;i++){shCoord(r,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=UG.at(c[0],c[1]);if(Ru>0&&c[2]<Ru+0.003){shPoint(r,c[0],c[1],Ru+0.003,q);p.setXYZ(i,q[0],q[1],q[2]);}}}}
+    p.needsUpdate=true;o.geometry.computeVertexNormals();o.userData.reseated=true;o.userData.tailFitted=true;o.userData.ctx='none';}
+  for(const o of others){if(o.userData.tailFitted)continue;const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
     G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrisOf(o,0),0);});
@@ -266,7 +277,7 @@ function buildShells(G,GS){
     p.needsUpdate=true;cm.geometry.computeVertexNormals();}
   /* fabric of a lower layer that ends up under an upper one is never seen: drop it, so nothing can poke through
      (only 2 cm inside the upper layer's edge: the coverage grid is coarse and hole-filled, at an open front it reached past the fabric and cut teeth into the trousers) */
-  for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean))){const L=layers.find(l=>l.name===m.userData.layer);if(!L)continue;
+  for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean))){const L=layers.find(l=>l.name===m.userData.layer);if(!L||window.__qaNoDrop)continue;
     const up=layers.filter(u=>u.rank>L.rank&&u.newG);if(!up.length)continue;const g=m.geometry,p=g.attributes.position,rg=g.userData.reg,n=p.count,c=new Float32Array(3),cov=new Uint8Array(n);
     for(let i=0;i<n;i++){const r0=rg?rg[i]:0;shCoord(r0,p.getX(i),p.getY(i),p.getZ(i),c,0);for(const U of up){const G2=U.newG[r0];if(!G2||!G2.any)continue;const R=G2.at(c[0],c[1]);if(R>0&&R>=c[2]-0.03){if(!G2.S)G2.sdf();if(G2.sdfAt(c[0],c[1])>0.02){cov[i]=1;break;}}}}
     const ix=g.index.array,keep=[];for(let t=0;t<ix.length;t+=3)if(!(cov[ix[t]]&&cov[ix[t+1]]&&cov[ix[t+2]]))keep.push(ix[t],ix[t+1],ix[t+2]);if(keep.length<ix.length)g.setIndex(keep);}
@@ -407,6 +418,9 @@ function shDrape(B,layers){
       if(L.name!=='bottom'){const y=P[v*3+1];if(reg[v]===0)h=Math.max(h,0.9*smooth((y-(BC.shY-0.2))/0.17));else if(reg[v]<=2)h=Math.max(h,0.9*(1-smooth((B.C[v*3+1]-0.02)/0.1)));}
       /* the bust holds the fabric up (it rests on it and spans down from it) */
       if(BC.g==='f'&&reg[v]===0&&L.name!=='bottom'){const y=P[v*3+1];h=Math.max(h,0.95*gauss(y-1.25,0.1)*smooth((P[v*3+2]-0.0)/0.06));}
+      /* the last 2-3 cm at a cut edge (hem, front, cuff) move together with the pattern: points along the edge falling
+         independently made it ragged, with teeth hanging below a hem band */
+      if(reg[v]===0)h=Math.max(h,0.8*(1-smooth((L.f[v]-0.004)/0.028)));
       hold[v]=h;
       T[v]=(1-h)*Math.min(0.04,0.0015+0.5*Math.max(0,E[v]-0.003));}
     return{L,X,act,X0,rest,on,T,hold,acc:new Float32Array(n*3),cnt:new Float32Array(n)};});
@@ -647,7 +661,8 @@ function shEmit(B,L){
     {const BP=B.P,nr=g.attributes.normal;for(const q of (BC.core.spots||[])){let ax=0,ay=0,az=0;const ids=[];for(let i=0;i<S2.length;i++){const v=S2[i],dx=BP[v*3]-q[0],dy=BP[v*3+1]-q[1],dz=BP[v*3+2]-q[2],d=Math.sqrt(dx*dx+dy*dy+dz*dz);if(d<q[3]*0.8){ids.push([i,d]);if(d>q[3]*0.5){ax+=nr.getX(i);ay+=nr.getY(i);az+=nr.getZ(i);}}}
       const l=Math.hypot(ax,ay,az);if(!l)continue;ax/=l;ay/=l;az/=l;for(const[i,d] of ids){const w=1-smooth(d/(q[3]*0.8));const x=lerp(nr.getX(i),ax,w),y=lerp(nr.getY(i),ay,w),z=lerp(nr.getZ(i),az,w),m=Math.hypot(x,y,z)||1;nr.setXYZ(i,x/m,y/m,z/m);}}}
     /* turned edge: the fabric folds back at hems, cuffs and necklines so it reads as cloth with thickness */
-    shTurnEdge(g);
+    /* (no turned edge along the lower cut where the curtain or kept skirt continues the fabric: it drew a hem line across the hips) */
+    shTurnEdge(g,L.lowerCut!=null?L.lowerCut+0.004:null);
     const nv=g.attributes.position.count,col=new Float32Array(nv*3);for(let i=0;i<nv;i++){const y=g.attributes.position.getY(i);col[i*3]=col[i*3+1]=col[i*3+2]=1;}
     g.setAttribute('color',new THREE.BufferAttribute(col,3));
     const m=mk(g,L.mats[mi]);m.userData.ctx='none';out.push(m);
@@ -660,7 +675,7 @@ function shEmit(B,L){
 const posKey=(x,y,z)=>(Math.round(x*20000)+65536)*17179869184+(Math.round(y*20000)+65536)*131072+(Math.round(z*20000)+65536);
 function shWeldNormals(g,S,P2){const n=g.attributes.normal,by=new Map();for(let i=0;i<S.length;i++){const k=posKey(P2[i*3],P2[i*3+1],P2[i*3+2]);let a=by.get(k);if(a===undefined)by.set(k,i);else if(typeof a==='number')by.set(k,[a,i]);else a.push(i);}
   for(const a of by.values()){if(typeof a==='number')continue;let x=0,y=0,z=0;for(const i of a){x+=n.getX(i);y+=n.getY(i);z+=n.getZ(i);}const l=Math.hypot(x,y,z)||1;for(const i of a)n.setXYZ(i,x/l,y/l,z/l);}}
-function shTurnEdge(g){
+function shTurnEdge(g,skipBelow){
   const ix=Array.from(g.index.array),p=g.attributes.position,n=g.attributes.normal,u=g.attributes.uv,rg=g.userData.reg,cnt=new Map();
   const pa=p.array,NV=p.count,same=new Map(),can=new Uint32Array(NV);
   for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=same.get(k);if(c===undefined){same.set(k,i);c=i;}can[i]=c;}
@@ -668,7 +683,7 @@ function shTurnEdge(g){
   const P=Array.from(p.array),N=Array.from(n.array),U=Array.from(u.array),inner=new Map(),th=0.0026;
   const dup=i=>{let j=inner.get(i);if(j!=null)return j;j=P.length/3;inner.set(i,j);
     P.push(p.getX(i)-n.getX(i)*th,p.getY(i)-n.getY(i)*th,p.getZ(i)-n.getZ(i)*th);N.push(-n.getX(i),-n.getY(i),-n.getZ(i));U.push(u.getX(i),u.getY(i)+0.05);if(rg)rg.push(rg[i]);if(g.userData.src)g.userData.src.push(g.userData.src[i]);return j;};
-  for(const e of cnt.values()){if(e.c!==1)continue;const a=e.a,b=e.b,a2=dup(a),b2=dup(b);ix.push(b,a,a2,b,a2,b2);}
+  for(const e of cnt.values()){if(e.c!==1)continue;const a=e.a,b=e.b;if(skipBelow!=null&&rg&&rg[a]===0&&rg[b]===0&&p.getY(a)<skipBelow&&p.getY(b)<skipBelow)continue;const a2=dup(a),b2=dup(b);ix.push(b,a,a2,b,a2,b2);}
   if(!inner.size)return;
   g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(ix);
 }
