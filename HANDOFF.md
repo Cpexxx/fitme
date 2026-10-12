@@ -189,3 +189,8 @@ Kolejne rundy:
   (sama ikonka na pasku, log `XGetWindowAttributes failed`). Bez GPU zostaje natywny Wayland (test: Xvfb → weston
   x11-backend pixman → Fitme jako klient Wayland: okno i manekin OK). FITME_OZONE=x11|wayland wymusza. Okno pokazuje się
   najpóźniej po 4 s, nawet bez `ready-to-show`.
+- 2026-10-12: użytkownik ma też Ubuntu na prawdziwym sprzęcie (host `zpxn`, AMD RX 7900 `1002:744c` + Intel iGPU). Wymuszony
+  X11 → proces GPU crash (exit 139) ×3 → brak WebGL. Zmiany w main.js: NIE wymuszamy X11 (FITME_OZONE=x11|wayland ręcznie),
+  `force_high_performance_gpu` tylko macOS, `enable-unsafe-swiftshader` zawsze na Linuksie, po crashu procesu GPU
+  (`child-process-gone`) app.relaunch z `--fitme-soft` (SwiftShader). Test: FITME_GPU_FORCE=1 FITME_TEST_GPU_CRASH=1 (chrome://gpucrash).
+  PRZYCZYNA crasha na AMD nieustalona — czekamy na log z wersji bez wymuszonego X11.
