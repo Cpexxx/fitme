@@ -250,7 +250,7 @@ function buildTop(G,P=S.top){
   const trim=T.trim?fabric('rib',c2):md;
   const sleeveless=sleeve==='none';
   const hemOut=(BC.g==='f'?0.875:0.855)+(F.hem||0)+(T.tail?-0.02:0)-SZ.len;
-  const hem=tuck?waistY-0.05:hemOut,e0=Math.max(0.002,F.e+(T.boning?-0.004:0)+SZ.d),top=sleeveless?(neck==='scoop'?1.345:1.3):NECK_Y;
+  const hem=tuck?waistY-0.05:hemOut,e0=Math.max(0.002,easeCap(F.e+(T.boning?-0.004:0)+SZ.d)),top=sleeveless?(neck==='scoop'?1.345:1.3):NECK_Y;
   const easeAt=y=>{let e=e0;if(y>1.3)e=lerp(e0,Math.min(e0,0.008+e0*0.4),smooth((y-1.3)/0.12));if(y>1.45)e=lerp(e,0.01,smooth((y-1.45)/0.055));if(tuck&&y<waistY+0.06)e=lerp(0.003,e,smooth((y-(waistY-0.015))/0.075));if(T.rib&&!tuck&&y<hem+0.05)e=lerp(e*0.45,e,smooth((y-hem)/0.05));return e;};
   const baseAt=y=>(tuck&&y<waistY)?bodyEnv(y,null):drapeEnv(y,prev);
   const rf0=y=>{const b=baseAt(y);let r=addE(b,easeAt(y));if(!sleeveless){const c=topCap(y,e0,prev,F.drop||0);if(c)r=maxE(r,c);}else if(y>0.98)r.rx=Math.min(r.rx,b.rx+0.01+0.01*smooth((1.1-y)/0.12));return r;};
@@ -319,7 +319,7 @@ function buildTop(G,P=S.top){
   /* sleeves */
   let sleeveF=null;
   if(!sleeveless){
-    const len=sleeve==='long'?Math.min(1.0,0.945+Math.max(0,SZ.sl)):sleeve==='rolled'?0.7:0.34+(F.sleeveAdd||0)+SZ.sl*0.5,se=Math.max(0.002,F.se+SZ.d*0.7);
+    const len=sleeve==='long'?Math.min(1.0,0.945+Math.max(0,SZ.sl)):sleeve==='rolled'?0.7:0.34+(F.sleeveAdd||0)+SZ.sl*0.5,se=Math.max(0.002,easeCap(F.se+SZ.d*0.7,0.03));
     sleeveF=t=>{if(t>len+1e-9)return null;let r=Math.max(armAt(t),sleeveEnv(t,prev))+se;if(F.drop&&t<0.25)r+=0.024*(1-t/0.25);
       if((T.rib||T.cuffs)&&sleeve==='long'&&t>len-0.07)r=Math.max(armAt(t),sleeveEnv(t,prev))+(T.cuffs?0.007:0.009);return r;};
     const elbow=(a,tt,s)=>{const e=Math.max(0,s.rx-armAt(s.t));return 1+(gauss(s.t-0.5,0.08)*0.3*e*Math.sin(s.t*55+a*1.5)*(0.6+0.4*Math.sin(a*2+1))+0.12*e*fbm(Math.cos(a)*2,s.t*6,Math.sin(a)*2))/s.rx;};

@@ -17,7 +17,7 @@ function buildOuter(G,P=S.outer){
   MK_STIFF=Math.min(1,(STIFF[mat]||0.4)+(T.structured?0.2:0)+(T.quilt?0.4:0)+(T.lapel?0.1:0));
   const m=fabric(mat,P.color,pat,c2),md=fabric(mat,shade(P.color,-0.07),pat,c2);
   const ribMat=T.ribStripe?fabric('rib',P.color,'breton',c2):fabric('rib',shade(P.color,-0.05));
-  const top=NECK_Y,hem=T.hem+(F.hem||0)-SZ.len,e0=Math.max(0.006,T.e*F.m+SZ.d),sleeves=!T.sleeveless,drop=(F.drop||0)+(T.structured?0.012:0);
+  const top=NECK_Y,hem=T.hem+(F.hem||0)-SZ.len,e0=Math.max(0.006,easeCap(T.e*F.m+SZ.d)),sleeves=!T.sleeveless,drop=(F.drop||0)+(T.structured?0.012:0);
   const close=T.closure==='none'?'closed':(CLOSES[P.close]?P.close:'closed');
   const lapel=!!T.lapel,vrib=T.collar==='vrib',yb=T.yb||T.vb||1.2,yg=1.4,xg=0.074;
   const vX=y=>y<yb?0:lerp(0,xg,smooth((y-yb)/(yg-yb))*0.7+clamp((y-yb)/(yg-yb),0,1)*0.3);
@@ -33,7 +33,8 @@ function buildOuter(G,P=S.outer){
     else if(y>0.98){r.rx=Math.min(r.rx,b.rx+0.014+0.01*smooth((1.1-y)/0.12));}
     return r;};
   const isOpen=close!=='closed'||lapel||vrib,chestR=rf0(1.27);
-  const qm=T.quilt?y=>1+0.05*Math.pow(Math.abs(Math.sin((y-hem)*Math.PI/0.085)),0.6):null;
+  /* quilted channels: full, flat-topped baffles pinched in at the stitch lines (not a smooth wave = a balloon) */
+  const qm=T.quilt?y=>1+0.055*Math.pow(Math.abs(Math.sin((y-hem)*Math.PI/0.085)),0.28)-0.03:null;
   const mod=(a,t,s)=>{let k=qm?qm(s.y):1;
     if(!T.quilt)k*=1+(0.25*e0*Math.sin(a*5+s.y*6)*smooth((1.2-s.y)/0.3)+0.1*e0*fbm(Math.cos(a)*2.6,s.y*2.2,Math.sin(a)*2.6))/Math.max(s.rx,0.08);
     if(isOpen&&close!=='half'&&s.y<1.27){const fr=Math.max(0,Math.sin(a)),b0=s.rz-(s.off||0);k*=1+fr*fr*Math.max(0,chestR.rz*0.96-b0)/b0*0.85*smooth((1.27-s.y)/0.12);}
@@ -49,7 +50,8 @@ function buildOuter(G,P=S.outer){
   if(anyGap){const lm=mk(tube(vSamples(hem+0.004,top-0.004,60,y=>ringF(y,-0.0035)),{seg:84,mod}),liningMat(T,P));lm.userData.lining=true;G.add(lm);}
   /* front edges */
   const edge=(sd,off=0.0015)=>{const pts=[];for(let k=0;k<=44;k++){const y=lerp(hem,top,k/44),g=gapX(y);if(g<0.004)continue;const r=rf0(y),aR=angAtX(r,g),a=sd>0?aR:Math.PI-aR;pts.push(ringPt(r,a,y,mod(a,0,{y,rx:r.rx,rz:r.rz}),0,off));}return pts;};
-  if(anyGap)for(const sd of [-1,1])cordsAlong(G,m,edge(sd),0.004);
+  /* (no rolled cord along the pattern's front edges: the fitted shell has its own turned edge and its fronts open wider,
+     the cords were left hanging in the opening as loose stripes) */
   /* hem */
   const band=(y0,y1,mat2,bulge)=>G.add(mk(tube(vSamples(y0,y1,5,y=>ringF(y,0.002+roundE(y,y0,y1,bulge||0.003))),{seg:84}),mat2));
   if(T.band==='rib')band(hem,hem+0.05,ribMat);
@@ -122,9 +124,9 @@ function buildOuter(G,P=S.outer){
   /* sleeves */
   let sleeveF=null;
   if(sleeves){
-    const len=Math.min(1.0,0.975+Math.max(0,SZ.sl)),se=Math.max(0.006,T.se*F.m+SZ.d*0.7);
+    const len=Math.min(1.0,0.975+Math.max(0,SZ.sl)),se=Math.max(0.006,easeCap(T.se*F.m+SZ.d*0.7,0.03));
     sleeveF=t=>{if(t>len+1e-9)return null;const inner=Math.max(armAt(t),sleeveEnv(t,prev));let r=inner+se;if(drop&&t<0.25)r+=drop*0.8*(1-t/0.25);if(T.cuff==='rib'&&t>len-0.06)r=inner+0.011;return r;};
-    const smod=(a,tt,s)=>T.quilt?1+0.06*Math.pow(Math.abs(Math.sin(s.t*Math.PI/0.12)),0.6):1+(gauss(s.t-0.5,0.09)*0.16*se*Math.sin(s.t*46+a*1.5)*(0.6+0.4*Math.sin(a*2+1))+0.12*se*fbm(Math.cos(a)*2,s.t*5,Math.sin(a)*2))/s.rx;
+    const smod=(a,tt,s)=>T.quilt?1+0.065*Math.pow(Math.abs(Math.sin(s.t*Math.PI/0.12)),0.28)-0.035:1+(gauss(s.t-0.5,0.09)*0.16*se*Math.sin(s.t*46+a*1.5)*(0.6+0.4*Math.sin(a*2+1))+0.12*se*fbm(Math.cos(a)*2,s.t*5,Math.sin(a)*2))/s.rx;
     const sm=T.sleeves2?fabric('leather',c2):m;
     for(const side of [-1,1]){
       G.add(mkMain(tube(aSamples(-0.06,len,T.quilt?96:72,side,sleeveF),{seg:42,mod:smod}),sm));

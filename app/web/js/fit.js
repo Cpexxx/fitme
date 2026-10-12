@@ -194,6 +194,8 @@ function bodyMeasures(){
   return m;
 }
 /* extra ease (nominal metres) a chosen size adds over the mannequin's own size */
+/* ease past ~3.5 cm (big sizes, oversized) does not blow the garment up: the extra cloth hangs and folds instead */
+function easeCap(e,c=0.035){return e<=c?e:c+(e-c)*0.45;}
 function sizeEase(P){
   const m=BC.meas;if(!m||!P||!P.size||P.size==='auto'||!SIZES.includes(P.size))return{d:0,len:0,sl:0,diff:0};
   const i=SIZES.indexOf(P.size),chart=SIZE_CHEST[BC.g][i],d=(chart-m.chest)/TAU/100/BC.sxz,diff=i-m.sizeIdx;

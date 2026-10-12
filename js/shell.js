@@ -141,7 +141,9 @@ function shLayerFit(L){
   if(L.name==='top'){e=(TOP_FITS[P.fit]||TOP_FITS.regular).e;L.tuck=TOPS[P.type]&&TOPS[P.type].tuck?(P.tuck||'out'):'out';L.rank=L.tuck==='in'?0:2;}
   else if(L.name==='mid'){e=MID_ITEMS[P.type]==='top'?(TOP_FITS[P.fit]||TOP_FITS.regular).e:((OUTERS[P.type]||{}).e||0.03)*((OUTER_FITS[P.fit]||{}).m||1);L.rank=3;}
   else{e=((OUTERS[P.type]||{}).e||0.035)*((OUTER_FITS[P.fit]||{}).m||1);L.rank=4;L.sleeveless=!!(OUTERS[P.type]||{}).sleeveless;}
-  L.fitE=Math.max(0.004,e+sizeEase(P).d);
+  L.fitE=Math.max(0.004,easeCap(e+sizeEase(P).d));
+  /* quilted (puffer) garments: channels are stitched into the fitted fabric (shFolds) */
+  if(L.name!=='top'&&L.name!=='bottom'){const OT=OUTERS[P.type];L.quilt=!!(OT&&OT.quilt&&(L.name==='outer'||MID_ITEMS[P.type]==='outer'));}
   /* the outfit as a whole: over slim trousers a top or jacket is cut closer at the waist, over relaxed / wide ones it falls easier;
      a bulky layer underneath (hoodie, sweater, oversized tee) gives the next layer room */
   if(L.name!=='bottom'){const B=S.bottom,bf=B&&B.type!=='none'&&BOTTOMS[B.type]&&!BOTTOMS[B.type].skirt?B.fit:null;
@@ -606,6 +608,8 @@ function shFolds(B,L){
     /* where the drape bunched the fabric the folds are deeper; where it hangs taut they almost vanish */
     if(L.comp)d*=0.5+1.3*smooth(L.comp[v]/0.05);
     d*=heavy;
+    /* puffer: full baffles between stitch lines (8.5 cm apart on the body, 12 on the sleeves), the stitches pulled in */
+    if(L.quilt){d*=0.35;const ph=r===0?xx*Math.PI/0.085:r<=2?xx*Math.PI/0.12:0;if(ph)d+=0.0085*(Math.pow(Math.abs(Math.sin(ph)),0.3)-0.72)*edgeK;}
     /* near a sleeve end the fold depth is capped so the cuff stays a clean ring */
     if(r>=1&&r<=2)d=clamp(d,-0.008-0.008*edgeK,0.008+0.008*edgeK);
     if(d){X[v*3]+=Nn[v*3]*d;X[v*3+1]+=Nn[v*3+1]*d;X[v*3+2]+=Nn[v*3+2]*d;}}
