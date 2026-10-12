@@ -103,8 +103,10 @@ let BUILT=null;
 const LOOK_KEYS=new Set(['color','color2','sole','beltColor','sockColor','dial','frame','lens','pattern','metal','skin','finish','strap']);
 function shapeKey(state){return JSON.stringify(state,(k,v)=>LOOK_KEYS.has(k)?undefined:(k==='pose'?'':v))+QUALITY;}
 /* the garment builders alone (no fabric simulation): fast, used to get the materials of a new colourway */
+/* the layers up to and including the shirt: things worn on the shirt (a tie) are laid on these, not on a sweater or coat */
+let LAYERS_TOP=null;
 function runBuilders(G,GS){
-  safe('body',()=>buildBody(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
+  LAYERS_TOP=null;safe('body',()=>buildBody(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));LAYERS_TOP=LAYERS.slice();MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
   MK_CTX='hair';safe('hair',()=>buildHair(G));MK_CTX='none';safe('acc',()=>buildAcc(G));safe('shoes',()=>buildShoes(GS,G));}
 function matSeq(G,GS){const m=[],c=[];for(const g of [G,GS])g.traverse(o=>{if(o.isMesh){m.push(o.material);c.push(o.geometry.attributes.position.count);}});return{m,c};}
 function buildInto(group,state,cache=true){
@@ -701,6 +703,9 @@ function randomize(){
   A.cap.type=maybe(0.3,HATS);A.cap.color=pc(PAL.basic);A.glasses.type=maybe(0.25,GLASSES);A.watch.type=maybe(0.4,WATCHES);A.bracelet.type=maybe(0.3,BRACELETS);A.bracelet.pos=R()*0.4;
   A.ring.type=maybe(0.2,RINGS);A.chain.type=maybe(0.35,NECKLACES);A.earrings.type=maybe(fem?0.6:0.2,EARRINGS);A.wallet.type=maybe(0.15,WALLETS);A.bag.type=maybe(0.3,BAGS);A.bag.color=pc(PAL.leather);
   A.scarf.type=s.outer.type!=='none'&&R()<0.2?pick(['wrap','long']):'none';A.tie.type='none';
+  /* everything is drawn anew: a bandana, kerchief or gloves from the previous outfit must not stay on */
+  A.bandana.type=maybe(0.08,BANDANAS);A.headband.type=A.cap.type==='none'?maybe(0.06,HEADBANDS):'none';A.gloves.type=s.outer.type!=='none'?maybe(0.12,GLOVES):'none';
+  for(const k of ['bandana','headband','scarf'])A[k].color=pc(PAL.basic);A.gloves.color=pc(PAL.leather);
   const met=pick(Object.keys(METALS));for(const k of ['watch','bracelet','ring','chain','earrings','wallet'])A[k].metal=met;
   S=sanitize(s);update();
 }

@@ -128,6 +128,8 @@ function buildBracelets(G){
 }
 function buildRings(G){
   const A=S.acc.ring,t0=A.type;if(!t0||t0==='none')return;
+  /* under full gloves the rings are not seen (they stood out of the glove's fingers) */
+  const gl=S.acc.gloves&&S.acc.gloves.type;if(gl&&gl!=='none'&&gl!=='fingerless')return;
   const side=handSide(A.hand),metal=metalMat(A.metal),H=localGroup(armMatrix(1,side));
   const fingers={signet:[3],band:[2],stack:[0,1,2],chunky:[1]}[t0]||[2];
   for(const i of fingers){const f=fingerSeg(i),P=f.A.clone().addScaledVector(f.d1,f.L1*0.55),r=f.r+0.0014;
@@ -175,7 +177,7 @@ function buildWalletChain(G){
   const sd=A.side==='L'?1:-1,metal=metalMat(A.metal),wy=PANTS.waistY;
   const aF=sd>0?FRONT-0.5:FRONT+0.5,aB=sd>0?BACKA+0.56:BACKA-0.56;
   const span=sd>0?aF-aB:aB-aF;
-  const chain=sag=>{const pts=[];for(let i=0;i<=26;i++){const t=i/26,a=sd>0?aF-span*t:aF+span*t,y=wy-0.025-sag*Math.sin(Math.PI*t)-0.04*t;pts.push(envPt(bodyEnv(y,LAYERS),a,y,0.008+0.01*Math.sin(Math.PI*t)));}
+  const chain=sag=>{const pts=[];for(let i=0;i<=26;i++){const t=i/26,a=sd>0?aF-span*t:aF+span*t,y=wy-0.025-sag*Math.sin(Math.PI*t)-0.04*t;pts.push(envPt(bodyEnv(y,LAYERS.slice(0,1)),a,y,0.008+0.01*Math.sin(Math.PI*t)));}
     const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),L=curve.getLength(),n=Math.round(L/0.0105);
     for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0062,0.0017,8,14),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.66,1);G.add(l);}
     return pts;};
@@ -236,18 +238,22 @@ function buildScarf(G){
     const last=smp[N];for(let i=0;i<11;i++){const p=last.c.clone().addScaledVector(last.u,(i/10-0.5)*W*0.92);G.add(mk(cordGeo([p,p.clone().add(V3(0.002*Math.sin(i*2),-0.032-0.006*Math.sin(i*3.1),0.002))],0.0022),m));}});
 }
 function buildTie(G){
-  const A=S.acc.tie,t0=A.type;if(!t0||t0==='none')return;
+  const A=S.acc.tie,t0=A.type;if(!t0||t0==='none')return;const TL=LAYERS_TOP||LAYERS;
   const m=fabric('satin',A.color,A.pattern||'solid',A.color2||'#7a3b2e'),y0=NECK_Y-0.025,yEnd=t0==='bow'?y0:(PANTS?PANTS.waistY+0.03:1.04);
-  if(t0==='bow'){const e=frontEnv(y0,LAYERS,0),z=frontZ(e,0)+0.012;for(const sd of [-1,1]){const l=mk(new THREE.SphereGeometry(1,16,12),m);l.scale.set(0.028,0.016,0.008);l.position.set(sd*0.026,y0,z);G.add(l);}const k=mk(new THREE.SphereGeometry(1,12,10),m);k.scale.set(0.009,0.012,0.008);k.position.set(0,y0,z+0.003);G.add(k);return;}
+  if(t0==='bow'){const e=frontEnv(y0,TL,0),z=frontZ(e,0)+0.012;for(const sd of [-1,1]){const l=mk(new THREE.SphereGeometry(1,16,12),m);l.scale.set(0.028,0.016,0.008);l.position.set(sd*0.026,y0,z);G.add(l);}const k=mk(new THREE.SphereGeometry(1,12,10),m);k.scale.set(0.009,0.012,0.008);k.position.set(0,y0,z+0.003);G.add(k);return;}
   const wMax=t0==='skinny'?0.052:0.084,pts=[],sides=[];
-  for(let k=0;k<=24;k++){const y=lerp(y0-0.03,yEnd,k/24),e=frontEnv(y,LAYERS,0);pts.push(V3(0,y,frontZ(e,0)+0.006));sides.push(V3(1,0,0));}
+  for(let k=0;k<=24;k++){const y=lerp(y0-0.03,yEnd,k/24),e=frontEnv(y,TL,0);pts.push(V3(0,y,frontZ(e,0)+0.006));sides.push(V3(1,0,0));}
   const wf=v=>lerp(0.032,wMax,smooth(v*1.05))*(v>0.93?Math.max(0.05,1-(v-0.93)/0.07):1);
   G.add(mk(ribbon(pts,sides,wf,{cols:4,uRep:2}),m));
-  const e=frontEnv(y0,LAYERS,0),z=frontZ(e,0)+0.012,kn=mk(new THREE.CylinderGeometry(0.019,0.012,0.038,12),m);kn.position.set(0,y0-0.012,z);kn.scale.z=0.45;G.add(kn);
+  const e=frontEnv(y0,TL,0),z=frontZ(e,0)+0.012,kn=mk(new THREE.CylinderGeometry(0.019,0.012,0.038,12),m);kn.position.set(0,y0-0.012,z);kn.scale.z=0.45;G.add(kn);
 }
 function buildAcc(G){buildHat(G);buildGlasses(G);buildWatch(G);buildBracelets(G);buildRings(G);buildEarrings(G);buildHeadband(G);buildGloves(G);
   /* pieces that lie on the clothes follow the same fit deformation as the fabric */
-  MK_CTX='cloth';try{buildBandana(G);buildNecklace(G);buildWalletChain(G);buildScarf(G);buildTie(G);buildBag(G);}finally{MK_CTX='none';}}
+  MK_CTX='cloth';try{buildBandana(G);buildNecklace(G);
+    /* a tie is worn on the shirt and a wallet chain on the trousers: they belong to that layer, so a sweater or a coat over
+       them hides them (the tie lay on top of a crew-neck sweater, the chain on the front of a long coat) */
+    MK_LAYER='bottom';buildWalletChain(G);MK_LAYER='top';buildTie(G);MK_LAYER='none';
+    buildScarf(G);buildBag(G);}finally{MK_CTX='none';MK_LAYER='none';}}
 
 /* =============== bandanas =============== */
 function bandanaMat(A){return fabric('poplin',A.color||'#a3262a',A.pattern||'paisley',A.color2||'#f4f1ea');}

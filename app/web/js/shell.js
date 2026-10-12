@@ -706,7 +706,9 @@ function shReseat(o,shift,G){
    the fabric over them stays smooth instead of being pushed out into lumps */
 function shHideCovered(o,L,layers){const up=layers.filter(l=>l.rank>L.rank&&l.newG);if(!up.length)return;
   const g=o.geometry,p=g.attributes.position,n=p.count;if(!n)return;if(!g.index){const ix=new Uint32Array(n);for(let i=0;i<n;i++)ix[i]=i;g.setIndex(new THREE.BufferAttribute(ix,1));g.clearGroups&&g.clearGroups();}const r=shRegionOfAxis(g.userData.axis||fitAxisOf(g)),c=new Float32Array(3),cov=new Uint8Array(n);
-  for(let i=0;i<n;i++){shCoord(r,p.getX(i),p.getY(i),p.getZ(i),c,0);for(const U of up){const G2=U.newG[r];if(!G2||!G2.any)continue;const R=G2.at(c[0],c[1]);if(R>=0&&R>=c[2]-0.035){cov[i]=1;break;}}}
+  /* a piece on the legs (a wallet chain, a trouser detail) is also covered by a coat's skirt, which lives in the trunk region */
+  const regs=r>=3?[r,0]:[r];
+  for(let i=0;i<n;i++)for(const rr of regs){if(cov[i])break;shCoord(rr,p.getX(i),p.getY(i),p.getZ(i),c,0);for(const U of up){const G2=U.newG[rr];if(!G2||!G2.any)continue;const R=G2.at(c[0],c[1]);if(R>=0&&R>=c[2]-0.035){cov[i]=1;break;}}}
   const ix=g.index.array,keep=[];for(let t=0;t<ix.length;t+=3)if(!(cov[ix[t]]&&cov[ix[t+1]]&&cov[ix[t+2]]))keep.push(ix[t],ix[t+1],ix[t+2]);
   if(keep.length<ix.length)g.setIndex(keep);}
 /* the part of a shirt / jacket / coat below the crotch: a curtain that starts exactly on the fitted shell's lower edge
