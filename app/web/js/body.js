@@ -89,13 +89,21 @@ function fingerSeg(i){
 }
 /* =============== head: smooth egg like a display mannequin =============== */
 function headPt(th,ph,h=0){
-  const D=BC.hd,ny=Math.cos(th),sr=Math.sin(th);
-  const wx=D.rx*(ny<0?lerp(1,BC.jaw||0.76,Math.pow(-ny,1.6)):1-0.06*ny*ny);
+  const D=BC.hd;let ny=Math.cos(th),sr=Math.sin(th);
+  /* the lower half is squarer than an egg: jaw angles and a chin instead of a rounded point (a weak, receding jaw) */
+  if(ny<0){const p=0.8;ny=-Math.pow(-ny,p);sr=Math.pow(sr,p);const l=Math.hypot(ny,sr);ny/=Math.max(1,l);sr/=Math.max(1,l);}
+  const wx=D.rx*(ny<0?lerp(1,Math.max(BC.jaw||0.76,BC.g==='f'?0.8:0.86),Math.pow(-ny,1.8)):1-0.06*ny*ny);
   const zf=D.zf*(ny<0?lerp(1,0.88,Math.pow(-ny,2)):1-0.05*ny*ny);
   const zb=D.zb*(ny<-0.2?lerp(1,0.8,smooth((-ny-0.2)/0.8)):1+0.03*gauss(ny-0.3,0.35));
   const[c,s]=seXY(ph,2.12);
   let x=wx*sr*c,z=(s>=0?zf:zb)*sr*s,y=D.ry*ny;
-  if(s>0)z+=0.006*s*smooth((-ny-0.55)/0.3)*gauss(c,0.5);
+  /* a jaw, not an egg: the chin comes forward a little */
+  if(s>0)z+=0.006*s*smooth((-ny-0.5)/0.32)*gauss(c,0.55);
+  /* the lowest point is the chin at the front, not the middle of an egg: the lower half leans forward */
+  if(ny<0)z+=D.zf*0.3*Math.pow(-ny,1.7);
+  /* behind the jaw and at the back the skull runs smoothly into the neck (no round bottom with the neck stuck under it) */
+  /* under the jawline the head tucks in towards the neck (all round except the chin): the jaw reads as an edge, not a bowl */
+  if(ny<-0.2&&BC.neckR){const back=smooth((0.3-s)/0.85),chin=gauss(c,0.4)*smooth(s/0.4),tb=smooth((-ny-0.2)/0.8)*back,tj=smooth((-ny-0.6)/0.3)*(1-chin),t=Math.max(tb*tb*0.85,tj*0.7),hr=Math.hypot(x,z),nr=BC.neckR*1.12;if(hr>nr&&t>0){const k=lerp(hr,nr,t)/hr;x*=k;z*=k;}}
   if(h){const L=Math.hypot(x,y,z)||1,k=(L+h)/L;x*=k;y*=k;z*=k;}
   return V3(BC.headC.x+x,BC.headC.y+y,BC.headC.z+z);
 }

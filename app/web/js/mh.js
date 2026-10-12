@@ -188,7 +188,9 @@ function neckFlare(R,n){if(!BC.headC||!BC.hd)return;const c=BC.headC,ry=BC.hd.ry
   let cx=0,cz=0,k=0;for(let i=0;i<n;i++){const y=R[i*3+1];if(Math.abs(y-y0)<0.006&&Math.abs(R[i*3])<0.09){cx+=R[i*3];cz+=R[i*3+2];k++;}}if(k<6)return;cx/=k;cz/=k;
   for(let i=0;i<n;i++){const y=R[i*3+1];if(y<y0||y>y1+0.03)continue;const x=R[i*3],z=R[i*3+2];if(Math.abs(x)>0.12)continue;
     const t=clamp((y-y0)/(y1-y0),0,1),w=Math.pow(t,2.2),ccx=lerp(cx,c.x,t),ccz=lerp(cz,c.z,t),dx=x-ccx,dz=z-ccz,r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);
-    const hr=headHorizR(Math.min(y,y1),ph);if(hr==null)continue;const target=hr*0.97;if(target<=r)continue;const r2=lerp(r,target,w);
+    const hr=headHorizR(Math.min(y,y1),ph);if(hr==null)continue;
+    /* the throat stays a throat: the neck widens into the skull at the sides and the back, never forwards under the chin */
+    const fwd=smooth((dz/r-0.15)/0.6),target=lerp(hr*0.97,r,fwd);if(target<=r)continue;const r2=lerp(r,target,w);
     R[i*3]=ccx+dx/r*r2;R[i*3+2]=ccz+dz/r*r2;}}
 function mhGeo(P,feet){
   const p1=mhPlan(feet),hi=GEO_Q>1,plan=hi?mhPlan2(feet):p1,R=hi?ccApply(plan,ccApply(p1,P)):ccApply(p1,P),n=plan.n;smoothSpots(R,plan,BC.core&&BC.core.spots);
