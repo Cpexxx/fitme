@@ -194,3 +194,7 @@ Kolejne rundy:
   `force_high_performance_gpu` tylko macOS, `enable-unsafe-swiftshader` zawsze na Linuksie, po crashu procesu GPU
   (`child-process-gone`) app.relaunch z `--fitme-soft` (SwiftShader). Test: FITME_GPU_FORCE=1 FITME_TEST_GPU_CRASH=1 (chrome://gpucrash).
   PRZYCZYNA crasha na AMD nieustalona — czekamy na log z wersji bez wymuszonego X11.
+- 2026-10-12: użytkownik przeszedł z Windowsa na **Kubuntu na prawdziwym sprzęcie** (KDE Plasma, AMD RX 7900 + Intel iGPU).
+  Wersja Windows niepotrzebna „na razie” — job `windows` w build.yml tylko ręcznie (workflow_dispatch, input windows=true);
+  wydanie `latest` zawiera wtedy tylko Fitme-linux.tar.gz. Polecenie aktualizacji dla użytkownika:
+  `cd ~/Desktop && rm -rf Fitme-linux-x64 Fitme-linux.tar.gz && wget -q --show-progress https://github.com/Cpexxx/fitme/releases/download/latest/Fitme-linux.tar.gz && tar -xzf Fitme-linux.tar.gz && ./Fitme-linux-x64/fitme.sh`

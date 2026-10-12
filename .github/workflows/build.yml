@@ -7,6 +7,11 @@ on:
     branches: [main]
     paths: ['js/**', 'fitme.html', 'app/**', '.github/workflows/build.yml']
   workflow_dispatch:
+    inputs:
+      windows:
+        description: 'Zbuduj też wersję Windows'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -16,7 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Windows na razie tylko na żądanie (Actions -> Build Fitme -> Run workflow -> windows); użytkownik testuje na Kubuntu
   windows:
+    if: github.event_name == 'workflow_dispatch' && inputs.windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +78,7 @@ jobs:
 
   release:
     needs: [windows, linux]
+    if: always() && needs.linux.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -80,6 +88,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          MSG=$(printf 'Commit %s (%s)\n\nWindows: rozpakuj Fitme-windows.zip i uruchom Fitme.exe.\nLinux: tar -xzf Fitme-linux.tar.gz, potem ./Fitme-linux-x64/fitme.sh' "${GITHUB_SHA::7}" "$(date -u +'%Y-%m-%d %H:%M UTC')")
+          MSG=$(printf 'Commit %s (%s)\n\nLinux: tar -xzf Fitme-linux.tar.gz, potem ./Fitme-linux-x64/fitme.sh\nWindows (gdy zbudowany): rozpakuj Fitme-windows.zip i uruchom Fitme.exe.' "${GITHUB_SHA::7}" "$(date -u +'%Y-%m-%d %H:%M UTC')")
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest Fitme-windows.zip Fitme-linux.tar.gz --target "$GITHUB_SHA" --title "Fitme – najnowsza wersja" --notes "$MSG" --latest
+          gh release create latest $(ls Fitme-*.zip Fitme-*.tar.gz 2>/dev/null) --target "$GITHUB_SHA" --title "Fitme – najnowsza wersja" --notes "$MSG" --latest
