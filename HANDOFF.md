@@ -198,3 +198,20 @@ Kolejne rundy:
   Wersja Windows niepotrzebna „na razie” — job `windows` w build.yml tylko ręcznie (workflow_dispatch, input windows=true);
   wydanie `latest` zawiera wtedy tylko Fitme-linux.tar.gz. Polecenie aktualizacji dla użytkownika:
   `D=$(xdg-user-dir DOWNLOAD); cd "$D" && rm -rf Fitme-linux-x64 Fitme-linux.tar.gz && wget -q --show-progress https://github.com/Cpexxx/fitme/releases/download/latest/Fitme-linux.tar.gz && tar -xzf Fitme-linux.tar.gz && ./Fitme-linux-x64/fitme.sh`
+
+## Runda 7 (2026-10-12): uwagi 1-9 + głęboki skan
+- Narzędzia QA: `tools/qa/sweep.js <out> [regexp] [--shots]` — buduje KAŻDĄ pozycję katalogu (1854 przypadki: typy, kroje,
+  długości, materiały, akcesoria, fryzury, pozy, sylwetki, rozmiary, wzory, obie płcie, 18 inspo × 7 póz) i sprawdza wyjątki,
+  NaN, elementy poza postacią, brak warstwy, czas. `tools/qa/ui.js <out>` — klika interfejs jak użytkownik (zapisz, udostępnij
+  w obie strony, zły kod, losuj, wyczyść+cofnij, opcje, panele, społeczność, polubienia, menu, przeładowanie, telefon 390 px).
+  Max 2 procesy Chromium równolegle (4 się zakleszczały). Pod SwiftShaderem klikać z `force:true`.
+- Naprawione w tej rundzie: puchówka (pikowanie w shFolds przez L.quilt, mniejszy luz), miękki limit luzu `easeCap` (fit.js),
+  listwy krawędzi rozpiętych pół usunięte (outer.js), żuchwa (headPt) + szyja (neckFlare bez poszerzania do przodu), proporcje
+  kobiece i łagodniejsze mięśnie (recipe.json + VARS 'mp' w process.py, mhdata przegenerowane), Losuj losuje też bandanę/chustę/
+  rękawiczki, nagłówek na telefonie (@media 560px), krawat na koszuli (LAYERS_TOP) i pod swetrem ukryty, łańcuch portfela na
+  spodniach (zakrywa go płaszcz: shHideCovered sprawdza też region tułowia dla nóg), pierścionki pod rękawiczkami ukryte,
+  poły koszuli kończącej się nad kroczem dopasowane (była 'wstęga'), krawędzie cięcia trzymane przy drapowaniu (hold).
+- Nie udało się odtworzyć: pkt 1 (pas przenika kurtki) — pasek nie przebija żadnej z 21 kurtek; pkt 6 (spodnie bez stanu)
+  — wszystkie 16 dołów mają pas; pkt 8 (biało-czerwony element z tyłu). Potrzebne kody FIT3 od użytkownika.
+- Znane: poziomy pas cieniowania na koszulkach na wysokości bioder = granica powłoka/kurtyna (shCurtain zaczyna się 2 mm
+  na zewnątrz; wsunięcie pod powłokę dawało z-fighting na płaszczach — wycofane). Rękaw bomberki lekko odstaje nad ściągaczem.

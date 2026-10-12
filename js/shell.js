@@ -420,7 +420,7 @@ function shDrape(B,layers){
       if(BC.g==='f'&&reg[v]===0&&L.name!=='bottom'){const y=P[v*3+1];h=Math.max(h,0.95*gauss(y-1.25,0.1)*smooth((P[v*3+2]-0.0)/0.06));}
       /* the last 2-3 cm at a cut edge (hem, front, cuff) move together with the pattern: points along the edge falling
          independently made it ragged, with teeth hanging below a hem band */
-      if(reg[v]===0)h=Math.max(h,0.8*(1-smooth((L.f[v]-0.004)/0.028)));
+      h=Math.max(h,0.8*(1-smooth((L.f[v]-0.004)/0.028)));
       hold[v]=h;
       T[v]=(1-h)*Math.min(0.04,0.0015+0.5*Math.max(0,E[v]-0.003));}
     return{L,X,act,X0,rest,on,T,hold,acc:new Float32Array(n*3),cnt:new Float32Array(n)};});
