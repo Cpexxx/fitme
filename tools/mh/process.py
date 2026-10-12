@@ -116,7 +116,7 @@ def variant(g,mus,wt,extra):
     R['%s-young-%s-%s-idealproportions'%(gg,mus,wt)]=1.0
     for k,v in extra.items():R[k]=R.get(k,0)+v
     return R
-VARS={'m':{'mp':('maxmuscle','averageweight',{'torso-vshape-incr':0.35,'measure-shoulder-dist-incr':0.25,'torso-muscle-pectoral-incr':0.35,'torso-muscle-dorsi-incr':0.45,'measure-upperarm-circ-incr':0.45,'l-upperarm-shoulder-muscle-incr':0.6,'r-upperarm-shoulder-muscle-incr':0.6,'measure-thigh-circ-incr':0.35,'measure-calf-circ-incr':0.35,'measure-neck-circ-incr':0.5,'measure-waist-circ-decr':0.2}),
+VARS={'m':{'mp':('maxmuscle','averageweight',{'torso-vshape-incr':0.3,'measure-shoulder-dist-incr':0.2,'torso-muscle-pectoral-incr':0.25,'torso-muscle-dorsi-incr':0.3,'measure-upperarm-circ-incr':0.28,'l-upperarm-shoulder-muscle-incr':0.3,'r-upperarm-shoulder-muscle-incr':0.3,'measure-thigh-circ-incr':0.25,'measure-calf-circ-incr':0.2,'measure-neck-circ-incr':0.35,'measure-waist-circ-decr':0.2}),
            'mn':('minmuscle','averageweight',{}),'wp':('averagemuscle','maxweight',{'measure-waist-circ-incr':0.75,'stomach-pregnant-incr':0.3,'measure-hips-circ-incr':0.3,'measure-thigh-circ-incr':0.45,'l-upperarm-fat-incr':0.6,'r-upperarm-fat-incr':0.6,'measure-neck-circ-incr':0.6,'buttocks-volume-incr':0.3,'measure-bust-circ-incr':0.3}),
            'wn':('averagemuscle','minweight',{'measure-waist-circ-decr':0.35,'measure-thigh-circ-decr':0.25,'measure-upperarm-circ-decr':0.2})},
       'f':{'mp':('maxmuscle','averageweight',{'measure-upperarm-circ-incr':0.25,'measure-thigh-circ-incr':0.2,'measure-calf-circ-incr':0.25,'torso-muscle-dorsi-incr':0.2,'measure-shoulder-dist-incr':0.15}),

@@ -25,9 +25,8 @@
   "female-young-averagemuscle-averageweight-idealproportions": 1,
   "female-young-averagemuscle-averageweight-maxheight": 0.4,
   "measure-waist-circ-decr": 0.25,
-  "measure-hips-circ-decr": -0.25,
   "measure-thigh-circ-incr": 0.3,
-  "measure-neck-height-incr": 0.3,
+  "measure-neck-height-incr": 0.0,
   "stomach-navel-in": 0.4,
   "l-upperleg-fat-incr": 0.35,
   "r-upperleg-fat-incr": 0.35,
@@ -35,7 +34,10 @@
   "r-lowerleg-fat-incr": 0.5,
   "l-lowerleg-muscle-incr": 0.25,
   "r-lowerleg-muscle-incr": 0.25,
-  "female-young-averagemuscle-averageweight-maxcup-averagefirmness": 0.25,
-  "female-young-averagemuscle-averageweight-averagecup-maxfirmness": 0.15
+  "female-young-averagemuscle-averageweight-maxcup-averagefirmness": 0.42,
+  "female-young-averagemuscle-averageweight-averagecup-maxfirmness": 0.45,
+  "measure-shoulder-dist-incr": 0.22,
+  "buttocks-volume-decr": 0.3,
+  "measure-upperarm-circ-incr": 0.12
  }
 }

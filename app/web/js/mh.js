@@ -79,7 +79,8 @@ function footPitch(hh,ay=0.08,dz=0.14){if(hh<=0)return 0;let lo=0,hi=1.2;for(let
 /* returns deformed control points + joints for the current sliders */
 /* body type: muscle and fat (-1..1, a little past 1 allowed) blend the MakeHuman macro shapes (real body types, not scaling) */
 function mhMorph(g,mus,fat){const B=mhBase(),M=B[g],key=g+r3(mus)+'|'+r3(fat);B.morph=B.morph||new Map();if(B.morph.has(key))return B.morph.get(key);
-  const P=M.pos.slice(),J={},ws=[[mus>0?'mp':'mn',Math.abs(mus)],[fat>0?'wp':'wn',Math.min(1,Math.abs(fat))]];
+  /* past the most muscular MakeHuman shape the delta is extrapolated: grow it more slowly (it turned lumpy, like plasticine) */
+  const P=M.pos.slice(),J={},ws=[[mus>0?'mp':'mn',mus>1?1+(mus-1)*0.55:Math.abs(mus)],[fat>0?'wp':'wn',Math.min(1,Math.abs(fat))]];
   for(const[k,w] of ws){const d=M.d[k];if(!d||!w)continue;for(let i=0;i<P.length;i++)P[i]+=d[i]*w;}
   /* muscular and heavy at once: a little extra volume the two shapes alone miss */
   if(mus>0&&fat>0&&M.d.wp){const w=0.25*Math.min(mus,fat);for(let i=0;i<P.length;i++)P[i]+=M.d.wp[i]*w;}
@@ -121,6 +122,8 @@ function mhShape(g,F,b){
     const fx=(1+(F.hips-1)*wH+(F.waist-1)*wW+(F.chest-1)*wC*0.45+(F.shoulders-1)*wS*0.9)*nk*bt;
     const fzF=(1+(F.hips-1)*wH*0.5+(F.waist-1)*wW+(F.chest-1)*wC*(fem?1.2:1))*nk*bt,fzB=(1+(F.hips-1)*wH*1.1+(F.waist-1)*wW*0.6+(F.chest-1)*wC*0.3)*nk*bt;
     let tx=x*fx,tz=z*(z>0?fzF:fzB);
+    /* the bust sits higher and closer together than the base mesh has it (it hung low and pointed outwards) */
+    let bl=0;if(fem&&z>0){bl=gauss(y-1.235,0.055)*gauss(Math.abs(x)-0.085,0.055)*smooth((z-0.05)/0.05);tx-=sd*0.007*bl;}
     /* mannequin neck: lift the throat so the neck rises straight into the egg head */
     const yN=y+(fem?0.06:0.07)*smooth((y-1.49)/0.08)*clamp((z+0.02)/0.12,0,1);
     /* legs: move with the hip joint, thicken around the leg axis */
@@ -131,7 +134,7 @@ function mhShape(g,F,b){
     let ax0=ax*along*ak+px*ath,ay0=ay*along*ak+py*ath;{const xr=ax0*abC-ay0*abS,yr=ax0*abS+ay0*abC;ax0=xr;ay0=yr;}
     const arx=sd*(sh0[0]+dSh+ax0),ary=sh0[1]+ay0,arz=sh0[2]+az*along*ak+pz*ath;
     const s=tw+lw+aw||1;
-    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=(yN*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
+    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=((yN+0.03*bl)*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
   }
   /* mannequin feet a touch longer than the base mesh (it was made for a shorter figure) */
   {const A=J.ankL,fk=fem?1.05:1.09,fw=fem?1.02:1.04;for(let i=0;i<nv;i++){const w=B.footw[i];if(w<=0)continue;const sd=P[i*3]>=0?1:-1,ax=sd*A[0];
