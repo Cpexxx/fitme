@@ -197,4 +197,4 @@ Kolejne rundy:
 - 2026-10-12: użytkownik przeszedł z Windowsa na **Kubuntu na prawdziwym sprzęcie** (KDE Plasma, AMD RX 7900 + Intel iGPU).
   Wersja Windows niepotrzebna „na razie” — job `windows` w build.yml tylko ręcznie (workflow_dispatch, input windows=true);
   wydanie `latest` zawiera wtedy tylko Fitme-linux.tar.gz. Polecenie aktualizacji dla użytkownika:
-  `cd ~/Desktop && rm -rf Fitme-linux-x64 Fitme-linux.tar.gz && wget -q --show-progress https://github.com/Cpexxx/fitme/releases/download/latest/Fitme-linux.tar.gz && tar -xzf Fitme-linux.tar.gz && ./Fitme-linux-x64/fitme.sh`
+  `D=$(xdg-user-dir DOWNLOAD); cd "$D" && rm -rf Fitme-linux-x64 Fitme-linux.tar.gz && wget -q --show-progress https://github.com/Cpexxx/fitme/releases/download/latest/Fitme-linux.tar.gz && tar -xzf Fitme-linux.tar.gz && ./Fitme-linux-x64/fitme.sh`
