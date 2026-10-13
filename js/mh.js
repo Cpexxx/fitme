@@ -123,7 +123,9 @@ function mhShape(g,F,b){
     const fzF=(1+(F.hips-1)*wH*0.5+(F.waist-1)*wW+(F.chest-1)*wC*(fem?1.2:1))*nk*bt,fzB=(1+(F.hips-1)*wH*1.1+(F.waist-1)*wW*0.6+(F.chest-1)*wC*0.3)*nk*bt;
     let tx=x*fx,tz=z*(z>0?fzF:fzB);
     /* the bust sits higher and closer together than the base mesh has it (it hung low and pointed outwards) */
-    let bl=0;if(fem&&z>0){bl=gauss(y-1.235,0.055)*gauss(Math.abs(x)-0.085,0.055)*smooth((z-0.05)/0.05);tx-=sd*0.007*bl;}
+    /* (no lift any more: moving the bust up squeezed the fold under it into a hard shelf - the firmer MakeHuman bust in the
+       recipe sits higher on its own) */
+    let bl=0;if(fem&&z>0){bl=gauss(y-1.24,0.1)*gauss(Math.abs(x)-0.09,0.085)*smooth((z-0.02)/0.06);tx-=sd*0.006*bl;}
     /* mannequin neck: lift the throat so the neck rises straight into the egg head */
     const yN=y+(fem?0.06:0.07)*smooth((y-1.49)/0.08)*clamp((z+0.02)/0.12,0,1);
     /* legs: move with the hip joint, thicken around the leg axis */
@@ -134,7 +136,7 @@ function mhShape(g,F,b){
     let ax0=ax*along*ak+px*ath,ay0=ay*along*ak+py*ath;{const xr=ax0*abC-ay0*abS,yr=ax0*abS+ay0*abC;ax0=xr;ay0=yr;}
     const arx=sd*(sh0[0]+dSh+ax0),ary=sh0[1]+ay0,arz=sh0[2]+az*along*ak+pz*ath;
     const s=tw+lw+aw||1;
-    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=((yN+0.03*bl)*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
+    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=(yN*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
   }
   /* mannequin feet a touch longer than the base mesh (it was made for a shorter figure) */
   {const A=J.ankL,fk=fem?1.05:1.09,fw=fem?1.02:1.04;for(let i=0;i<nv;i++){const w=B.footw[i];if(w<=0)continue;const sd=P[i*3]>=0?1:-1,ax=sd*A[0];

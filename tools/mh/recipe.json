@@ -34,8 +34,8 @@
   "r-lowerleg-fat-incr": 0.5,
   "l-lowerleg-muscle-incr": 0.25,
   "r-lowerleg-muscle-incr": 0.25,
-  "female-young-averagemuscle-averageweight-maxcup-averagefirmness": 0.42,
-  "female-young-averagemuscle-averageweight-averagecup-maxfirmness": 0.45,
+  "female-young-averagemuscle-averageweight-maxcup-averagefirmness": 0.32,
+  "female-young-averagemuscle-averageweight-averagecup-maxfirmness": 1.0,
   "measure-shoulder-dist-incr": 0.22,
   "buttocks-volume-decr": 0.3,
   "measure-upperarm-circ-incr": 0.12
