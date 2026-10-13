@@ -192,8 +192,9 @@ function buildShells(G,GS){
       if(reg[v]===0&&r===0&&y<0.95){const lr=P[v*3]>=0?3:4,Lg=L.grids[lr];if(Lg){shCoord(lr,P[v*3],y,P[v*3+2],tmp,0);const fl=Lg.sdfAt(tmp[0],tmp[1]);if(fl>fv){fv=fl;g=Lg;r=lr;th=tmp[0];xx=tmp[1];rho=tmp[2];}}}
       if(!g)continue;fv=Math.min(fv,(0.3-W[v*3+2])*0.1);f[v]=fv;
       /* fe: distance to a real edge of the garment (the curtain cut is not one: the fabric continues below it) */
-      /* (the shell of a coat ends 2 cm above the cut: lower down it is made from the body between the legs and turned in there) */
-      fe[v]=f[v];if(L.lowerCut!=null)f[v]=Math.min(f[v],y-L.lowerCut-0.018);if(L.legCut!=null)f[v]=Math.min(f[v],y-L.legCut);
+      /* (the shell of a coat ends 2 cm above the cut: lower down it is made from the body between the legs and turned in there;
+         the sleeves are not cut - a hand hangs below the cut and the sleeve ended short of the cuff) */
+      fe[v]=f[v];if(L.lowerCut!=null&&r!==1&&r!==2)f[v]=Math.min(f[v],y-L.lowerCut-(r===0?0.018:-0.012));if(L.legCut!=null)f[v]=Math.min(f[v],y-L.legCut);
       if(f[v]<-0.045)continue;
       let Rv=g.at(th,xx);if(Rv<0)Rv=g.nearest(th,xx);
       if(Rv<0)continue;
