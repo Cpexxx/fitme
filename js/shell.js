@@ -192,7 +192,8 @@ function buildShells(G,GS){
       if(reg[v]===0&&r===0&&y<0.95){const lr=P[v*3]>=0?3:4,Lg=L.grids[lr];if(Lg){shCoord(lr,P[v*3],y,P[v*3+2],tmp,0);const fl=Lg.sdfAt(tmp[0],tmp[1]);if(fl>fv){fv=fl;g=Lg;r=lr;th=tmp[0];xx=tmp[1];rho=tmp[2];}}}
       if(!g)continue;fv=Math.min(fv,(0.3-W[v*3+2])*0.1);f[v]=fv;
       /* fe: distance to a real edge of the garment (the curtain cut is not one: the fabric continues below it) */
-      fe[v]=f[v];if(L.lowerCut!=null)f[v]=Math.min(f[v],y-L.lowerCut+0.012);if(L.legCut!=null)f[v]=Math.min(f[v],y-L.legCut);
+      /* (the shell of a coat ends 2 cm above the cut: lower down it is made from the body between the legs and turned in there) */
+      fe[v]=f[v];if(L.lowerCut!=null)f[v]=Math.min(f[v],y-L.lowerCut-0.018);if(L.legCut!=null)f[v]=Math.min(f[v],y-L.legCut);
       if(f[v]<-0.045)continue;
       let Rv=g.at(th,xx);if(Rv<0)Rv=g.nearest(th,xx);
       if(Rv<0)continue;
@@ -269,7 +270,7 @@ function buildShells(G,GS){
     for(const U of layers){if(U.rank>=L.rank||!U.newG)continue;for(const r of [0,3,4]){const UG=U.newG[r];if(!UG||!UG.any)continue;
       for(let i=0;i<p.count;i++){shCoord(r,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=UG.at(c[0],c[1]);if(Ru>0&&c[2]<Ru+0.003){shPoint(r,c[0],c[1],Ru+0.003,q);p.setXYZ(i,q[0],q[1],q[2]);}}}}
     p.needsUpdate=true;o.geometry.computeVertexNormals();o.userData.reseated=true;o.userData.tailFitted=true;o.userData.ctx='none';}
-  for(const o of others){if(o.userData.tailFitted)continue;const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&o.userData.band)shBandOnFabric(o,L);if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
+  for(const o of others){if(o.userData.tailFitted)continue;const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G,L&&L.curtainMesh?L.lowerCut:null);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&o.userData.band)shBandOnFabric(o,L);if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
     G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrisOf(o,0),0);});
@@ -737,7 +738,7 @@ function shEmit(B,L){
       const l=Math.hypot(ax,ay,az);if(!l)continue;ax/=l;ay/=l;az/=l;for(const[i,d] of ids){const w=1-smooth(d/(q[3]*0.8));const x=lerp(nr.getX(i),ax,w),y=lerp(nr.getY(i),ay,w),z=lerp(nr.getZ(i),az,w),m=Math.hypot(x,y,z)||1;nr.setXYZ(i,x/m,y/m,z/m);}}}
     /* turned edge: the fabric folds back at hems, cuffs and necklines so it reads as cloth with thickness */
     /* (no turned edge along the lower cut where the curtain or kept skirt continues the fabric: it drew a hem line across the hips) */
-    shTurnEdge(g,L.lowerCut!=null?L.lowerCut+0.004:null);
+    shTurnEdge(g,L.lowerCut!=null?L.lowerCut+0.03:null);
     const nv=g.attributes.position.count,col=new Float32Array(nv*3);for(let i=0;i<nv;i++){const y=g.attributes.position.getY(i);col[i*3]=col[i*3+1]=col[i*3+2]=1;}
     g.setAttribute('color',new THREE.BufferAttribute(col,3));
     const m=mk(g,L.mats[mi]);m.userData.ctx='none';out.push(m);
@@ -779,7 +780,7 @@ function shShiftGrid(o,nw){
 }
 function shBake(o,G){o.updateMatrixWorld(true);const gg=o.geometry.clone();gg.applyMatrix4(o.matrixWorld);gg.userData=Object.assign({},o.geometry.userData);
   if(o.parent)o.parent.remove(o);o.geometry=gg;o.position.set(0,0,0);o.quaternion.identity();o.scale.set(1,1,1);o.updateMatrix();G.add(o);G.updateMatrixWorld(true);}
-function shReseat(o,shift,G){
+function shReseat(o,shift,G,trunkOnly){
   let axis=o.geometry.userData.axis;
   /* bake the transform so every vertex can be moved in body space, and hang the mesh straight off G */
   o.updateMatrixWorld(true);const gg=o.geometry.clone();gg.applyMatrix4(o.matrixWorld);gg.userData=Object.assign({},o.geometry.userData);
@@ -787,6 +788,8 @@ function shReseat(o,shift,G){
   let home=G;{let p=o.parent;while(p){if(p.userData&&p.userData.bagBody)o.userData.bagBody=true;if(p.userData&&p.userData.bagGroup){home=p;break;}p=p.parent;}}
   if(o.parent)o.parent.remove(o);o.geometry=gg;o.position.set(0,0,0);o.quaternion.identity();o.scale.set(1,1,1);o.updateMatrix();home.add(o);
   if(!axis||axis==='auto')axis=fitAxisOf(gg);
+  /* on a long coat the skirt below the crotch is a trunk tube (the curtain): a detail well below the cut (pocket, belt end) follows it, not the leg under it (cuffs at the wrists, next to the cut, stay as they are) */
+  if(trunkOnly!=null&&(axis==='legL'||axis==='legR')){gg.computeBoundingBox();const bb=gg.boundingBox;if((bb.min.y+bb.max.y)/2<trunkOnly-0.08)axis='torso';}
   const r=shRegionOfAxis(axis),S=shift[r],p=gg.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
   const bias=o.userData.layer==='none'?0.0008:0.0012;
   for(let i=0;i<p.count;i++){shCoord(r,p.getX(i),p.getY(i),p.getZ(i),c,0);const d=S.at(c[0],c[1]);shPoint(r,c[0],c[1],Math.max(0.001,c[2]+d+bias),q);p.setXYZ(i,q[0],q[1],q[2]);}
@@ -809,7 +812,7 @@ function shLowerRim(ms,cut,NA,thOf,minR){
     const can=new Uint32Array(NV),seen=new Map();for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=seen.get(k);if(c===undefined){seen.set(k,i);c=i;}can[i]=c;}
     const cnt=new Map();for(let t=0;t<ix.length;t+=3)for(let k=0;k<3;k++){const a=ix[t+k],b=ix[t+(k+1)%3],ca=can[a],cb=can[b],key=ca<cb?ca*NV+cb:cb*NV+ca;const e=cnt.get(key);if(e)e.c++;else cnt.set(key,{c:1,a,b});}
     for(const e of cnt.values()){if(e.c!==1)continue;const a=e.a,b=e.b;if(rg&&(rg[a]!==0||rg[b]!==0))continue;
-      const ax=pa[a*3],ay=pa[a*3+1],az=pa[a*3+2],bx=pa[b*3],by=pa[b*3+1],bz=pa[b*3+2];if(Math.max(ay,by)>cut+0.004)continue;
+      const ax=pa[a*3],ay=pa[a*3+1],az=pa[a*3+2],bx=pa[b*3],by=pa[b*3+1],bz=pa[b*3+2];if(Math.max(ay,by)>cut+0.03)continue;
       /* the outside face only (the turned edge's inner copies face in), and edges that run round the body (not a front edge) */
       if(nr.getX(a)*ax+nr.getZ(a)*az<0||nr.getX(b)*bx+nr.getZ(b)*bz<0)continue;if(Math.abs(by-ay)>0.7*Math.hypot(bx-ax,bz-az))continue;
       let ta=Math.atan2(az,ax),tb=Math.atan2(bz,bx);tb=ta+wrapA(tb-ta);const lo=Math.min(ta,tb),hi=Math.max(ta,tb);if(hi-lo>0.5)continue;
@@ -852,13 +855,15 @@ function shCurtain(L,cut,shells,B2,tails,layers){
   /* where the shell's lower edge is found the curtain starts on it (same point, same normal) and carries its radius and
      folds down over 6 cm into its own hang; elsewhere (no edge at that angle) it starts just under the shell as before */
   const rim=shLowerRim(shells.filter(m=>m.userData.layer===L.name),cut,NA,thOf,Rsm.map(r=>r*0.92)),useRim=new Uint8Array(NA);
-  for(let i=0;i<NA;i++)useRim[i]=rim.has[i]&&ok[i]&&rim.pos[i*3+1]>hem[i]+0.03&&rim.pos[i*3+1]<cut+0.004?1:0;
+  for(let i=0;i<NA;i++)useRim[i]=rim.has[i]&&ok[i]&&rim.pos[i*3+1]>hem[i]+0.03&&rim.pos[i*3+1]<cut+0.03?1:0;
   /* short gaps (an angle where the edge was not found or was rejected) take the edge interpolated from both sides:
      a column starting elsewhere made a slanted step in the first row */
-  {const valid=useRim.slice();for(let i=0;i<NA;i++){if(valid[i]||!ok[i])continue;let l=1,r=1;while(l<9&&!valid[(i-l+NA)%NA])l++;while(r<9&&!valid[(i+r)%NA])r++;if(l>=9||r>=9)continue;
+  {const valid=useRim.slice();for(let i=0;i<NA;i++){if(valid[i]||!ok[i])continue;/* (a wide gap is the crotch at the centre front / back, where the shell's edge runs in between the legs) */const lim=26;let l=1,r=1;while(l<lim&&!valid[(i-l+NA)%NA])l++;while(r<lim&&!valid[(i+r)%NA])r++;if(l>=lim||r>=lim)continue;
     const A=(i-l+NA)%NA,Bq=(i+r)%NA,u=l/(l+r),th=thOf(i),RA=Math.hypot(rim.pos[A*3],rim.pos[A*3+2]),RB=Math.hypot(rim.pos[Bq*3],rim.pos[Bq*3+2]),y=lerp(rim.pos[A*3+1],rim.pos[Bq*3+1],u),R=lerp(RA,RB,u);
     if(!(y>hem[i]+0.03)||Math.abs(rim.pos[A*3+1]-rim.pos[Bq*3+1])>0.012)continue;
-    /* (reaching 7 mm higher, 4 mm inside: the shell's edge above it may be notched there) */const y2=y+(rim.rej[i]?0.007:0),R2=R-(rim.rej[i]?0.004:0);shPoint(0,th,y2,R2,q);rim.pos[i*3]=q[0];rim.pos[i*3+1]=q[1];rim.pos[i*3+2]=q[2];
+    /* across a wide gap (the crotch) the top reaches up under the shell, whose edge runs in between the legs there:
+       the deeper into the gap, the higher (up to 3.5 cm), just inside the shell's surface */
+    const gk=smooth((Math.min(l,r)-1)/4),y2=y+0.035*gk;let R2=R;if(gk>0){const Rs=ref.at(th,y2);if(Rs>0)R2=lerp(R,Math.min(R,Rs-0.003),gk);}shPoint(0,th,y2,R2,q);rim.pos[i*3]=q[0];rim.pos[i*3+1]=q[1];rim.pos[i*3+2]=q[2];
     let nx=lerp(rim.nor[A*3],rim.nor[Bq*3],u),ny=lerp(rim.nor[A*3+1],rim.nor[Bq*3+1],u),nz=lerp(rim.nor[A*3+2],rim.nor[Bq*3+2],u);const nl=Math.hypot(nx,ny,nz)||1;rim.nor[i*3]=nx/nl;rim.nor[i*3+1]=ny/nl;rim.nor[i*3+2]=nz/nl;useRim[i]=1;}}
   const base=(ii,th,y,t)=>{let pr=T.at(th,y);if(pr<0)pr=T.nearest(th,y);const flare=0.55*Math.max(0,pr-Rc[ii]);return[Rsm[ii]+flare+0.0022+0.0015*t,flare];};
   for(let j=0;j<=N;j++)for(let i=0;i<=NA;i++){const ii=i%NA,th=thOf(ii),t=j/N,R0=useRim[ii]?Math.hypot(rim.pos[ii*3],rim.pos[ii*3+2]):0,y0=useRim[ii]?rim.pos[ii*3+1]:cut+0.012,y=lerp(y0,hem[ii],t);
