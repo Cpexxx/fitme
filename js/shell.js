@@ -883,12 +883,21 @@ function shCurtain(L,cut,shells,B2,tails,layers){
   for(let j=0;j<N;j++)for(let i=0;i<NA;i++){const i2=(i+1)%NA;if(!ok[i]||!ok[i2]||Math.abs(hem[i]-hem[i2])>0.025)continue;const a=j*(NA+1)+i,b=a+NA+1;idx.push(a,b,a+1,b,b+1,a+1);}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();
   /* outward facing */
-  {const p=g.attributes.position,nr=g.attributes.normal;let flip=0;for(let i=0;i<p.count;i+=37){if(p.getX(i)*nr.getX(i)+p.getZ(i)*nr.getZ(i)<0)flip++;else flip--;}if(flip>0){const ix=g.index.array;for(let t=0;t<ix.length;t+=3){const tmp=ix[t+1];ix[t+1]=ix[t+2];ix[t+2]=tmp;}g.computeVertexNormals();}}
+  let flipped=false;{const p=g.attributes.position,nr=g.attributes.normal;let flip=0;for(let i=0;i<p.count;i+=37){if(p.getX(i)*nr.getX(i)+p.getZ(i)*nr.getZ(i)<0)flip++;else flip--;}if(flip>0){flipped=true;const ix=g.index.array;for(let t=0;t<ix.length;t+=3){const tmp=ix[t+1];ix[t+1]=ix[t+2];ix[t+2]=tmp;}g.computeVertexNormals();}}
   /* the seam at the back (u wraps) shares normals */
   const nr=g.attributes.normal;for(let j=0;j<=N;j++){const a=j*(NA+1),b=a+NA;const x=nr.getX(a)+nr.getX(b),y=nr.getY(a)+nr.getY(b),z=nr.getZ(a)+nr.getZ(b),l=Math.hypot(x,y,z)||1;nr.setXYZ(a,x/l,y/l,z/l);nr.setXYZ(b,x/l,y/l,z/l);}
   /* along the shell's edge the shading continues the shell's (no line where the two meet) */
   for(let i=0;i<=NA;i++){const ii=i%NA;if(!useRim[ii])continue;for(const[j,w] of [[0,1],[1,0.5]]){if(j>N)continue;const k=j*(NA+1)+i;let x=lerp(nr.getX(k),rim.nor[ii*3],w),y=lerp(nr.getY(k),rim.nor[ii*3+1],w),z=lerp(nr.getZ(k),rim.nor[ii*3+2],w);const l=Math.hypot(x,y,z)||1;nr.setXYZ(k,x/l,y/l,z/l);}}
-  g.userData.reg=reg;g.userData.axis='torso';shTurnEdge(g,null,(a,b)=>a<=NA&&b<=NA&&useRim[a%NA]&&useRim[b%NA]);
+  /* a hidden flap from the shell's edge 1.6 cm up under the shell: when the figure walks the shell and the curtain are
+     skinned differently and the seam opened into a dark crack */
+  let flap0=g.attributes.position.count;
+  {const P=Array.from(g.attributes.position.array),Nn=Array.from(nr.array),U=Array.from(g.attributes.uv.array),ix=Array.from(g.index.array),top=new Int32Array(NA+1).fill(-1),bot=new Int32Array(NA+1).fill(-1);
+    for(let i=0;i<=NA;i++){const ii=i%NA;if(!useRim[ii])continue;const k=i,x=P[k*3],y=P[k*3+1],z=P[k*3+2],th=Math.atan2(z,x);let Rs=ref.at(th,y+0.016);if(Rs<0)Rs=Math.hypot(x,z);shPoint(0,th,y+0.016,Math.max(0.02,Rs-0.003),q);
+      bot[i]=P.length/3;P.push(x,y,z);Nn.push(rim.nor[ii*3],rim.nor[ii*3+1],rim.nor[ii*3+2]);U.push(U[k*2],U[k*2+1]);reg.push(0);
+      top[i]=P.length/3;P.push(q[0],q[1],q[2]);Nn.push(rim.nor[ii*3],rim.nor[ii*3+1],rim.nor[ii*3+2]);U.push(U[k*2],U[k*2+1]+0.016/TILE);reg.push(0);}
+    for(let i=0;i<NA;i++){const a=top[i],b=bot[i],a1=top[i+1],b1=bot[i+1];if(a<0||a1<0)continue;if(!flipped)ix.push(a,b,a1,b,b1,a1);else ix.push(a,a1,b,b,a1,b1);}
+    g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(Nn,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(ix);}
+  g.userData.reg=reg;g.userData.axis='torso';shTurnEdge(g,null,(a,b)=>(a<=NA&&b<=NA&&useRim[a%NA]&&useRim[b%NA])||(a>=flap0&&b>=flap0));
   const col=new Float32Array(g.attributes.position.count*3).fill(1);g.setAttribute('color',new THREE.BufferAttribute(col,3));
   const m=mk(g,L.mats[0]);m.userData.ctx='none';m.userData.layer=L.name;m.userData.kept=true;return m;}
 /* (unused) the part of a shirt / jacket / coat below the crotch is kept as a tube: it continues the fitted shell exactly
