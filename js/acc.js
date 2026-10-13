@@ -40,42 +40,131 @@ function buildHat(G){
       G.add(mk(surf(96,6,(u,v)=>{const ph=u*TAU,E=hatEdge(ph,H0+0.006),r=V3(Math.cos(ph),0,Math.sin(ph)),side=Math.abs(Math.cos(ph));return E.clone().addScaledVector(r,0.06*v).add(V3(0,0.012*v*v*side-0.006*v*Math.max(0,Math.sin(ph)),0));},{wrapU:true,uRep:30,noAO:true}),m));break;}
   }
 }
+/* glasses: a frame front sized to the head (its end pieces sit at the temples), lenses with each style's own outline,
+   rims as real parts (acetate: a moulded band round the lens with some depth; metal: a thin wire), a bridge, nose pads on
+   metal frames, hinges and temples running back over the ear.
+   o: lens outline, h: height / width, rim: acetate | metal | brow (acetate brow + wire below) | none | shield,
+   rw: acetate band width, top: band wider at the top, lw: lens width against the head, wrap / tilt: radians */
+const GL_SPEC={
+  aviator:{o:'tear',h:0.86,rim:'metal',bridge:'double',pads:1,lw:1.06,wrap:0.1,dy:-0.003},
+  round:{o:'round',h:1,rim:'metal',bridge:'keyhole',pads:1,lw:0.9,wrap:0.05},
+  rect:{o:'rect',h:0.64,rim:'acetate',rw:0.0036,top:1.25,bridge:'saddle',lw:1,wrap:0.1},
+  wayfarer:{o:'trap',h:0.78,rim:'acetate',rw:0.0048,top:1.7,bridge:'saddle',lw:1,wrap:0.08,tilt:0.06},
+  clubmaster:{o:'club',h:0.78,rim:'brow',rw:0.0055,bridge:'club',pads:1,lw:1,wrap:0.08},
+  cat:{o:'cat',h:0.7,rim:'acetate',rw:0.004,top:1.5,bridge:'saddle',lw:1.04,wrap:0.1},
+  oval:{o:'oval',h:0.48,rim:'acetate',rw:0.0026,bridge:'bar',lw:0.86,wrap:0.12},
+  oversize:{o:'square',h:0.9,rim:'acetate',rw:0.005,top:1.2,bridge:'saddle',lw:1.12,wrap:0.1,dy:-0.004},
+  rimless:{o:'rect',h:0.62,rim:'none',bridge:'bar',pads:1,lw:0.95,wrap:0.08},
+  shield:{rim:'shield',h:0.7,lw:1.1,wrap:0.3}
+};
+/* lens outlines: points round the lens, x from the nose (-1) to the temple (+1), y from -1 to 1 */
+function glOutline(o,N=96){const pts=[],se=(a,n)=>{const c=Math.cos(a),s=Math.sin(a);return[Math.sign(c)*Math.pow(Math.abs(c),2/n),Math.sign(s)*Math.pow(Math.abs(s),2/n)];};
+  for(let i=0;i<N;i++){const a=i/N*TAU;let x,y;
+    switch(o){
+      case 'round':case 'oval':[x,y]=[Math.cos(a),Math.sin(a)];break;
+      case 'tear':{[x,y]=se(a,2.3);if(y>0)y*=0.82;else y*=1+0.32*(0.5-0.5*x);x+=0.06*Math.max(0,-y)*(0.5-0.5*x);break;}
+      case 'trap':{[x,y]=se(a,3.4);x*=1+0.1*y;if(y<0&&x>0)y*=1-0.12*x;break;}
+      case 'club':{[x,y]=se(a,3);x*=1+0.07*y;break;}
+      case 'cat':{[x,y]=se(a,2.8);x*=1+0.1*y;y+=0.3*Math.max(0,x)*Math.pow(Math.max(0,y),0.6);if(y<0)y*=1-0.15*Math.max(0,x);break;}
+      case 'square':[x,y]=se(a,4.2);break;
+      default:[x,y]=se(a,5);}
+    pts.push([x,y]);}
+  let mx=0,my=0;for(const[x,y] of pts){mx=Math.max(mx,Math.abs(x));my=Math.max(my,Math.abs(y));}return pts.map(([x,y])=>[x/mx,y/my]);}
+function glOffset(P,d){const n=P.length,out=[];for(let i=0;i<n;i++){const a=P[(i+n-1)%n],b=P[(i+1)%n];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;tx/=l;ty/=l;
+  /* outward normal of a counter-clockwise loop */const w=typeof d==='function'?d(P[i]):d;out.push([P[i][0]+ty*w,P[i][1]-tx*w]);}return out;}
+function glPlace(geo,M){geo.applyMatrix4(M);if(M.determinant()<0&&geo.index){const ix=geo.index.array;for(let t=0;t<ix.length;t+=3){const k=ix[t+1];ix[t+1]=ix[t+2];ix[t+2]=k;}}geo.computeVertexNormals();return geo;}
 function buildGlasses(G){
-  const A=S.acc.glasses,t=A.type;if(!t||t==='none')return;
-  const hc=BC.headC,y=hc.y+0.004,zf=headPt(Math.acos(0.02),FRONT,0,false).z+0.009;
-  const metalF=t==='aviator'||t==='round';
-  const fm=metalF?plain(A.frame||'#c9a34a',.25,1,'gframe',{clearcoat:.4}):plain(A.frame||'#1b1a19',.25,0,'gacet',{clearcoat:.8});
+  const A=S.acc.glasses,t=A.type,SP=GL_SPEC[t];if(!t||t==='none'||!SP)return;
+  const hc=BC.headC,thAt=yy=>Math.acos(clamp((yy-hc.y)/BC.hd.ry,-0.99,0.99)),yc=hc.y+0.004+(SP.dy||0),thE=thAt(yc);
+  const metalF=SP.rim==='metal'||SP.rim==='none',fm=metalF?plain(A.frame||'#c9a34a',.22,1,'gframe'):plain(A.frame||'#1b1a19',.3,0,'acet',{clearcoat:.7,clearcoatRoughness:.15});
+  const wire=SP.rim==='brow'?plain(t==='clubmaster'?'#c9a34a':A.frame,.22,1,'gframe'):fm;
   const lc=A.lens||'#151515',clear=lumHex(lc)>0.8;
   let lm=matCache.get('lens|'+lc);
-  if(!lm){lm=new THREE.MeshPhysicalMaterial({color:lin(lc),transparent:true,opacity:clear?0.18:0.78,roughness:0.05,metalness:0.1,clearcoat:1,side:THREE.DoubleSide,depthWrite:false});lm.userData.noShadow=true;matCache.set('lens|'+lc,lm);}
-  const shape=()=>{const s=new THREE.Shape();
-    switch(t){
-      case 'aviator':s.moveTo(-0.026,0.012);s.bezierCurveTo(-0.01,0.019,0.016,0.018,0.027,0.01);s.bezierCurveTo(0.03,-0.008,0.012,-0.024,-0.004,-0.024);s.bezierCurveTo(-0.02,-0.024,-0.029,-0.008,-0.026,0.012);break;
-      case 'round':s.absellipse(0,0,0.021,0.021,0,TAU);break;
-      case 'oval':s.absellipse(0,0,0.022,0.011,0,TAU);break;
-      case 'cat':s.moveTo(-0.025,0.004);s.bezierCurveTo(-0.022,0.016,0.018,0.014,0.03,0.02);s.bezierCurveTo(0.03,0.002,0.02,-0.018,0.0,-0.017);s.bezierCurveTo(-0.018,-0.016,-0.027,-0.008,-0.025,0.004);break;
-      case 'shield':s.moveTo(-0.034,0.014);s.lineTo(0.034,0.016);s.bezierCurveTo(0.037,-0.004,0.026,-0.02,0.006,-0.02);s.lineTo(-0.034,-0.016);s.closePath();break;
-      default:{const w=0.026,h=0.017,r=0.006;s.moveTo(-w+r,-h);s.lineTo(w-r,-h);s.quadraticCurveTo(w,-h,w,-h+r);s.lineTo(w,h-r);s.quadraticCurveTo(w,h,w-r,h);s.lineTo(-w+r,h);s.quadraticCurveTo(-w,h,-w,h-r);s.lineTo(-w,-h+r);s.quadraticCurveTo(-w,-h,-w+r,-h);}
-    }return s;};
-  const thick=metalF?0.0018:0.0042;
+  if(!lm){lm=new THREE.MeshPhysicalMaterial({color:lin(lc),transparent:true,opacity:clear?0.16:0.8,roughness:0.04,metalness:0.15,clearcoat:1,clearcoatRoughness:0.03,envMapIntensity:1.6,side:THREE.DoubleSide,depthWrite:false});lm.userData.noShadow=true;matCache.set('lens|'+lc,lm);}
+  /* the face at eye level: the point of the head surface at a given x (binary search round the side of the head) */
+  const face=x=>{let lo=0,hi=FRONT;const xs=headPt(thE,0).x-hc.x;if(x>=xs)return headPt(thE,0);for(let i=0;i<24;i++){const m=(lo+hi)/2;if(headPt(thE,m).x-hc.x>x)lo=m;else hi=m;}return headPt(thE,(lo+hi)/2);};
+  const hw=headPt(thE,0).x-hc.x,bh=t==='round'?0.0095:0.0085,rw=SP.rim==='acetate'||SP.rim==='brow'?SP.rw:0,ep=metalF?0.004:0.0045;
+  const Lw=(hw*0.88-bh-ep-rw*2)*SP.lw,Lh=Lw*SP.h,cx=bh+rw+Lw/2;
+  const paths=[],tr=metalF?0.0012:0.0021,hinge=[];
+  if(SP.rim==='shield')return buildShield(G,SP,yc,hw,face,fm,lm,tr,paths,hinge,thAt);
+  const O=glOutline(SP.o);
+  const local=O.map(([x,y])=>[x*Lw/2,y*Lh/2]);
   for(const sd of [-1,1]){
-    const g=new THREE.Group();g.position.set(sd*0.034,y,zf-0.006);g.rotation.y=sd*0.2;if(sd<0)g.scale.x=-1;
-    const s=shape(),pts=s.getSpacedPoints(64).map(p=>V3(p.x,p.y,0));
-    g.add(mk(cordGeo(pts,thick,true,8,80),fm));
-    const ls=mk(new THREE.ShapeGeometry(s,24),lm);ls.position.z=-0.001;g.add(ls);
-    G.add(g);
-  }
-  const br=[V3(-0.012,y+0.006,zf+0.001),V3(0,y+0.009,zf+0.004),V3(0.012,y+0.006,zf+0.001)];G.add(mk(cordGeo(br,thick*0.8,false,6,12),fm));
-  if(metalF)G.add(mk(cordGeo([V3(-0.016,y+0.017,zf),V3(0,y+0.019,zf+0.003),V3(0.016,y+0.017,zf)],0.0012,false,6,12),fm));
-  /* temples run along the side of the head (just clear of it) to behind the ear and bend down there;
-     the hair lies over them, so it is lifted a little where they pass (they used to stand off the head and pierce it) */
-  const tr=metalF?0.0014:0.0024,paths=[],thAt=yy=>Math.acos(clamp((yy-hc.y)/BC.hd.ry,-0.99,0.99));
-  for(const sd of [-1,1]){const h0=V3(sd*0.06,y+0.008,zf-0.006),side=sd>0?0:Math.PI,back=sd>0?-0.32:Math.PI+0.32,a0=Math.atan2(h0.z-hc.z,h0.x-hc.x),pts=[h0];
-    for(let k=1;k<=7;k++){const t=k/7,ph=t<0.8?lerp(a0,side,t/0.8):lerp(side,back,(t-0.8)/0.2),yy=y+0.007-0.006*t;pts.push(headPt(thAt(yy),ph,tr+0.0012));}
-    pts.push(headPt(thAt(y-0.012),lerp(side,back,1.25),tr+0.0012),headPt(thAt(y-0.024),lerp(side,back,1.4),tr+0.001));
-    G.add(mk(cordGeo(pts,tr,false,6,40),fm));paths.push(pts);}
+    /* lens frame: centre in front of the face, turned with it (wrap) and tilted (pantoscopic) */
+    const fc=face(cx),M=new THREE.Matrix4(),q=new THREE.Quaternion().setFromEuler(new THREE.Euler(SP.tilt!=null?SP.tilt:0.1,sd*(SP.wrap+0.06),0,'YXZ'));
+    let zc=fc.z+0.008;
+    const mkM=()=>M.compose(V3(hc.x+sd*cx,yc,zc),q,V3(sd,1,1));mkM();
+    /* clear of the face everywhere (the brows and cheeks of the egg are round) */
+    for(let it=0;it<4;it++){let worst=0;const v=new THREE.Vector3();for(const[x,y] of glOffset(local,rw+0.001)){v.set(x,y,-0.003).applyMatrix4(M);
+        const r=headRAt(v.y,Math.atan2(v.z-hc.z,v.x-hc.x));if(r==null)continue;const d=Math.hypot(v.x-hc.x,v.z-hc.z)-r;if(d<0.0035)worst=Math.max(worst,0.0035-d);}
+      if(worst<=0)break;zc+=worst;mkM();}
+    const W=(x,y,z)=>V3(x,y,z).applyMatrix4(M);
+    /* lens */
+    const shp=new THREE.Shape(local.map(([x,y])=>new THREE.Vector2(x,y)));
+    if(SP.rim==='none'){const lg=new THREE.ExtrudeGeometry(shp,{depth:0.0016,bevelEnabled:true,bevelThickness:0.0003,bevelSize:0.0003,bevelSegments:1,curveSegments:4});lg.translate(0,0,-0.0008);G.add(mk(glPlace(lg,M),lm));}
+    else G.add(mk(glPlace(new THREE.ShapeGeometry(shp,4),M),lm));
+    /* rim */
+    if(SP.rim==='metal'){const ring=glOffset(local,0.0006).map(([x,y])=>W(x,y,0));G.add(mk(cordGeo(ring,0.00115,true,8,140),fm));}
+    else if(SP.rim==='acetate'||SP.rim==='brow'){
+      const top=SP.top||1,wOf=SP.rim==='brow'?(p=>0.0006+rw*smooth((p[1]/(Lh/2)+0.15)/0.45)):(p=>rw*(1+(top-1)*smooth(p[1]/(Lh/2)))*(t==='cat'?1+0.5*smooth(p[0]/(Lw/2))*smooth(p[1]/(Lh/2)):1));
+      const outer=glOffset(local,wOf),sh2=new THREE.Shape(outer.map(([x,y])=>new THREE.Vector2(x,y)));sh2.holes.push(new THREE.Path(local.slice().reverse().map(([x,y])=>new THREE.Vector2(x,y))));
+      const D=0.0042,rg=new THREE.ExtrudeGeometry(sh2,{depth:D,bevelEnabled:true,bevelThickness:0.0007,bevelSize:0.0006,bevelSegments:2,curveSegments:4});rg.translate(0,0,-D*0.6);G.add(mk(glPlace(rg,M),fm));
+      if(SP.rim==='brow'){
+        const off=glOffset(local,0.0005),arc=[];for(const[x,y] of off)if(y<Lh*0.2)arc.push([x,y,(Math.atan2(y,x)-Math.PI/2+2*TAU)%TAU]);arc.sort((a,b)=>a[2]-b[2]);
+        G.add(mk(cordGeo(arc.map(([x,y])=>W(x,y,0)),0.0009,false,6,80),wire));}}
+    /* reference points on the rim: inner top (bridge), inner lower (pads), outer top (end piece) */
+    const pick=(fx,fy)=>{let best=null,bs=-9;for(const[x,y] of glOffset(local,rw*0.6+0.0005)){const s2=fx*x/(Lw/2)+fy*y/(Lh/2);if(s2>bs){bs=s2;best=[x,y];}}return best;};
+    const inTop=pick(-1,0.75),inLow=pick(-1,-0.35),outTop=pick(1,0.55),topMid=pick(-0.35,1);
+    hinge.push({sd,inTop:W(inTop[0],inTop[1],0),inLow:W(inLow[0],inLow[1],0),outTop:W(outTop[0],outTop[1],0),topMid:W(topMid[0],topMid[1],0)});}
+  const [L,R]=hinge;
+  /* bridge */
+  const arch=(a,b,up,fw,r,m)=>{const mid=a.clone().lerp(b,0.5).add(V3(0,up,fw));G.add(mk(cordGeo([a,a.clone().lerp(mid,0.55).add(V3(0,up*0.25,0)),mid,b.clone().lerp(mid,0.55).add(V3(0,up*0.25,0)),b],r,false,8,30),m));};
+  if(SP.bridge==='saddle')arch(L.inTop,R.inTop,0.0015,0.001,rw*0.7,fm);
+  else if(SP.bridge==='bar')arch(L.inTop,R.inTop,0.0005,0.0008,0.0011,fm);
+  else if(SP.bridge==='keyhole')arch(L.inTop,R.inTop,0.0045,0.001,0.0011,fm);
+  else if(SP.bridge==='double'){arch(L.inTop,R.inTop,0.002,0.001,0.0011,fm);arch(L.topMid,R.topMid,0.0006,0.001,0.001,fm);}
+  else if(SP.bridge==='club'){arch(L.topMid,R.topMid,0.0012,0.001,rw*0.45,fm);arch(L.inTop,R.inTop,0.003,0.001,0.0009,wire);}
+  /* nose pads on metal frames: small clear pads on wire arms against the sides of the nose */
+  if(SP.pads){const pm=plain('#e9eef2',0.2,0,'lens',{transparent:true,opacity:0.55});
+    for(const H of hinge){const fp=face(bh+0.002),pad=V3(hc.x+H.sd*(bh+0.0025),yc-0.004,fp.z+0.0045);
+      G.add(mk(cordGeo([H.inLow,H.inLow.clone().lerp(pad,0.5).add(V3(0,0.0015,0)),pad],0.0005,false,4,10),SP.rim==='brow'?wire:fm));
+      const pd=mk(new THREE.SphereGeometry(0.004,10,8),pm);pd.scale.set(0.45,1,0.3);pd.position.copy(pad);pd.rotation.y=H.sd*0.5;G.add(pd);}}
+  /* end pieces and hinges: from the rim's outer top to the side of the head, the temples start there */
+  for(const H of hinge){const sd=H.sd,o=H.outTop,hp=V3(hc.x+sd*(hw+tr+0.003),o.y,o.z-0.009);
+    /* end piece: from the rim's outer top a little back and out to the hinge, which sits just clear of the widest part of
+       the head (a hinge further in sent the temple through the side of the head) */
+    const e1=o.clone().add(V3(sd*0.0015,0,-0.003));
+    G.add(mk(cordGeo([o,e1,e1.clone().lerp(hp,0.5).add(V3(sd*0.0008,0,0.0008)),hp],metalF?0.0011:Math.max(0.0016,rw*0.5),false,8,16),fm));
+    const hg=mk(new THREE.BoxGeometry(0.0035,0.0045,0.006),metalF?fm:plain('#c0c3c7',.25,1,'gframe'));hg.position.copy(hp).add(V3(0,0,-0.002));hg.rotation.y=sd*0.15;G.add(hg);
+    paths.push(glTemple(G,hp,sd,yc,tr,thAt,fm));}
   hairOverTemples(G,paths,tr);
 }
+/* temple: straight back along the side of the head, just clear of it, then over and behind the ear */
+/* head radius (horizontal, from the head axis) in a real direction at a height: headPt's angle parameter is not the
+   point's angle (the outline is a superellipse with a longer back), so search for it */
+function headRAt(y,ang){const hc=BC.headC,ny=(y-hc.y)/BC.hd.ry;if(ny<-0.97||ny>0.999)return null;const th=Math.acos(ny),angOf=ph=>{const P=headPt(th,ph,0);return Math.atan2(P.z-hc.z,P.x-hc.x);};
+  let lo=ang-0.7,hi=ang+0.7;for(let i=0;i<26;i++){const m=(lo+hi)/2;if(wrapA(angOf(m)-ang)<0)lo=m;else hi=m;}const P=headPt(th,(lo+hi)/2,0);return Math.hypot(P.x-hc.x,P.z-hc.z);}
+function glTemple(G,h0,sd,yc,tr,thAt,m){const hc=BC.headC,side=sd>0?0:Math.PI,bk=-sd*1,a0=Math.atan2(h0.z-hc.z,h0.x-hc.x),pts=[h0];
+  /* straight along the side of the head to just above the ear (a little behind the side point), height easing to eye level */
+  const aE=side+bk*0.14;for(let k=1;k<=8;k++){const t=k/8,ph=lerp(a0,aE,t),yy=lerp(h0.y,yc+0.002,smooth(t));pts.push(headPt(thAt(yy),ph,tr+0.0012));}
+  /* the bend behind the ear: a quarter turn down over ~3 cm */
+  for(let k=1;k<=5;k++){const t=k/5,ph=aE+bk*(0.14+0.2*Math.sin(t*Math.PI/2)),yy=yc+0.002-0.028*(1-Math.cos(t*Math.PI/2));pts.push(headPt(thAt(yy),ph,tr+0.0012-0.0004*t));}
+  /* never inside the head: the side of the skull bulges out past the hinges (the temple sank into it there) */
+  const c=new THREE.CatmullRomCurve3(pts,false,'centripetal'),P2=c.getSpacedPoints(40);
+  for(const p of P2){const r=headRAt(p.y,Math.atan2(p.z-hc.z,p.x-hc.x));if(r==null)continue;const d=Math.hypot(p.x-hc.x,p.z-hc.z),need=r+tr+0.0012;if(d<need){const k=need/d;p.x=hc.x+(p.x-hc.x)*k;p.z=hc.z+(p.z-hc.z)*k;}}
+  pts.length=0;pts.push(...P2);
+  G.add(mk(cordGeo(pts,tr,false,8,64),m));
+  /* temple tip (a slightly thicker cover behind the ear) */
+  G.add(mk(cordGeo(pts.slice(-4),tr*1.3,false,8,14),m));return pts;}
+/* sport shield: one wrap-around lens across both eyes, a top bar and a nose piece */
+function buildShield(G,SP,yc,hw,face,fm,lm,tr,paths,hinge,thAt){const hc=BC.headC,W2=hw*0.92,Hh=0.038,Rw=0.085,fc=face(0),zc=fc.z+0.014;
+  const top=u=>0.5*Hh*(0.92+0.08*Math.cos(u*Math.PI))+0.002,bot=u=>{const a=Math.abs(u);return -0.5*Hh*(0.5+0.5*Math.pow(Math.sin(Math.min(1,a*1.6)*Math.PI/2),0.8))*(1-0.55*smooth((a-0.72)/0.28))+0.005*gauss(a,0.11);};
+  const at=(u,y)=>{const x=u*W2,ang=x/Rw;return V3(hc.x+Rw*Math.sin(ang),yc+y,zc-Rw*(1-Math.cos(ang))-0.004*y/Hh);};
+  G.add(mk(surf(48,10,(u,v)=>{const uu=u*2-1;return at(uu,lerp(bot(uu),top(uu),v));},{noAO:true}),lm));
+  const bar=[];for(let i=0;i<=40;i++){const u=i/20-1;bar.push(at(u,top(u)+0.0012));}G.add(mk(cordGeo(bar,0.0022,false,8,80),fm));
+  const nb=[at(-0.09,bot(-0.09)+0.004),at(0,bot(0)+0.006).add(V3(0,0,0.002)),at(0.09,bot(0.09)+0.004)];G.add(mk(cordGeo(nb,0.0018,false,6,16),fm));
+  for(const sd of [-1,1]){const e=at(sd,top(sd)-0.004);paths.push(glTemple(G,e,sd,yc,tr*1.3,thAt,fm));}
+  hairOverTemples(G,paths,tr*1.3);}
 function hairOverTemples(G,paths,tr){const hair=[];G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')hair.push(o);});if(!hair.length)return;
   const hc=BC.headC,Q=[];for(const pts of paths){const c=new THREE.CatmullRomCurve3(pts);for(const p of c.getSpacedPoints(80))Q.push(p);}
   let y0=9,y1=-9;for(const q of Q){y0=Math.min(y0,q.y);y1=Math.max(y1,q.y);}

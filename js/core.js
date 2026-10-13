@@ -357,7 +357,7 @@ function fabric(kind,hex,pat='solid',hex2='#1e1e1f'){
   matCache.set(key,m);return m;
 }
 /* everything reads matte except polished metal and stones: those catch sharp highlights from the studio lights */
-const SHINY=['gem','pearl','bead','dial','lens'];
+const SHINY=['gem','pearl','bead','dial','lens','acet'];
 function plain(hex,rough=.8,metal=0,key='',extra){
   const k='p|'+hex+'|'+rough+'|'+metal+'|'+key;if(matCache.has(k))return matCache.get(k);
   const met=metal>=0.5,shiny=SHINY.includes(key),ex=Object.assign({},extra||{});

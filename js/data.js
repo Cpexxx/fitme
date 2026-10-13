@@ -171,7 +171,7 @@ const GLOVES={none:'Brak',leather:'Skórzane',driving:'Do jazdy (z dziurkami)',k
 /* accessories */
 const HATS={none:'Brak',baseball:'Baseball',trucker:'Trucker',beanie:'Beanie',fisherman:'Krótka beanie',bucket:'Bucket',flat:'Kaszkiet',beret:'Beret',fedora:'Fedora'};
 const HAT_TAGS={baseball:['streetwear','casual'],trucker:['y2k','americana'],beanie:['streetwear','workwear'],fisherman:['workwear','gorpcore'],bucket:['y2k','streetwear'],flat:['heritage','old money'],beret:['feminine','retro'],fedora:['classic','retro']};
-const GLASSES={none:'Brak',aviator:'Aviatory',round:'Okrągłe',rect:'Prostokątne',cat:'Kocie oko',shield:'Sportowe',oval:'Owalne y2k'};
+const GLASSES={none:'Brak',aviator:'Aviatory',wayfarer:'Wayfarer',clubmaster:'Clubmaster',round:'Okrągłe (lenonki)',rect:'Prostokątne',oversize:'Duże kwadratowe',cat:'Kocie oko',oval:'Owalne y2k',rimless:'Bez oprawek',shield:'Sportowe'};
 const WATCHES={none:'Brak',classic:'Klasyczny',diver:'Diver',square:'Prostokątny',digital:'Cyfrowy',smart:'Smartwatch'};
 const STRAPS={leather:'Brązowa skóra',black:'Czarna skóra',metal:'Bransoleta',nato:'Nato',rubber:'Guma'};
 const BRACELETS={none:'Brak',chain:'Łańcuch',beads:'Koraliki',cuff:'Bangle',cord:'Rzemyk',tennis:'Tennis',leather:'Skórzana'};
@@ -186,6 +186,7 @@ const ACC_TAGS={classic:['old money'],diver:['smart casual'],square:['old money'
   chain:['gothic luxe','streetwear'],beads:['casual','y2k'],cuff:['old money','minimal'],cord:['casual','surf'],tennis:['streetwear'],leather:['rock'],
   thin:['minimal'],cuban:['streetwear'],cross:['gothic luxe'],pendant:['casual'],pearls:['coquette','y2k'],layered:['streetwear'],choker:['y2k','gothic luxe'],
   aviator:['retro','classic'],round:['indie','retro'],rect:['minimal'],cat:['retro','feminine'],shield:['y2k','gorpcore'],oval:['y2k'],
+  wayfarer:['classic','americana'],clubmaster:['retro','smart casual'],oversize:['minimal','old money'],rimless:['minimal','office'],
   crossbody:['streetwear'],sling:['streetwear','gorpcore'],backpack:['casual','gorpcore'],tote:['minimal','feminine'],wrap:['heritage'],long:['minimal'],tie:['formal','office'],skinny:['indie','rock'],bow:['formal','preppy']};
 
 /* =============== hair =============== */
