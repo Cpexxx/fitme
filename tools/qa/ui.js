@@ -69,7 +69,7 @@ const ROOT = path.resolve(__dirname, '../..');
     await fc('[data-page="creator"] >> visible=true'); await settle();
   });
   await step('udostępnij: kod w obie strony', async () => {
-    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.size = 'XL'; S.bottom.w = 32; update(); }); await settle();
+    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.mat = ''; S.outer.fit = 'regular'; S.outer.size = 'XL'; S.bottom.w = 32; update(); }); await settle();
     const before = await S(); await fc('#btnShare'); const code = await page.inputValue('#codeOut'); expect(code.startsWith('FIT3.'), 'kod nie zaczyna się od FIT3');
     await fc('#dlgShare [data-close]'); await fc('#btnRandom'); await settle();
     await fc('#btnShare'); await page.fill('#codeIn', code); await fc('#codeLoad'); await settle();
@@ -129,8 +129,9 @@ const ROOT = path.resolve(__dirname, '../..');
     await heads[0].click({ force: true }); await page.waitForTimeout(100); const poses = await page.$$('#accR .acc.open .chip'); for (const p of poses) { await p.click({ force: true }); await settle(300); }
     await (await page.$$('#accR .acc .acc-head'))[1].click({ force: true }); await page.waitForTimeout(100);
     const bt = await page.$$('#accR .acc.open .chips[aria-label="Typ sylwetki"] .chip'); for (const b of bt) { await b.click({ force: true }); await settle(300); }
-    const sh = await page.$('#accR .acc.open .sub-head'); if (sh) { await sh.click({ force: true }); await page.waitForTimeout(80); }
-    const g = await page.$$('#accR .acc.open .sub.open .chip'); if (g.length) { await g[g.length - 1].click({ force: true }); await settle(600); }
+    /* the 'Wersja' sub keeps its open state between runs: open it only when closed (toggling closed it picked another sub's chip) */
+    if (!(await page.$('#accR .acc.open .sub.open .chips[aria-label="Wersja"]'))) { const sh = await page.$('#accR .sub:has(.chips[aria-label="Wersja"]) .sub-head'); if (sh) { await sh.click({ force: true }); await page.waitForTimeout(80); } }
+    const g = await page.$$('#accR .acc.open .sub.open .chips[aria-label="Wersja"] .chip'); if (g.length) { await g[g.length - 1].click({ force: true }); await settle(600); }
     const s = await S(); expect(s.gender === 'f' && s.height === 168, 'zmiana na kobietę nie ustawiła wzrostu 168 (jest ' + s.gender + ' ' + s.height + ')');
     await shot('05-body');
   });
@@ -151,7 +152,8 @@ const ROOT = path.resolve(__dirname, '../..');
     await page.waitForTimeout(3000); await shot('06-liked');
   });
   await step('miniatury w Społeczności generują się', async () => {
-    await fc('[data-page="explore"] >> visible=true'); await page.waitForFunction(() => document.querySelectorAll('#exploreGrid .card img').length >= 18, null, { timeout: 240000 });
+    await fc('[data-page="explore"] >> visible=true'); /* (the previous step may leave a search / filter on: wait for every visible card, not a fixed 18) */
+    await page.waitForFunction(() => document.querySelectorAll('#exploreGrid .card').length > 0 && !document.querySelector('#exploreGrid .ph'), null, { timeout: 240000 });
     expect(!(await page.$('#exploreGrid .ph')), 'zostały karty bez miniatury'); await shot('07-explore');
   });
   await step('menu (hamburger)', async () => {
