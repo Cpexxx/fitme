@@ -215,3 +215,30 @@ Kolejne rundy:
   — wszystkie 16 dołów mają pas; pkt 8 (biało-czerwony element z tyłu). Potrzebne kody FIT3 od użytkownika.
 - Znane: poziomy pas cieniowania na koszulkach na wysokości bioder = granica powłoka/kurtyna (shCurtain zaczyna się 2 mm
   na zewnątrz; wsunięcie pod powłokę dawało z-fighting na płaszczach — wycofane). Rękaw bomberki lekko odstaje nad ściągaczem.
+
+## Runda 8 (2026-10-13): okulary, fryzury, T-shirty, manekin kobiety, oversize, tekstury
+- **Luźne ubrania** (shell.js): `shLoose` (po shRelax i drugi raz po shHull) — dla luzu > ~1,2 cm promień tkaniny jest
+  wygładzany gaussem w siatce biegunowej regionu (tułów 4 cm, rękawy 3 cm), oparty na zaokrąglonym „podparciu" ciała,
+  a poniżej biustu/klatki tkanina wisi (nie podwija się). Fałdy (`shFolds`) liczone na współrzędnych i normalnych samej
+  tkaniny (było: ciała → szum pod biustem). `shUntangle` rozprowadza wierzchołki stycznie (sierpy pod biustem).
+  `L.fe` = odległość od PRAWDZIWEJ krawędzi (bez cięcia kurtyny) — używana w drape/folds/untangle/shLoose.
+- **Kurtyna** (shCurtain): zaczyna się DOKŁADNIE na dolnej krawędzi powłoki (`shLowerRim`: pozycja + normalna na kąt),
+  przez 6 cm przechodzi w swój zwis; luki (krocze na środku, odrzucone punkty blisko osi) interpolowane do 26 kolumn
+  i podniesione pod powłokę. Ukryty pas 1,6 cm pod powłoką (pęknięcia przy chodzie). Powłoka płaszcza kończy się 2 cm
+  nad cięciem tylko w regionach tułowia/nóg (NIE rękawy — inaczej mankiet wisiał jako obręcz). Szczegóły poniżej cięcia
+  (kieszenie trencza) reseatowane na tułów (`shReseat(...,trunkOnly=lowerCut)`).
+- Ściągacze dołu (userData.band) podnoszone nad tkaninę (`shBandOnFabric`).
+- **Manekin kobiety**: recipe f — averagecup-maxfirmness 1.0, maxcup 0.32; usunięte sztuczne podnoszenie biustu w mhShape
+  (ściskało fałd pod biustem w półkę). Próby analitycznego biustu (mhBustForm) wycofane — zawijały siatkę.
+- **Okulary** (acc.js): `GL_SPEC` + `glOutline` + `buildGlasses` od nowa: front dopasowany do szerokości głowy, obręcze
+  acetatowe (ExtrudeGeometry z otworem) lub drut, mostki, noski, zawiasy, zauszniki `glTemple` sprawdzane `headRAt` (prawdziwy
+  promień głowy w danym kierunku — headPt ma kąt parametryczny!). Typy: aviator, wayfarer, clubmaster, round, rect, oversize,
+  cat, oval, rimless, shield.
+- **Fryzury** (hair.js + core.js): materiał matowy (MeshStandard, rough .9), karty pasm `hairCards` (tekstura `hairCardTex`
+  z alfą, `hairCardMat` alphaTest) wzdłuż kierunku czesania na powłoce, arkuszu, kucyku, koku; brak kart pod czapką
+  (`hatLineNy`); arkusz startuje stycznie z powłoki (thin=0.85·thick); `hairOutward` odwraca normalne do środka.
+- **Tekstury** (colorTex): denim, dresówka, wełna (tweed), płótno, len, flanela, nylon (ripstop), dzianina w skali 1,5–6 mm;
+  BUMPY denim .22, fleece .3, flannel .22 (większe dawały moiré/tynk).
+- Znane: w pozie „chód" przód płaszcza nad nogą wysuniętą tworzy lekki stopień na szwie powłoka/kurtyna (różne wagi skinningu).
+- Pułapka sesji: NIE robić `git checkout <commit> -- js` w roboczym katalogu (nadpisuje niezacommitowane zmiany) — do
+  porównań używać `git worktree add <scratch>/wt <commit>` (+ skopiować app/web/vendor i tools/qa/render.js).
