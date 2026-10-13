@@ -271,7 +271,7 @@ function weaveTex(kind){
   const grid=(step,amp)=>{for(let y=0;y<Z;y+=step)for(let x=0;x<Z;x+=step){ctx.fillStyle=g(128+((x/step+y/step)%2?amp:-amp));ctx.fillRect(x,y,step,step);}};
   if(paintStruct(ctx,Z,kind,g,R)){const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;texCache.set(key,t);return t;}
   switch(kind){
-    case 'denim':diag(4,40,1.6);noise(5000,40);break;
+    case 'denim':diag(6,26,2.2);break;
     case 'twill':case 'gabardine':diag(4,26,1.2);noise(2000,15);break;
     case 'canvas':case 'oxford':grid(2,30);noise(3000,20);break;
     case 'poplin':noise(3000,12);break;
@@ -284,7 +284,7 @@ function weaveTex(kind){
     case 'cable':for(let x=0;x<Z;x+=8)for(let y=0;y<Z;y+=8){ctx.fillStyle=g(160);ctx.fillRect(x+1,y+1,6,6);}
       for(const cx of [40,128,216]){for(let y=-20;y<Z+20;y+=32){ctx.lineWidth=12;ctx.strokeStyle=g(220);ctx.beginPath();ctx.moveTo(cx-14,y);ctx.bezierCurveTo(cx-14,y+16,cx+14,y+16,cx+14,y+32);ctx.stroke();ctx.strokeStyle=g(190);ctx.beginPath();ctx.moveTo(cx+14,y);ctx.bezierCurveTo(cx+14,y+16,cx-14,y+16,cx-14,y+32);ctx.stroke();}ctx.fillStyle=g(40);ctx.fillRect(cx-26,0,3,Z);ctx.fillRect(cx+23,0,3,Z);}break;
     case 'wool':noise(9000,30);diag(8,8,2);break;
-    case 'flannel':case 'fleece':case 'velvet':noise(8000,22,2);break;
+    case 'flannel':case 'fleece':case 'velvet':for(let i=0;i<700;i++){const x=R()*Z,y=R()*Z,r=3+R()*7,gr=ctx.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,g(R()<.5?160:96));gr.addColorStop(1,'rgba(128,128,128,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();}break;
     case 'pile':for(let i=0;i<1400;i++){ctx.fillStyle=g(128+Math.round((R()*2-1)*70));ctx.beginPath();ctx.arc(R()*Z,R()*Z,2+R()*5,0,7);ctx.fill();}break;
     case 'suede':noise(9000,20,2);break;
     case 'cord':vstr(10,70);noise(2000,12);break;
@@ -328,14 +328,31 @@ function colorTex(kind,hex,pat,hex2){
   if(pat&&pat!=='solid')drawPattern(ctx,Z,pat,hex,hex2,R);
   const L=a=>`rgba(255,255,255,${a})`,D=a=>`rgba(0,0,0,${a})`,sc=Z/256;
   const noise=(n,a,sz=1)=>{for(let i=0;i<n;i++){ctx.fillStyle=R()<.5?L(a*R()):D(a*R());ctx.fillRect(R()*Z,R()*Z,sz*sc,sz*sc);}};
+  /* the surface of the cloth at the scale it is seen at (a tile is ~7 cm, a pixel ~0.3 mm): details of 1.5-6 mm that read
+     as the material in a close view and average out to the plain colour in a full-length one */
+  const mott=(n,a,r0,r1)=>{for(let i=0;i<n;i++){const x=R()*Z,y=R()*Z,r=(r0+R()*(r1-r0))*sc,gr=ctx.createRadialGradient(x,y,0,x,y,r),c0=R()<.5?L(a*(.5+R()*.5)):D(a*(.5+R()*.5));gr.addColorStop(0,c0);gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;
+    for(const ox of [-Z,0,Z])for(const oy of [-Z,0,Z]){if(x+ox<-r||x+ox>Z+r||y+oy<-r||y+oy>Z+r)continue;ctx.save();ctx.translate(ox,oy);ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.restore();}}};
+  const slub=(n,a,vert,w0,w1)=>{for(let i=0;i<n;i++){const p=R()*Z,l=(20+R()*120)*sc,q=R()*Z,w=(w0+R()*(w1-w0))*sc;ctx.fillStyle=R()<.55?L(a*(.4+R()*.6)):D(a*(.4+R()*.6));
+    for(const o of [-Z,0,Z]){if(vert)ctx.fillRect(p,q+o,w,l);else ctx.fillRect(q+o,p,l,w);}}};
+  const twillL=(step,a,w)=>{ctx.lineWidth=w*sc;for(let k=-Z;k<2*Z;k+=step*sc){ctx.strokeStyle=L(a);ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+Z,Z);ctx.stroke();ctx.strokeStyle=D(a*1.2);ctx.beginPath();ctx.moveTo(k+step*sc/2,0);ctx.lineTo(k+step*sc/2+Z,Z);ctx.stroke();}};
+  const flecks=(n,cols,a)=>{for(let i=0;i<n;i++){ctx.globalAlpha=a*(.5+R()*.5);ctx.fillStyle=cols[Math.floor(R()*cols.length)];const x=R()*Z,y=R()*Z,l=(1.5+R()*4)*sc,an=R()*Math.PI;ctx.save();ctx.translate(x,y);ctx.rotate(an);ctx.fillRect(-l/2,-0.6*sc,l,1.2*sc);ctx.restore();}ctx.globalAlpha=1;};
   switch(kind){
-    case 'denim':ctx.lineWidth=1.3*sc;for(let k=-Z;k<2*Z;k+=4*sc){ctx.strokeStyle=L(.07);ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+Z,Z);ctx.stroke();}noise(5000,.14);for(let i=0;i<40;i++){ctx.fillStyle=L(.05*R());ctx.fillRect(R()*Z,0,(1+R()*2)*sc,Z);}break;
-    case 'linen':for(let i=0;i<120;i++){ctx.fillStyle=R()<.5?L(.07):D(.05);ctx.fillRect(0,R()*Z,Z,sc);ctx.fillRect(R()*Z,0,sc,Z);}noise(2500,.06);break;
-    case 'wool':noise(9000,.08);break;
-    case 'flannel':case 'fleece':case 'pile':case 'suede':case 'velvet':noise(6000,.06,2);break;
-    case 'leather':for(let i=0;i<220;i++){ctx.fillStyle=R()<.5?L(.018):D(.025);ctx.beginPath();ctx.arc(R()*Z,R()*Z,(2+R()*6)*sc,0,7);ctx.fill();}break;
-    case 'knit':case 'waffle':case 'pique':case 'cord':case 'pile':{const[c2,x2]=cnv(256,256);const R2=rng(hash('s'+kind));x2.fillStyle='#808080';x2.fillRect(0,0,256,256);paintStruct(x2,256,kind,v=>`rgb(${v},${v},${v})`,R2);
-      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=kind==='pile'?0.35:0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';break;}
+    case 'denim':/* indigo twill: the diagonal wale (~1.5 mm), slubby warp yarns (vertical streaks of uneven dye), white weft flecks, soft fading */
+      mott(26,.06,18,50);twillL(8,.03,3);slub(260,.07,true,1,2.5);noise(4000,.1);for(let i=0;i<900;i++){ctx.fillStyle=L(.12+R()*.14);ctx.fillRect(R()*Z,R()*Z,sc,(1+R()*2)*sc);}break;
+    case 'twill':case 'gabardine':mott(20,.035,15,40);twillL(kind==='gabardine'?4:5,.04,1.6);noise(2500,.05);break;
+    case 'canvas':mott(24,.04,12,36);slub(110,.035,true,1,2);slub(110,.035,false,1,2);noise(3000,.06);break;
+    case 'oxford':/* two-tone basket weave: fine white and coloured yarns */for(let y=0;y<Z;y+=2*sc)for(let x=(y/(2*sc)%2)*2*sc;x<Z;x+=4*sc){ctx.fillStyle=L(.07);ctx.fillRect(x,y,2*sc,2*sc);}noise(2000,.05);break;
+    case 'linen':mott(18,.05,20,60);slub(180,.08,false,1,2.6);slub(120,.06,true,1,2);noise(2500,.06);break;
+    case 'jersey':case 'tricot':/* knit columns barely visible, a slight heather */for(let x=0;x<Z;x+=3*sc){ctx.fillStyle=D(.035);ctx.fillRect(x,0,sc,Z);}mott(30,.03,8,24);noise(3000,.05);break;
+    case 'wool':/* tweed-like: small fibres in lighter and contrasting tones */mott(30,.05,10,34);noise(9000,.08);flecks(500,[shade(hex,.35),shade(hex,-.3),mixHex(hex,'#c9a34a',.5),mixHex(hex,'#7a3b2e',.5),mixHex(hex,'#4b6a8f',.5)],.45);break;
+    case 'flannel':/* brushed: soft cloudy nap */mott(90,.06,6,22);noise(5000,.06,2);break;
+    case 'fleece':/* sweatshirt fleece: a soft heather (lighter and darker fibre clusters of a few mm) */mott(160,.07,3,10);mott(20,.04,20,60);noise(6000,.05,1.5);break;
+    case 'pile':case 'suede':case 'velvet':mott(70,.06,5,20);noise(6000,.06,2);break;
+    case 'nylon':/* ripstop: a faint 5 mm grid of thicker yarns */{const g=18*sc;ctx.fillStyle=L(.035);for(let k=0;k<Z;k+=g){ctx.fillRect(k,0,1.4*sc,Z);ctx.fillRect(0,k,Z,1.4*sc);}noise(1200,.03);break;}
+    case 'satin':mott(10,.025,30,80);break;
+    case 'leather':for(let i=0;i<220;i++){ctx.fillStyle=R()<.5?L(.018):D(.025);ctx.beginPath();ctx.arc(R()*Z,R()*Z,(2+R()*6)*sc,0,7);ctx.fill();}mott(12,.03,30,70);break;
+    case 'knit':case 'waffle':case 'pique':case 'cord':{const[c2,x2]=cnv(256,256);const R2=rng(hash('s'+kind));x2.fillStyle='#808080';x2.fillRect(0,0,256,256);paintStruct(x2,256,kind,v=>`rgb(${v},${v},${v})`,R2);
+      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';if(kind==='knit')mott(30,.035,8,24);break;}
     case 'rib':for(let x=0;x<Z;x+=6*sc){ctx.fillStyle=D(.08);ctx.fillRect(x,0,2*sc,Z);}break;
     case 'mesh':for(let y=0;y<Z;y+=8*sc)for(let x=(y/(8*sc)%2)*4*sc;x<Z;x+=8*sc){ctx.fillStyle=D(.35);ctx.beginPath();ctx.arc(x+4*sc,y+4*sc,2*sc,0,7);ctx.fill();}break;
     case 'cork':for(let i=0;i<3000;i++){ctx.fillStyle=R()<.5?L(.1):D(.14);ctx.fillRect(R()*Z,R()*Z,2*sc,2*sc);}break;
@@ -345,7 +362,7 @@ function colorTex(kind,hex,pat,hex2){
   const rep={tartan:.5,buffalo:.5,camo:.42}[pat]||1;t.repeat.set(rep,rep);
   texCache.set(key,t);return t;
 }
-const BUMPY={cable:0.35,cord:0.35,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.2};
+const BUMPY={cable:0.35,cord:0.35,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.3,denim:0.22,flannel:0.22};
 function fabric(kind,hex,pat='solid',hex2='#1e1e1f'){
   if(!HEX.test(hex||''))hex='#888888';if(!HEX.test(hex2||''))hex2='#1e1e1f';
   const key=['f',kind,hex,pat||'solid',pat&&pat!=='solid'?hex2:''].join('|');if(matCache.has(key))return matCache.get(key);
