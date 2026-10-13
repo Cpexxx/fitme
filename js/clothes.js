@@ -269,7 +269,7 @@ function buildTop(G,P=S.top){
   const thread=shade(P.color,lumHex(P.color)<0.3?0.25:-0.2);
   /* hem */
   if(!tuck){
-    if(T.rib)G.add(mk(tube(vSamples(hem,hem+0.05,5,y=>addE(rf0(y),0.0015+roundE(y,hem,hem+0.05,0.002))),{seg:84}),md));
+    if(T.rib){const bd=mk(tube(vSamples(hem,hem+0.05,5,y=>addE(rf0(y),0.0015+roundE(y,hem,hem+0.05,0.002))),{seg:84}),md);bd.userData.band=1;G.add(bd);}
     else{G.add(mk(tube(vSamples(hem,hem+0.016,4,y=>addE(rf0(y),roundE(y,hem,hem+0.016,0.003))),tubeO),m));stitchRing(G,hem+0.022,rf0,thread,0,folds);}
     if(T.tail){const dropF=a=>0.05*Math.pow(Math.abs(Math.sin(a)),1.5);
       const tl=mk(surf(84,6,(u,v)=>{const a=u*TAU,y=hem-dropF(a)*v;return envPt(rf0(hem),a,y,0.0005);},{noAO:true}),m);tl.userData.tail=true;G.add(tl);}

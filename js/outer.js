@@ -53,7 +53,7 @@ function buildOuter(G,P=S.outer){
   /* (no rolled cord along the pattern's front edges: the fitted shell has its own turned edge and its fronts open wider,
      the cords were left hanging in the opening as loose stripes) */
   /* hem */
-  const band=(y0,y1,mat2,bulge)=>G.add(mk(tube(vSamples(y0,y1,5,y=>ringF(y,0.002+roundE(y,y0,y1,bulge||0.003))),{seg:84}),mat2));
+  const band=(y0,y1,mat2,bulge)=>{const bd=mk(tube(vSamples(y0,y1,5,y=>ringF(y,0.002+roundE(y,y0,y1,bulge||0.003))),{seg:84}),mat2);bd.userData.band=1;G.add(bd);return bd;};
   if(T.band==='rib')band(hem,hem+0.05,ribMat);
   else if(T.band==='bind')band(hem,hem+0.014,md,0.002);
   else if(T.band==='cord'){band(hem,hem+0.03,md,0.002);for(const sd of [-1,1]){const p=at(sd*Math.max(0.09,gapX(hem+0.015)+0.03),hem+0.015,0.004);cordsAlong(G,plain('#1b1a19',.6),[p,p.clone().add(V3(0,-0.03,0.004)),p.clone().add(V3(0,-0.05,0.004))],0.0022);G.add(mk(rodGeo(p.clone().add(V3(0,-0.045,0.004)),p.clone().add(V3(0,-0.065,0.004)),0.0055,10),plain('#1b1a19',.5)));}}
