@@ -390,14 +390,39 @@ function hairTex(hex,dir,kind){
   else if(kind==='braid'){for(let y=0;y<Z;y+=16)for(let x=0;x<Z;x+=32){ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x+8,y+8,9,5,0.7,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(x+24,y+16,9,5,-0.7,0,7);ctx.fill();}
     for(let i=0;i<300;i++){ctx.strokeStyle=`rgba(255,255,255,${.05+R()*.08})`;const x=R()*Z;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+(R()-.5)*20,Z);ctx.stroke();}}
   else{/* clumps: broad soft light/dark bands of random width, then fine low-contrast strands */
-    let x=0;while(x<Z){const w=6+R()*22,g=ctx.createLinearGradient(x,0,x+w,0),k=R()*.1;g.addColorStop(0,`rgba(0,0,0,${.07+k})`);g.addColorStop(.45,`rgba(255,255,255,${.03+R()*.05})`);g.addColorStop(1,`rgba(0,0,0,${.07+k})`);ctx.fillStyle=g;ctx.fillRect(x,0,w,Z);x+=w;}
+    let x=0;while(x<Z){const w=6+R()*22,g=ctx.createLinearGradient(x,0,x+w,0),k=R()*.04;g.addColorStop(0,`rgba(0,0,0,${.03+k})`);g.addColorStop(.45,`rgba(255,255,255,${.02+R()*.03})`);g.addColorStop(1,`rgba(0,0,0,${.03+k})`);ctx.fillStyle=g;ctx.fillRect(x,0,w,Z);x+=w;}
     for(let i=0;i<900;i++){const x2=R()*Z,l=R()<.5;ctx.strokeStyle=l?`rgba(255,255,255,${.015+R()*.04})`:`rgba(0,0,0,${.02+R()*.06})`;ctx.lineWidth=.4+R()*.8;ctx.beginPath();ctx.moveTo(x2,-4);ctx.bezierCurveTo(x2+(R()-.5)*5,Z*.33,x2+(R()-.5)*5,Z*.66,x2+(R()-.5)*3,Z+4);ctx.stroke();}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=8;texCache.set(key,t);return t;
+}
+/* hair cards: a strand atlas (4 columns, roots at the top, tips at the bottom) with alpha: many fine strands, denser
+   in the middle of a column, ending at different lengths, each a little lighter or darker than the base colour */
+function hairCardTex(hex,kind){
+  const key='hc|'+hex+kind;if(texCache.has(key))return texCache.get(key);
+  const Z=512,CW=128,[c,ctx]=cnv(Z,Z);if(!ctx){texCache.set(key,null);return null;}
+  ctx.clearRect(0,0,Z,Z);const R=rng(hash(key));ctx.lineCap='round';const rgb=new THREE.Color(hex);
+  const rgba=(sh,a)=>{const k=new THREE.Color(shade(hex,sh));return`rgba(${Math.round(k.r*255)},${Math.round(k.g*255)},${Math.round(k.b*255)},${a})`;};
+  for(let col=0;col<4;col++){const x0=col*CW,n=kind==='coil'?90:kind==='short'?130:150;
+    for(let i=0;i<n;i++){
+      /* across the card: dense in the middle, a few stray strands at the sides */
+      const g=(R()+R()+R()-1.5)/1.5,x=x0+CW/2+g*CW*0.47,y0=R()*Z*0.05,len=Z*(kind==='short'?0.5+0.5*R():0.55+0.45*R());
+      const sh=(R()-0.5)*0.12,a=0.7+0.3*R(),gr=ctx.createLinearGradient(0,y0,0,y0+len);
+      /* each strand fades out over its last third (soft, uneven ends instead of a cut edge) */
+      gr.addColorStop(0,rgba(sh-0.04,0));gr.addColorStop(0.1,rgba(sh-0.04,a));gr.addColorStop(0.62,rgba(sh,a));gr.addColorStop(1,rgba(sh+0.05,0));
+      ctx.strokeStyle=gr;ctx.lineWidth=kind==='coil'?1.6+R()*1.4:1+R()*1.2;ctx.beginPath();
+      if(kind==='coil'){const ph=R()*TAU,amp=3+R()*4,fq=0.09+R()*0.06;ctx.moveTo(x,y0);for(let y=y0;y<y0+len;y+=3)ctx.lineTo(x+Math.sin(y*fq+ph)*amp,y);}
+      else{const bend=(R()-0.5)*12,w1=(R()-0.5)*5;ctx.moveTo(x,y0);ctx.bezierCurveTo(x+w1,y0+len*0.33,x+bend*0.6,y0+len*0.66,x+bend,y0+len);}
+      ctx.stroke();}}
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;texCache.set(key,t);return t;
+}
+function hairCardMat(hex,kind='strand'){
+  const k='hcm|'+hex+kind;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:0xffffff,map:hairCardTex(hex,kind),alphaTest:0.35,side:THREE.DoubleSide,roughness:0.82,metalness:0,envMapIntensity:0.3,vertexColors:true});
+  m.userData.noShadow=true;matCache.set(k,m);return m;
 }
 function hairMat(hex,dir='v',kind='strand'){
   const k='hm|'+hex+dir+kind;if(matCache.has(k))return matCache.get(k);
   const map=hairTex(hex,dir,kind);
-  const m=new THREE.MeshPhysicalMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0022:.004,roughness:kind==='strand'?.78:.88,metalness:0,sheen:kind==='strand'?.2:.1,sheenRoughness:.45,sheenColor:lin(shade(hex,.22)),envMapIntensity:.38,
+  const m=new THREE.MeshStandardMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0018:.0015,roughness:.9,metalness:0,envMapIntensity:.28,
     side:THREE.DoubleSide,vertexColors:true,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
   matCache.set(k,m);return m;
 }

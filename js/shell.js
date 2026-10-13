@@ -370,7 +370,7 @@ function shReseatHair(o,S,G){
   const p=gg.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
   for(let i=0;i<p.count;i++){const y=p.getY(i),w=1-smooth((y-y0)/0.06);if(w<=0)continue;shCoord(0,p.getX(i),y,p.getZ(i),c,0);const d=Math.min(0,S.at(c[0],c[1]))*w;if(!d)continue;
     shPoint(0,c[0],c[1],Math.max(0.001,c[2]+d),q);p.setXYZ(i,q[0],q[1],q[2]);}
-  p.needsUpdate=true;gg.computeVertexNormals();o.userData.ctx='none';
+  p.needsUpdate=true;if(!gg.userData.keepNormals)gg.computeVertexNormals();o.userData.ctx='none';
 }
 function shRasterShell(m,grids){{const g=m.geometry,rg=g.userData.reg,p=g.attributes.position,ix=g.index.array;
     if(g.userData.__per){for(let r=0;r<5;r++)if(g.userData.__per[r].length)grids[r].raster(g.userData.__per[r],0);return;}

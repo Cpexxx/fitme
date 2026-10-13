@@ -174,7 +174,7 @@ function hairOverTemples(G,paths,tr){const hair=[];G.traverse(o=>{if(o.isMesh&&o
       let bd=R,bq=null;for(const q of Q){const d=v.distanceTo(q);if(d<bd){bd=d;bq=q;}}if(!bq)continue;
       const rw=v.distanceTo(hc),rq=bq.distanceTo(hc)+tr+0.0025,w=1-smooth(bd/R);if(rw>=rq||w<=0)continue;
       const k=(rw+(rq-rw)*w)/rw;v.set(hc.x+(v.x-hc.x)*k,hc.y+(v.y-hc.y)*k,hc.z+(v.z-hc.z)*k).applyMatrix4(inv);p.setXYZ(i,v.x,v.y,v.z);ch=true;}
-    if(ch){p.needsUpdate=true;g.computeVertexNormals();}}}
+    if(ch){p.needsUpdate=true;if(!g.userData.keepNormals)g.computeVertexNormals();}}}
 function wristR(t,side){return armAt(t)+0.0028;}
 function buildWatch(G){
   const A=S.acc.watch,t0=A.type;if(!t0||t0==='none')return;
