@@ -180,6 +180,11 @@ const NECKLACES={none:'Brak',thin:'Cienki łańcuszek',cuban:'Gruby splot',cross
 const EARRINGS={none:'Brak',stud:'Sztyfty',hoopS:'Małe kółka',hoopL:'Duże kółka',drop:'Wiszące',cross:'Krzyżyki'};
 const WALLETS={none:'Brak',single:'Pojedynczy',double:'Podwójny'};
 const BAGS={none:'Brak',crossbody:'Listonoszka',sling:'Nerka na klatkę',backpack:'Plecak',tote:'Torba na ramię'};
+/* underwear (worn by default: the mannequin is never bare under the clothes); bottoms per gender, bras for women */
+const UNDER_M={none:'Brak',boxer:'Bokserki',trunk:'Krótkie bokserki',brief:'Slipy'};
+const UNDER_F={none:'Brak',brief:'Figi',hipster:'Hipsterki',boyshort:'Szorty',high:'Wysokie figi'};
+const BRAS={none:'Brak',tshirt:'Gładki (t-shirt)',balconette:'Balkonetka',sports:'Sportowy',bralette:'Bralette'};
+const SAGS={none:'Nie',low:'Lekko zsunięte',heavy:'Mocno zsunięte (sagging)'};
 const SCARVES={none:'Brak',wrap:'Owinięty',long:'Długi, luźny'};
 const TIES={none:'Brak',tie:'Krawat',skinny:'Wąski krawat',bow:'Mucha'};
 const ACC_TAGS={classic:['old money'],diver:['smart casual'],square:['old money','retro'],digital:['gorpcore','retro'],smart:['athleisure'],
@@ -208,11 +213,12 @@ const BACKDROPS={studio:['Studio','#e6e4e0','#b9b4ac'],stone:['Kamień','#d4d1cb
 const DEFAULT={v:5,gender:'m',height:180,build:1,mus:0.3,fat:0.15,
   fig:{shoulders:1,chest:1,waist:1,hips:1,legs:1,torso:1,arms:1,neckL:1,neckW:1,head:1},
   skin:13,finish:'fabric',pose:'stand',
+  under:{bottom:'boxer',bra:'tshirt',color:'auto',color2:'auto'},
   hair:{style:'fade',color:'#2a1d16',texture:'straight',fringe:'none',beard:'none',len:0.5},
   top:{type:'tee',fit:'regular',color:'#232325',color2:'#f4f1ea',pattern:'solid',mat:'',neck:'',sleeve:'',tuck:'out',print:'none',size:'auto'},
   mid:{src:'none',type:'none',fit:'regular',color:'#3c4a5c',color2:'#f4f1ea',pattern:'solid',mat:'',neck:'',sleeve:'',tuck:'out',print:'none',close:'closed',size:'auto'},
   outer:{type:'none',fit:'regular',color:'#1e1e1f',color2:'#e9e2d2',pattern:'solid',mat:'',close:'closed',size:'auto'},
-  bottom:{type:'jeans',fit:'straight',length:'full',rise:'mid',color:'#24345a',color2:'#f4f1ea',pattern:'solid',mat:'',belt:false,beltColor:'#3a281c',buckle:'classic',rips:false,stripes:false,w:'auto',l:'auto'},
+  bottom:{type:'jeans',fit:'straight',length:'full',rise:'mid',sag:'none',color:'#24345a',color2:'#f4f1ea',pattern:'solid',mat:'',belt:false,beltColor:'#3a281c',buckle:'classic',rips:false,stripes:false,w:'auto',l:'auto'},
   shoes:{type:'court',color:'#f3f1ec',color2:'#f3f1ec',sole:'#f2efe8',mat:'',socks:'none',sockColor:'#f4f1ea',eu:'auto'},
   acc:{
     cap:{type:'none',color:'#1e1e1f',color2:'#f4f1ea',back:false},

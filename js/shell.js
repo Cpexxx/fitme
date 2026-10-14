@@ -295,6 +295,7 @@ function buildShells(G,GS){
   /* every remaining piece of a garment (buckles, buttons, rivets - also ones built outside the cloth pass) under a higher layer is hidden */
   {const shellSet=new Set(shells);for(const L of layers){const cm=L.curtainMesh;if(cm)shellSet.add(cm);}const late=[];G.traverse(o=>{if(o.isMesh&&!shellSet.has(o)&&o.userData.layer&&o.userData.layer!=='none'&&!o.userData.reseated&&!o.userData.kept)late.push(o);});
     for(const o of late){const L=layers.find(l=>l.name===o.userData.layer);if(!L)continue;shBake(o,o.parent||G);shHideCovered(o,L,layers);}}
+  shUnderHide(G,layers);
   shHoodsOut(G,layers);
   shScarfOut(G);
   shBagsOut(G,layers);
@@ -348,6 +349,15 @@ function shHemOnCurtain(o,L){const cm=L.curtainMesh,H=cm&&cm.userData.hemAt,SG=L
   for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const k=bin(c[0]);if(y0[k]>8)continue;const y=c[1]-y0[k]+H(c[0]);let R=SG.at(c[0],y);if(R<0)R=SG.nearest(c[0],y);if(R<0)continue;
     shPoint(0,c[0],y,R+0.0012+(c[2]-r0[k]),q);p.setXYZ(i,q[0],q[1],q[2]);}
   p.needsUpdate=true;o.geometry.computeVertexNormals();}
+/* underwear under the clothes is never seen: where any garment covers it (inside its edge by more than a few mm) it is
+   dropped, so a tight top or leggings can never show a strap, a band or a cup through them */
+function shUnderHide(G,layers){const ms=[];G.traverse(o=>{if(o.isMesh&&o.userData.under)ms.push(o);});if(!ms.length)return;
+  const c=new Float32Array(3);for(const L of layers){if(!L.newG)continue;for(const r of [0,1,2,3,4]){const g=L.newG[r];if(g&&g.any&&!g.S)g.sdf();}}
+  for(const o of ms){const g=o.geometry,p=g.attributes.position,n=p.count,cov=new Uint8Array(n);
+    for(let i=0;i<n;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+      for(const L of layers){if(!L.newG)continue;let hit=false;for(const r of (Math.abs(x)>BC.shX*0.7&&y>BC.shY-0.3?[0,x>=0?1:2]:y<1.0?[0,x>=0?3:4]:[0])){const G2=L.newG[r];if(!G2||!G2.any)continue;shCoord(r,x,y,z,c,0);const R=G2.at(c[0],c[1]);if(R>0&&R>=c[2]-0.004&&G2.sdfAt(c[0],c[1])>0.004){hit=true;break;}}if(hit){cov[i]=1;break;}}}
+    const ix=g.index.array,keep=[];for(let t=0;t<ix.length;t+=3)if(!(cov[ix[t]]&&cov[ix[t+1]]&&cov[ix[t+2]]))keep.push(ix[t],ix[t+1],ix[t+2]);
+    if(keep.length<ix.length){g.setIndex(keep);if(!keep.length)o.visible=false;}}}
 function shHoodsOut(G,layers){const hoods=[];G.traverse(o=>{if(o.isMesh&&o.userData.hood)hoods.push(o);});if(!hoods.length)return;G.updateMatrixWorld(true);
   const c=new Float32Array(3),q=new Float32Array(3);
   for(const o of hoods){const L=layers.find(l=>l.name===o.userData.layer),rank=L?L.rank:{bottom:1,top:2,mid:3,outer:4}[o.userData.layer]||0;
@@ -422,7 +432,10 @@ function shRelax(B,L){
 /* loose fabric does not show the anatomy under it: where the cut leaves room, the trunk and the sleeves are a smooth
    surface spanning the body's high points (chest, shoulder blades, biceps) instead of a copy of its relief.
    Per region the fabric radius is low-pass filtered in its own polar frame, never closer to the raw body than a few mm. */
-function shLoose(B,L){const w0=smooth(((L.fitE||0)-0.012)/0.025);if(w0<=0)return;
+function shLoose(B,L){const w0=smooth(((L.fitE||0)-0.012)/0.025);
+  /* in a bra the bust is one smooth moulded form: any top over it (even a slim one) spans it without the apex showing */
+  const sp=BC.bra&&L.name!=='bottom'&&BC.core.spots&&BC.core.spots[1],bax=sp?Math.abs(sp[0]):0,bay=sp?sp[1]:0;
+  if(w0<=0&&!sp)return;
   const n=B.n,X=L.X,P=B.P,reg=B.reg,rv=L.rv,f=L.fe||L.f,c=new Float32Array(3),q=new Float32Array(3);
   for(const r of [0,1,2]){const arm=r>0,NA=96,st=arm?0.02:0.01,x0=arm?-0.1:0.6,NX=arm?60:110,K=NA*NX;
     const bin=(th,x)=>{const j=Math.round((x-x0)/st);if(j<0||j>=NX)return -1;return j*NA+((Math.floor((th/TAU+0.5)*NA)%NA)+NA)%NA;};
@@ -459,7 +472,8 @@ function shLoose(B,L){const w0=smooth(((L.fitE||0)-0.012)/0.025);if(w0<=0)return
       const wr=arm?smooth((x-0.12)/0.1)*(1-smooth((x-(L.sleeveEnd-0.08))/0.05)):smooth((x-(B.cy-0.01))/0.04)*(1-smooth((x-(BC.shY-0.1))/0.06));
       /* body points deep in a crevice (the crotch, between the legs) all map onto the same outer surface and fold the mesh: leave them */
       shCoord(r,P[v*3],P[v*3+1],P[v*3+2],c,0);const kb=bin(c[0],c[1]),deep=kb>=0&&FL[kb]>0?FL[kb]-c[2]:0;
-      const w=w0*wr*smooth((f[v]+0.005)/0.035)*(1-smooth((deep-0.07)/0.03));if(w<=0)continue;const R=at(th,x);if(R<0)continue;
+      const wb=sp&&!arm?gauss(P[v*3+1]-bay,0.075)*gauss(Math.abs(P[v*3])-bax,0.075)*smooth(P[v*3+2]/0.04):0;
+      const w=Math.max(w0*wr,wb)*smooth((f[v]+0.005)/0.035)*(1-smooth((deep-0.07)/0.03));if(w<=0)continue;const R=at(th,x);if(R<0)continue;
       shPoint(r,th,x,lerp(rho,R,w),q);X[v*3]=q[0];X[v*3+1]=q[1];X[v*3+2]=q[2];}}}
 /* the fabric mesh is the body's own topology: where the body turns away under the fabric (under the bust and the pecs,
    the navel, the shoulder blades) many body vertices land on a narrow strip of fabric and its triangles fold over each

@@ -29,7 +29,9 @@ function fixState(s){
   const B=BOTTOMS[s.bottom.type];
   s.bottom.fit=inList(s.bottom.fit,B.fits,['straight','aline','pleated','slip','relaxed','skinny'].find(x=>B.fits.includes(x))||B.fits[0]);
   s.bottom.length=inList(s.bottom.length,B.lens,['full','knee','shorts','midi'].find(x=>B.lens.includes(x))||B.lens[0]);
-  if(!RISES[s.bottom.rise])s.bottom.rise='mid';s.bottom.mat=inList(s.bottom.mat,B.mats||[],'');
+  if(!RISES[s.bottom.rise])s.bottom.rise='mid';if(!SAGS[s.bottom.sag]||B.skirt||s.bottom.type==='none'||B.tight)s.bottom.sag='none';if(s.bottom.sag!=='none'&&s.top.tuck!=='out')s.top.tuck='out';
+  s.under=s.under||clone(DEFAULT.under);{const UB=s.gender==='f'?UNDER_F:UNDER_M;if(!UB[s.under.bottom])s.under.bottom=s.gender==='f'?'brief':'boxer';
+    if(s.gender!=='f')s.under.bra='none';else if(!BRAS[s.under.bra])s.under.bra='tshirt';if(s.under.color!=='auto')s.under.color=hexOr(s.under.color,'auto');if(s.under.color2!=='auto')s.under.color2=hexOr(s.under.color2,'auto');}s.bottom.mat=inList(s.bottom.mat,B.mats||[],'');
   const SH=SHOES[s.shoes.type];s.shoes.mat=inList(s.shoes.mat,SH.ups||[],'');
   return s;
 }
@@ -44,13 +46,15 @@ function sanitize(o){
   if(o.fig&&typeof o.fig==='object')for(const k of Object.keys(FIG))if(Number.isFinite(+o.fig[k]))s.fig[k]=clamp(+o.fig[k],FIG[k][1],FIG[k][2]);
   if(Number.isInteger(o.skin)){if(old){s.skin=[1,3,5,7,9,10,11,13][o.skin]!=null?[1,3,5,7,9,10,11,13][o.skin]:3;if(o.skin>=5)s.finish='fabric';}else if(o.skin>=0&&o.skin<SKINS.length)s.skin=o.skin;}
   if(typeof o.pose==='string'&&POSES[o.pose])s.pose=o.pose;
+  if(o.under&&typeof o.under==='object'){const u=o.under;if(typeof u.bottom==='string')s.under.bottom=u.bottom;if(typeof u.bra==='string')s.under.bra=u.bra;s.under.color=u.color==='auto'?'auto':hexOr(u.color,s.under.color);s.under.color2=u.color2==='auto'?'auto':hexOr(u.color2,s.under.color2);}
+  else if(s.gender==='f')s.under.bottom='brief';
   if(FINISHES[o.finish])s.finish=o.finish;else if(o.finish==='plush')s.finish='fabric';
   if(o.hair&&typeof o.hair==='object'){const h=o.hair;if(HAIR[h.style])s.hair.style=h.style;s.hair.color=hexOr(h.color,s.hair.color);if(HAIR_TEX[h.texture])s.hair.texture=h.texture;
     if(FRINGES[h.fringe])s.hair.fringe=h.fringe;if(BEARDS[h.beard])s.hair.beard=h.beard;if(Number.isFinite(+h.len))s.hair.len=clamp(+h.len,0,1);}
   const copyG=(slot,src,types,extra)=>{if(!src||typeof src!=='object')return;const d=s[slot];
     let t=src.type;if(slot==='outer'&&t==='coat')t='overcoat';if(slot==='shoes'&&t==='sneaker')t='court';
     if(types[t])d.type=t;
-    for(const k of ['fit','length','rise','neck','sleeve','mat','close','buckle','socks','print'])if(typeof src[k]==='string')d[k]=src[k];
+    for(const k of ['fit','length','rise','sag','neck','sleeve','mat','close','buckle','socks','print'])if(typeof src[k]==='string')d[k]=src[k];
     for(const k of ['color','color2','sole','beltColor','sockColor'])if(k in d)d[k]=hexOr(src[k],d[k]);
     if(PATTERNS[src.pattern])d.pattern=src.pattern;
     for(const k of ['belt','rips','stripes'])if(typeof src[k]==='boolean')d[k]=src[k];
@@ -106,7 +110,7 @@ function shapeKey(state){return JSON.stringify(state,(k,v)=>LOOK_KEYS.has(k)?und
 /* the layers up to and including the shirt: things worn on the shirt (a tie) are laid on these, not on a sweater or coat */
 let LAYERS_TOP=null;
 function runBuilders(G,GS){
-  LAYERS_TOP=null;safe('body',()=>buildBody(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));LAYERS_TOP=LAYERS.slice();MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
+  LAYERS_TOP=null;safe('body',()=>buildBody(G));safe('under',()=>buildUnder(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));LAYERS_TOP=LAYERS.slice();MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
   MK_CTX='hair';safe('hair',()=>buildHair(G));MK_CTX='none';safe('acc',()=>buildAcc(G));safe('shoes',()=>buildShoes(GS,G));}
 function matSeq(G,GS){const m=[],c=[];for(const g of [G,GS])g.traverse(o=>{if(o.isMesh){m.push(o.material);c.push(o.geometry.attributes.position.count);}});return{m,c};}
 function buildInto(group,state,cache=true){
@@ -293,6 +297,7 @@ const ICON={
   bag:'<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/>',
   scarf:'<path d="M6 4c2 2 10 2 12 0v4c-2 2-10 2-12 0z"/><path d="M9 9v11h4V9"/>',
   tie:'<path d="M10 3h4l-1 3 2 10-3 4-3-4 2-10z"/>',
+  under:'<path d="M4 7h16l-1.5 5c-2.5 0-4.5 2-5.5 5h-2c-1-3-3-5-5.5-5z"/><path d="M4 9.5h16"/>',
   body:'<circle cx="12" cy="4.8" r="2.4"/><path d="M8 21v-7.5L6 13V9.5C6 8.4 6.9 7.5 8 7.5h8c1.1 0 2 .9 2 2V13l-2 .5V21"/><path d="M12 13.5V21"/>',
   skin:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16"/>',
   hair:'<path d="M5 14c0-6 3-10 7-10s7 4 7 10c0 2-1 5-2 6M5 14c0 2 1 5 2 6"/><path d="M8 9c2 1 6 1 8-1"/>',
@@ -467,6 +472,7 @@ function slotEditor(pad,k){
     sizeRows(pad,k,P);
     pad.append(chipRow('bottom.len','Długość',Object.fromEntries(T.lens.map(l=>[l,LT[l].label])),P.length,v=>P.length=v));
     pad.append(chipRow('bottom.rise','Stan',Object.fromEntries(Object.entries(RISES).map(([kk,v])=>[kk,v.label])),P.rise,v=>P.rise=v));
+    if(!T.skirt&&!T.tight)pad.append(chipRow('bottom.sag','Zsunięte',SAGS,P.sag||'none',v=>P.sag=v));
     garmentCommon(pad,'bottom',P,T);
     if(T.belt){pad.append(switchRow('Pasek',!!P.belt,v=>{P.belt=v;update();}));
       if(P.belt){pad.append(colorRow('bottom.belt','Kolor paska',PAL.leather,P.beltColor,v=>P.beltColor=v));pad.append(chipRow('bottom.buckle','Klamra',{classic:'Klasyczna',western:'Western',web:'Parciany pas'},P.buckle,v=>P.buckle=v));}}
@@ -532,7 +538,8 @@ function renderRight(){
   const btNow=Object.values(BODY_TYPES).find(v=>Math.abs(v.mus-S.mus)<0.02&&Math.abs(v.fat-S.fat)<0.02);
   box.append(accItem('R','body','body','Sylwetka',`${S.gender==='m'?'Men':'Women'}, ${fmtHeight(S.height)}, ${btNow?btNow.label.toLowerCase():'własna'}`,null,pad=>{
     pad.append(chipRow('body.g','Wersja',{m:'Men',f:'Women'},S.gender,g=>{if(g!==S.gender){const was=JSON.stringify(S.hair)===JSON.stringify(S.gender==='f'?FEMALE_HAIR:MALE_HAIR);S.gender=g;
-      if(g==='f'&&S.height===180)S.height=168;else if(g==='m'&&S.height===168)S.height=180;if(was)S.hair=clone(g==='f'?FEMALE_HAIR:MALE_HAIR);}flyTo(null);}));
+      if(g==='f'&&S.height===180)S.height=168;else if(g==='m'&&S.height===168)S.height=180;if(was)S.hair=clone(g==='f'?FEMALE_HAIR:MALE_HAIR);
+      S.under.bottom=g==='f'?(UNDER_F[S.under.bottom]?S.under.bottom:'brief'):(UNDER_M[S.under.bottom]?S.under.bottom:'boxer');S.under.bra=g==='f'?(BRAS[S.under.bra]&&S.under.bra!=='none'?S.under.bra:'tshirt'):'none';}flyTo(null);}));
     pad.append(rangeRow('Wzrost',150,205,1,S.height,v=>fmtHeight(v),(v,live)=>{S.height=v;update(live);}));
     const bt=Object.entries(BODY_TYPES).find(([k,v])=>Math.abs(v.mus-S.mus)<0.02&&Math.abs(v.fat-S.fat)<0.02);
     pad.append(el('p',{class:'hint lab'},'Typ sylwetki'),chips(Object.entries(BODY_TYPES).map(([k,v])=>[k,v.label]),bt?bt[0]:'',v=>{S.mus=BODY_TYPES[v].mus;S.fat=BODY_TYPES[v].fat;S.build=1;update();},'Typ sylwetki'));
@@ -543,6 +550,14 @@ function renderRight(){
     prop.append(el('button',{class:'linkbtn',on:{click:()=>{for(const k of Object.keys(FIG))S.fig[k]=1;update();}}},'Przywróć proporcje'));
     pad.append(subRow('body.fig','Proporcje',esc(Object.keys(FIG).some(k=>Math.abs(S.fig[k]-1)>0.005)?'własne':'domyślne'),prop));
   }));
+  {const U=S.under,UB=S.gender==='f'?UNDER_F:UNDER_M,ucol=c=>c==='auto'?null:c;
+    box.append(accItem('R','under','under','Bielizna',[UB[U.bottom]||'Brak'].concat(S.gender==='f'?[BRAS[U.bra]||'Brak']:[]).join(', '),ucol(U.color),pad=>{
+      pad.append(chipRow('under.b','Majtki',UB,U.bottom,v=>U.bottom=v));
+      if(S.gender==='f')pad.append(chipRow('under.bra','Stanik',BRAS,U.bra,v=>U.bra=v));
+      pad.append(subRow('under.c','Kolor',U.color==='auto'?esc('Domyślny'):dotHTML(U.color)+esc(nameIn(PAL.basic,U.color)),swatches(PAL.basic,U.color==='auto'?'':U.color,v=>{U.color=v;U.color2=v;update();},'Kolor bielizny')));
+      if(U.color!=='auto')pad.append(el('button',{class:'linkbtn',on:{click:()=>{U.color='auto';U.color2='auto';update();}}},'Kolor domyślny'));
+      pad.append(subRow('under.c2','Gumka / wykończenie',U.color2==='auto'?esc('Domyślny'):dotHTML(U.color2)+esc(nameIn(PAL.basic,U.color2)),swatches(PAL.basic,U.color2==='auto'?'':U.color2,v=>{U.color2=v;if(U.color==='auto')U.color=v;update();},'Kolor gumki')));
+    }));}
   box.append(accItem('R','skin','skin','Skóra',SKINS[S.skin][1],SKINS[S.skin][0],pad=>{
     pad.append(subRow('skin.tone','Odcień',dotHTML(SKINS[S.skin][0])+esc(SKINS[S.skin][1]),swatches(SKINS,SKINS[S.skin][0],hex=>{const i=SKINS.findIndex(s=>s[0]===hex);if(i>=0){S.skin=i;update();}},'Odcień',false)));
     pad.append(chipRow('skin.fin','Wykończenie',FINISHES,S.finish,v=>S.finish=v));

@@ -240,10 +240,12 @@ function seamAttrs(geo,R,feet){
     D[i*4+2]=(ax-A.x)*du.x+(y-A.y)*du.y+(z-A.z)*du.z;Mk[i*4+2]=smooth((aw-0.6)/0.3);
     D[i*4+3]=(ax-Wr.x)*df.x+(y-Wr.y)*df.y+(z-Wr.z)*df.z;Mk[i*4+3]=smooth((aw-0.6)/0.3);}
   geo.setAttribute('seamD',new THREE.BufferAttribute(D,4));geo.setAttribute('seamM',new THREE.BufferAttribute(Mk,4));
+  /* arm weight per vertex (underwear and straps keep off the arms and hands) */
+  {const A=new Float32Array(n);for(let i=0;i<n;i++)A[i]=W[i*3];geo.userData.armw=A;}
 }
 /* =============== the model consumed by body.js =============== */
 function coreModel(){
-  const F=BC.F,key=[BC.g,r3(BC.b),r3(BC.mus||0),r3(BC.fat||0),...Object.keys(FIG).filter(k=>!['legs','torso','neckL','head'].includes(k)).map(k=>r3(F[k]))].join('|');
+  const F=BC.F,key=[BC.g+(BC.bra?'b':''),r3(BC.b),r3(BC.mus||0),r3(BC.fat||0),...Object.keys(FIG).filter(k=>!['legs','torso','neckL','head'].includes(k)).map(k=>r3(F[k]))].join('|');
   return cacheGet('core',key,()=>{
     const B=mhBase(),R=mhShape(BC.g,F,BC.b),P=R.P,legX=R.legX,nv=B.nv,J=mhMorph(BC.g,BC.mus||0,BC.fat||0).J,MP=mhMap(BC.g);
     for(let i=0;i<nv;i++){P[i*3+1]=MP.inv(P[i*3+1]);P[i*3+2]+=MH_DZ;}
@@ -254,7 +256,7 @@ function coreModel(){
       const bump=i=>{let m=0;for(const j of nb[i])m+=P[j*3+2];return P[i*3+2]-m/nb[i].size;};
       /* nipples: the pole of the densest ring of faces on each pec */
       const edgeLen=i=>{let L=0;for(const j of nb[i])L+=Math.hypot(P[j*3]-P[i*3],P[j*3+1]-P[i*3+1],P[j*3+2]-P[i*3+2]);return L/nb[i].size;};
-      const spots=[];for(const sd of [-1,1]){let best=-1,bl=9;for(let i=0;i<nv;i++){const x=P[i*3]*sd,y=P[i*3+1];if(B.armw[i]>0.3||x<0.05||x>0.15||y<1.18||y>1.4||P[i*3+2]<0||!nb[i].size)continue;const L=edgeLen(i);if(L<bl){bl=L;best=i;}}if(best>=0)spots.push([best,0.035]);}
+      const spots=[];const nr=BC.bra?0.06:0.035;for(const sd of [-1,1]){let best=-1,bl=9;for(let i=0;i<nv;i++){const x=P[i*3]*sd,y=P[i*3+1];if(B.armw[i]>0.3||x<0.05||x>0.15||y<1.18||y>1.4||P[i*3+2]<0||!nb[i].size)continue;const L=edgeLen(i);if(L<bl){bl=L;best=i;}}if(best>=0)spots.push([best,nr]);}
       /* navel: the deepest pit on the belly midline, measured against the belly around it (3 cm) */
       {const fr=[];for(let i=0;i<nv;i++){const x=P[i*3],y=P[i*3+1];if(Math.abs(x)<0.06&&y>0.9&&y<1.2&&P[i*3+2]>0&&B.armw[i]<0.3)fr.push(i);}
         let best=-1,bd=-9;for(const i of fr){if(Math.abs(P[i*3])>0.012||P[i*3+1]<0.95||P[i*3+1]>1.15)continue;let sz=0,c=0;for(const j of fr){const dx=P[j*3]-P[i*3],dy=P[j*3+1]-P[i*3+1];const d2=dx*dx+dy*dy;if(d2<0.03*0.03&&d2>0.015*0.015){sz+=P[j*3+2];c++;}}if(c<4)continue;const d=sz/c-P[i*3+2];if(d>bd){bd=d;best=i;}}
