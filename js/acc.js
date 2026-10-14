@@ -261,18 +261,22 @@ function buildEarrings(G){
       case 'cross':{const a=lobe.clone().add(V3(sd*0.004,-0.004,0)),c=new THREE.Group();c.position.copy(a);const m1=mk(new THREE.BoxGeometry(0.0022,0.016,0.0022),metal);m1.position.y=-0.009;c.add(m1);const m2=mk(new THREE.BoxGeometry(0.0022,0.0022,0.01),metal);m2.position.y=-0.005;c.add(m2);G.add(c);break;}
     }}
 }
+/* wallet chain: from the front belt loop on its side in a loose U along the hip to the back pocket, where the wallet
+   sits with only its top edge showing above the pocket opening */
 function buildWalletChain(G){
   const A=S.acc.wallet,t0=A.type;if(!t0||t0==='none'||!PANTS)return;
-  const sd=A.side==='L'?1:-1,metal=metalMat(A.metal),wy=PANTS.waistY;
-  const aF=sd>0?FRONT-0.5:FRONT+0.5,aB=sd>0?BACKA+0.56:BACKA-0.56;
-  const span=sd>0?aF-aB:aB-aF;
-  const chain=sag=>{const pts=[];for(let i=0;i<=26;i++){const t=i/26,a=sd>0?aF-span*t:aF+span*t,y=wy-0.025-sag*Math.sin(Math.PI*t)-0.04*t;pts.push(envPt(bodyEnv(y,LAYERS.slice(0,1)),a,y,0.008+0.01*Math.sin(Math.PI*t)));}
+  const sd=A.side==='L'?1:-1,metal=metalMat(A.metal),wy=PANTS.waistY,env=y=>bodyEnv(y,LAYERS.slice(0,1));
+  const aF=sd>0?FRONT-0.5:FRONT+0.5,aB=sd>0?BACKA+0.56:BACKA-0.56,yF=wy-0.014,yB=wy-0.1+0.012;
+  const chain=sag=>{const pts=[];for(let i=0;i<=30;i++){const t=i/30,aa=sd>0?aF-(aF-aB)*t:aF+(aB-aF)*t,y=lerp(yF,yB,t)-sag*Math.pow(Math.sin(Math.PI*t),1.2);
+      pts.push(envPt(env(y),aa,y,0.006+0.008*Math.sin(Math.PI*t)));}
     const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),L=curve.getLength(),n=Math.round(L/0.0105);
-    for(let i=0;i<n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0062,0.0017,8,14),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.66,1);G.add(l);}
+    for(let i=0;i<=n;i++){const p=curve.getPointAt(i/n),tn=curve.getTangentAt(i/n),l=mk(new THREE.TorusGeometry(0.0062,0.0017,8,14),metal);l.position.copy(p);/* a link lies along the chain (ring plane holds the tangent), every other one turned a quarter about it */l.quaternion.setFromUnitVectors(VX,tn);if(i%2)l.rotateX(Math.PI/2);l.scale.set(1,0.66,1);G.add(l);}
     return pts;};
-  const p=chain(0.16);if(t0==='double')chain(0.25);
-  const clip=mk(new THREE.BoxGeometry(0.008,0.03,0.006),metal);clip.position.copy(p[0]).add(V3(0,0.006,0));clip.quaternion.copy(qFromTo(VZ,radialN(p[0])));G.add(clip);
-  const w=mk(new THREE.BoxGeometry(0.1,0.03,0.012),plain('#2a1d16',.5,0,'wallet',{clearcoat:.3}));const e=p[p.length-1];w.position.copy(e).add(V3(0,-0.01,0));w.quaternion.copy(qFromTo(VZ,radialN(e)));G.add(w);
+  const p=chain(0.1);if(t0==='double')chain(0.17);
+  /* clip on the belt loop, swivel at the wallet end */
+  const clip=mk(new THREE.BoxGeometry(0.008,0.026,0.005),metal);clip.position.copy(envPt(env(wy-0.006),aF,wy-0.006,0.006));clip.quaternion.copy(qFromTo(VZ,radialN(clip.position)));G.add(clip);
+  const wc=envPt(env(yB-0.004),aB,yB-0.004,0.005),w=mk(new THREE.BoxGeometry(0.088,0.018,0.007),plain('#2a1d16',.55,0,'wallet',{clearcoat:.2}));w.position.copy(wc);
+  w.quaternion.copy(qFromTo(VZ,radialN(wc)));G.add(w);
 }
 function roundBox(w,h,d,r){const s=new THREE.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);
   const g=new THREE.ExtrudeGeometry(s,{depth:d-0.01,bevelEnabled:true,bevelThickness:0.005,bevelSize:0.005,bevelSegments:3,curveSegments:8});g.translate(0,0,-(d-0.01)/2);return g;}

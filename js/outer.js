@@ -58,7 +58,7 @@ function buildOuter(G,P=S.outer){
   else if(T.band==='bind')band(hem,hem+0.014,md,0.002);
   else if(T.band==='cord'){band(hem,hem+0.03,md,0.002);for(const sd of [-1,1]){const p=at(sd*Math.max(0.09,gapX(hem+0.015)+0.03),hem+0.015,0.004);cordsAlong(G,plain('#1b1a19',.6),[p,p.clone().add(V3(0,-0.03,0.004)),p.clone().add(V3(0,-0.05,0.004))],0.0022);G.add(mk(rodGeo(p.clone().add(V3(0,-0.045,0.004)),p.clone().add(V3(0,-0.065,0.004)),0.0055,10),plain('#1b1a19',.5)));}}
   else if(T.band==='waist'){band(hem,hem+0.045,md,0.003);stitchRing(G,hem+0.04,y=>ringF(y,0.004),'#c98a3a');for(const sd of [-1,1]){const b=at(sd*0.16,hem+0.022,0.006);buttonAt(G,b,radialN(b),0.0065,metalMat('silver'),0.004);}}
-  else{band(hem,hem+0.018,m,0.003);stitchRing(G,hem+0.024,y=>ringF(y),thread,0,mod);}
+  else{band(hem,hem+0.018,m,0.003);stitchRing(G,hem+0.024,y=>ringF(y),thread,0,mod);G.children[G.children.length-1].userData.hemPiece=1;}
   /* collar */
   const gTop=gapX(top);
   switch(T.collar){
