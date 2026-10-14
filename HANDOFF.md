@@ -242,3 +242,20 @@ Kolejne rundy:
 - Znane: w pozie „chód" przód płaszcza nad nogą wysuniętą tworzy lekki stopień na szwie powłoka/kurtyna (różne wagi skinningu).
 - Pułapka sesji: NIE robić `git checkout <commit> -- js` w roboczym katalogu (nadpisuje niezacommitowane zmiany) — do
   porównań używać `git worktree add <scratch>/wt <commit>` (+ skopiować app/web/vendor i tools/qa/render.js).
+
+## Runda 9 (2026-10-14): screenshoty, bielizna, sagging, długie włosy
+- **Bielizna** (`S.under`: bottom/bra/color/color2; `color:'auto'` = czarne/szare dla mężczyzn zależnie od skóry, nude dla
+  kobiet): `buildUnder` w body.js; `bodyPatch(geo,[f1,f2..],th,mat)` wycina łatkę z powierzchni ciała (każde ograniczenie
+  przycina trójkąt dokładnie, zachowuje `bodySrc` do pozowania), `bodyStrap` = ramiączka. Typy: UNDER_M/UNDER_F/BRAS w data.js.
+  `shUnderHide` usuwa bieliznę pod ubraniem (nic nie przebija). Ze stanikiem: `BC.bra` → większy promień wygładzania sutków
+  (mh.js spots 0.06, klucz cache 'b') i `shLoose` wygładza biust dla każdej góry. Gorset → stanik bez ramiączek.
+- **Sagging**: `S.bottom.sag` none/low/heavy (SAGS) — pas spodni niżej (`buildPants`, nie niżej niż krocze+1,6 cm), nogawki
+  dłuższe; wymusza `tuck:'out'`. Długie topy (hem 0.855) i tak go zakrywają — widać przy tankach/krótkich topach/bez góry.
+- Screenshoty: koszule/flanele kończące się przy kroczu dostają kurtynę (`lowOf(T)<CY+0.09`), kurtyna dziedziczy UV powłoki
+  (wzór ciągły), obszycie/ściągacz jedzie na dół kurtyny (`shHemOnCurtain`, `userData.hemPiece`); `shDetailOnFabric` dociąga
+  szlufki/nity do tkaniny; łańcuch portfela od szlufki do tylnej kieszeni (`buildWalletChain`); ręce nie wchodzą w biodra —
+  `mhShape` (pętla odwodzenia ramion wg stawów palców) i `poseHandClear` w pose.js (dla póz, odstęp 1 cm, `handRest` w 'hip').
+- **Włosy**: `hairSheet` dwa przejścia (wymagany promień, potem pomost 1.4·krok nad przeszkodami), koniec przy kontakcie z
+  ramieniem; `hairBandK` (opaska na czoło leży na włosach); `shHairOverNeckwear` — włosy nad bandaną (`userData.neckwear`)
+  i cienkimi kołnierzami (`isHair` taguje runBuilders).
+- Sweep: nowe przypadki under/…, bra/…, sag/….

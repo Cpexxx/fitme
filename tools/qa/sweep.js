@@ -59,6 +59,9 @@ const ROOT = path.resolve(__dirname, '../..');
       for (const p of keys(PATTERNS)) add(`${g}/pattern/${p}`, `s=>{${G}s.top.pattern='${p}';s.bottom.pattern='${p}';}`);
       for (const p of keys(PRINTS)) add(`${g}/print/${p}`, `s=>{${G}s.top.print='${p}';}`);
       for (const f of Object.keys(FINISHES)) add(`${g}/finish/${f}`, `s=>{${G}s.finish='${f}';}`);
+      for (const u of keys(g === 'f' ? UNDER_F : UNDER_M)) for (const p of ['stand', 'walk']) add(`${g}/under/${u}/${p}`, `s=>{${G}s.under.bottom='${u}';s.top.type='none';s.bottom.type='none';s.pose='${p}';}`);
+      if (g === 'f') for (const b of keys(BRAS)) for (const t of ['none', 'tee', 'cami', 'corset', 'tank']) add(`${g}/bra/${b}/${t}`, `s=>{${G}s.under.bra='${b}';s.top.type='${t}';}`);
+      for (const sg of keys(SAGS)) for (const t of ['jeans', 'cargo', 'sweat', 'suit']) add(`${g}/sag/${sg}/${t}`, `s=>{${G}s.bottom.type='${t}';s.bottom.sag='${sg}';s.top.type='tank';s.bottom.belt=true;}`);
     }
     for (const f of INSPO) for (const p of Object.keys(POSES)) add(`inspo/${f.id}/${p}`, `s=>{Object.assign(s,clone(INSPO.find(x=>x.id==='${f.id}').state));s.pose='${p}';}`);
     return C;
