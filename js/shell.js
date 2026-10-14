@@ -298,6 +298,7 @@ function buildShells(G,GS){
   shUnderHide(G,layers);
   shHoodsOut(G,layers);
   shScarfOut(G);
+  shHairOverNeckwear(G);
   shBagsOut(G,layers);
   shUnderSleeves(G);
 }
@@ -377,6 +378,22 @@ function shScarfOut(G){const sc=[];G.traverse(o=>{if(o.isMesh&&o.userData.scarf)
   for(let it=0;it<3;it++){const L0=lift.slice();for(let j=0;j<NR;j++)for(let i=0;i<NA;i++){let m=L0[j*NA+i];for(const[dj,di] of [[0,1],[0,-1],[1,0],[-1,0]]){const jj=j+dj;if(jj<0||jj>=NR)continue;m=Math.max(m,L0[jj*NA+(i+di+NA)%NA]*0.8);}lift[j*NA+i]=m;}}
   for(const o of sc){const p=o.geometry.attributes.position;let ch=false;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const k=cell(c[0],c[1]);if(k<0||lift[k]<=0)continue;shPoint(0,c[0],c[1],c[2]+lift[k],q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}
     if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
+/* long hair falls over a bandana worn round the neck (it went through the roll and the triangle): per (angle, height)
+   cell the hair is lifted clear of it, the lift spread up and down so the hair bends over it instead of denting */
+function shHairOverNeckwear(G){const nw=[],hair=[];G.updateMatrixWorld(true);
+  /* obstacles: a bandana, and every garment piece round the neck and shoulders (collars, neckbands, hoods): the hair went
+     between its strands through a neckband */
+  G.traverse(o=>{if(!o.isMesh||!o.visible)return;if(o.userData.isHair){hair.push(o);return;}if(o.userData.neckwear||(o.userData.layer&&o.userData.layer!=='none'&&!o.userData.under)){
+    const g=o.geometry;if(!g.boundingBox)g.computeBoundingBox();const bb=g.boundingBox.clone().applyMatrix4(o.matrixWorld);if(bb.max.y>BC.shY-0.1&&bb.min.y<1.65)nw.push(o);}});
+  if(!nw.length||!hair.length)return;
+  const U=new PGrid(0),UN=new PGrid(0);for(const o of nw)(o.userData.neckwear?UN:U).raster(shTrisOf(o,0),0);if(!U.any&&!UN.any)return;
+  const NA=96,Y0=1.3,ST=0.005,NR=70,lift=new Float32Array(NA*NR),c=new Float32Array(3),q=new Float32Array(3),cell=(th,y)=>{const j=Math.round((y-Y0)/ST);if(j<0||j>=NR)return -1;return j*NA+((Math.floor((th/TAU+0.5)*NA)%NA)+NA)%NA;};
+  for(const o of hair)shBake(o,G);
+  for(const o of hair){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);if(c[1]<Y0||c[1]>Y0+NR*ST)continue;const k=cell(c[0],c[1]);if(k<0)continue;/* garments: only thin things (a neckband, a collar): hair deep inside something big belongs under it (a hood); a bandana with its knot is always under the hair */
+      const R=U.any?U.at(c[0],c[1]):-1,RN=UN.any?UN.at(c[0],c[1]):-1,need=R+0.003-c[2],needN=RN+0.003-c[2];if(R>0&&need<0.016)lift[k]=Math.max(lift[k],need);if(RN>0&&needN<0.05)lift[k]=Math.max(lift[k],needN);}}
+  for(let it=0;it<5;it++){const L0=lift.slice();for(let j=0;j<NR;j++)for(let i=0;i<NA;i++){let m=L0[j*NA+i];for(const[dj,di,f] of [[0,1,0.75],[0,-1,0.75],[1,0,0.85],[-1,0,0.85]]){const jj=j+dj;if(jj<0||jj>=NR)continue;m=Math.max(m,L0[jj*NA+(i+di+NA)%NA]*f);}lift[j*NA+i]=m;}}
+  for(const o of hair){const p=o.geometry.attributes.position;let ch=false;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const k=cell(c[0],c[1]);if(k<0||lift[k]<=0)continue;shPoint(0,c[0],c[1],c[2]+lift[k],q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}
+    if(ch){p.needsUpdate=true;if(!o.geometry.userData.keepNormals)o.geometry.computeVertexNormals();}}}
 function shBagsOut(G,layers){const groups=[];G.traverse(o=>{if(o.userData&&o.userData.bagGroup)groups.push(o);});if(!groups.length)return;
   const U=new PGrid(0);G.updateMatrixWorld(true);G.traverse(o=>{if(!o.isMesh||!o.userData.layer||o.userData.layer==='none')return;let p=o.parent,inBag=false;while(p){if(p.userData&&p.userData.bagGroup){inBag=true;break;}p=p.parent;}if(inBag)return;
     if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;U.raster(shTrisOf(o,0),0);});

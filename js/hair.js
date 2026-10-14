@@ -11,6 +11,10 @@ function capType(){const c=S.acc.cap.type;if(c&&c!=='none')return c;return S.acc
 const angFront=ph=>Math.abs(wrapA(ph-FRONT));
 function hairlineNy(ph){return interp1(HAIRLINE,angFront(ph));}
 function hatLineNy(ph){const t=capType(),tab=HAT_LINES[t];if(!tab)return null;let d=angFront(ph);if(S.acc.cap.back&&(t==='baseball'||t==='trucker'))d=Math.PI-d;return interp1(tab,d);}
+/* a headband across the forehead lies over the hair: the hair under it is pressed below its surface (it went through it at
+   the sides and the back). Returns how far the band covers a point (0..1) and the band's height over the scalp */
+const HB_H=0.011;
+function hairBandK(ny,ph){const A=S.acc.headband;if(!A||A.type!=='forehead')return 0;const f=0.5+0.5*Math.sin(ph),c=lerp(-0.12,0.42,f),hw=0.12*(0.75+0.25*Math.sin(ph));return 1-smooth((Math.abs(ny-c)-hw)/0.045);}
 function hairTexP(){return HTEX[S.hair.texture]||HTEX.straight;}
 const hairLen=(a,b)=>lerp(a,b,clamp(S.hair.len!=null?S.hair.len:0.5,0,1));
 /* ---------- shell over the scalp ---------- */
@@ -27,6 +31,7 @@ function hairShell(G,mat,hf,o={}){
     if(o.messy) h+=o.messy*Math.abs(nz3(dir.x*9+1,dir.y*9,dir.z*9))*smooth((ny-0.38)/0.3);
     const band=o.band||(h>0.03?0.32:h>0.015?0.22:0.17);h*=lerp(o.edge!=null?o.edge:0.35,1,Math.sqrt(smooth((1-v)/band)));
     const hl=hatLineNy(ph);if(hl!=null&&ny>hl-0.05)h=Math.min(h,0.0045);
+    {const bk=hairBandK(ny,ph);if(bk>0)h=lerp(h,Math.min(h,HB_H-0.003),bk);}
     SH.push(shd*lerp(0.88,1,smooth(h/0.008)));
     return headPt(th,ph,Math.max(h,0.0012),false);
   },{wrapU:true,uRep:12,vRep:2,noAO:true});
@@ -48,16 +53,30 @@ function hairSheet(G,mat,o){
     const u=i/nu,ph0=lerp(o.ph0,o.ph1,u),y0=o.y0(ph0),col=[],shc=[];let Rp=null,tb=0,y1=o.y1(ph0);
     /* the ends are not cut with a ruler: a soft, uneven line (longer and shorter sections) */
     {const ct=0.5+0.5*Math.sin(ph0*7+1.6*fbm(ph0*2,1.3,2.1));y1-=0.016*ct*smooth((y0-y1-0.06)/0.12);}
+    /* hair that ends just past the point where it meets the shoulder does not ride out over it in a flat plate: it ends
+       resting there (longer hair keeps falling, in front of or behind the shoulder) */
+    if(!o.noBody){let yc=null,Rh=0;for(let y=y0;y>y1-0.08;y-=0.004){const hr=headHorizR(y,ph0);Rh=hr!=null?Math.max(Rh*0.0,hr+o.thick):Math.max(Rh,BC.neckR+0.016);if(hr!=null)Rh=hr+o.thick;
+        if(envR(bodyEnv(y,LAYERS),ph0)+0.013>Rh+0.022){yc=y;break;}}
+      if(yc!=null&&y1<yc&&yc-y1<0.09)y1=yc-0.006-0.01*(0.5+0.5*Math.sin(ph0*5));}
     /* hair does not lie flat out to the shoulder tip: over the shoulders it falls in front of or behind them */
     const sx=Math.cos(ph0)>=0?1:-1,af=angFront(ph0),toFront=af<1.42,tgt=toFront?FRONT-sx*(0.42+0.3*smooth((af-0.9)/0.5)):BACKA+sx*(0.25+0.5*smooth((Math.PI-af)/1.9)),dph=Math.atan2(Math.sin(tgt-ph0),Math.cos(tgt-ph0));
+    /* pass 1: the radius each row needs (head + thickness, clear of the body and clothes) */
+    const PH=[],RQ=[],st=Math.abs(y1-y0)/nv;
     for(let j=0;j<=nv;j++){
       const v=j/nv,y=lerp(y0,y1,v);if(!o.noBody){const e=envR(bodyEnv(y,LAYERS),ph0);tb=Math.max(tb,smooth((e-(BC.neckR+0.035))/0.06),smooth((BC.shY+0.1-y)/0.07));}const ph=ph0+tb*dph,hr=headHorizR(y,ph),th=lerp(o.thin||0.006,o.thick,smooth(v/0.2));
       let R=hr!=null?hr+th:0;
+      if(hr!=null){const bk=hairBandK((y-hc.y)/BC.hd.ry,ph);if(bk>0)R=lerp(R,Math.min(R,hr+HB_H-0.003),bk);}
       if(hr!=null)R+=0.017*gauss(angFront(ph)-Math.PI/2,0.33)*gauss(y-(hc.y-0.012),0.045);
       if(!o.noBody)R=Math.max(R,envR(bodyEnv(y,LAYERS),ph)+0.013);
       if(hr==null)R=Math.max(R,BC.neckR+0.016);
-      /* hair drapes: it never jumps outwards faster than ~50 degrees from vertical, nor pulls in faster than that */
-      if(Rp!=null){const st=Math.abs(y1-y0)/nv;R=clamp(R,Rp-0.5*st,Rp+1.2*st);}
+      PH.push(ph);RQ.push(R);}
+    /* pass 2: hair is stiff enough to bridge: above an obstacle (the nape, the upper back, a collar) it already leans out
+       towards it (at most ~55 degrees from vertical) instead of stepping out where it meets it */
+    for(let j=nv-1;j>=0;j--)RQ[j]=Math.max(RQ[j],RQ[j+1]-1.4*st);
+    for(let j=0;j<=nv;j++){
+      const v=j/nv,y=lerp(y0,y1,v),ph=PH[j];let R=RQ[j];
+      /* and it never pulls in faster than that */
+      if(Rp!=null)R=Math.max(R,Rp-0.5*st);
       Rp=R;
       let Rw=R+(o.flare||0)*smooth(v)*smooth(v);
       if(T.wave)Rw+=0.0028*T.wave*Math.sin((y0-y)*(36+T.wave*22)+ph*3)*smooth(v/0.3);
@@ -88,7 +107,7 @@ function hairCards(G,g,nu,nv,o){
   const pos=[],nor=[],uv=[],col=[],idx=[],P=V3(),Q=V3(),P2=V3(),Q2=V3(),dir=o.dir||1,v0=o.v0!=null?o.v0:0.06,v1=o.v1!=null?o.v1:0.97;
   /* under a hat / kerchief the hair is pressed flat: no strands where it covers the head (they stood through it) */
   const hatOn=capType()!=='none';
-  const okP=Pt=>{const ny=(Pt.y-hc.y)/ry;if(o.minNy!=null&&ny<=o.minNy)return false;if(hatOn){const hl=hatLineNy(Math.atan2(Pt.z-hc.z,Pt.x-hc.x));if(hl!=null&&ny>hl-0.1)return false;}return true;};
+  const okP=Pt=>{const ny=(Pt.y-hc.y)/ry;if(o.minNy!=null&&ny<=o.minNy)return false;if(hairBandK(ny,Math.atan2(Pt.z-hc.z,Pt.x-hc.x))>0.05)return false;if(hatOn){const hl=hatLineNy(Math.atan2(Pt.z-hc.z,Pt.x-hc.x));if(hl!=null&&ny>hl-0.1)return false;}return true;};
   const path=[],nrm=[];
   for(let c=0;c<o.count;c++){
     /* roots spread over the surface; a strand runs from its root along the comb direction to its length or to the edge of

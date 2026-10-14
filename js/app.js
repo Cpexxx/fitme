@@ -111,7 +111,7 @@ function shapeKey(state){return JSON.stringify(state,(k,v)=>LOOK_KEYS.has(k)?und
 let LAYERS_TOP=null;
 function runBuilders(G,GS){
   LAYERS_TOP=null;safe('body',()=>buildBody(G));safe('under',()=>buildUnder(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));LAYERS_TOP=LAYERS.slice();MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
-  MK_CTX='hair';safe('hair',()=>buildHair(G));MK_CTX='none';safe('acc',()=>buildAcc(G));safe('shoes',()=>buildShoes(GS,G));}
+  MK_CTX='hair';safe('hair',()=>buildHair(G));G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')o.userData.isHair=1;});MK_CTX='none';safe('acc',()=>buildAcc(G));safe('shoes',()=>buildShoes(GS,G));}
 function matSeq(G,GS){const m=[],c=[];for(const g of [G,GS])g.traverse(o=>{if(o.isMesh){m.push(o.material);c.push(o.geometry.attributes.position.count);}});return{m,c};}
 function buildInto(group,state,cache=true){
   const saved=S;S=state;

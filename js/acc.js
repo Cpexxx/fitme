@@ -354,7 +354,7 @@ function bandanaMat(A){return fabric('poplin',A.color||'#a3262a',A.pattern||'pai
 function neckRing(y,add){const nb=bodyEnv(Math.min(y,1.56),LAYERS),n=torsoAt(Math.min(y,1.58));const base={rx:Math.min(nb.rx,n.rx+0.03),rz:Math.min(nb.rz,n.rz+0.03),rzb:Math.min(zbk(nb),zbk(n)+0.03),n:2.1};return addE(base,add);}
 function buildBandana(G){
   const A=S.acc.bandana,t0=A.type;if(!t0||t0==='none')return;
-  const m=bandanaMat(A),y0=1.51,y1=1.555;
+  const m=bandanaMat(A),y0=1.51,y1=1.555,n0=G.children.length;
   if(t0==='tri'){
     /* folded band round the neck */
     G.add(mk(tube(vSamples(y0,y1,6,y=>neckRing(y,0.007+roundE(y,y0,y1,0.004))),{seg:64,mod:(a,t,s)=>1+0.025*Math.sin(a*7+s.y*30)}),m));
@@ -371,6 +371,7 @@ function buildBandana(G){
     const kp=envPt(neckRing(yc,0.022),-0.35,yc,0);const k=mk(new THREE.SphereGeometry(1,14,10),m);k.scale.set(0.018,0.015,0.014);k.position.copy(kp);G.add(k);
     for(const off of [-0.01,0.012]){const p0=kp.clone().add(V3(0.006,-0.008,off));G.add(mk(ribbon([p0,p0.clone().add(V3(0.014,-0.03,0.006)),p0.clone().add(V3(0.02,-0.06,0.01))],[V3(0,0,1),V3(0,0,1),V3(0,0,1)],0.024,{cols:2}),m));}
   }
+  for(const o of G.children.slice(n0))o.userData.neckwear=1;
 }
 function buildHeadband(G){
   const A=S.acc.headband,t0=A.type;if(!t0||t0==='none')return;
