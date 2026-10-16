@@ -9,7 +9,16 @@ const gauss=(x,w)=>Math.exp(-(x*x)/(w*w));
 const TAU=Math.PI*2,FRONT=Math.PI/2,BACKA=-Math.PI/2;
 const HEX=/^#[0-9a-f]{6}$/i;
 const clone=o=>JSON.parse(JSON.stringify(o));
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* pamięć przeglądarki (localStorage, bez ciasteczek):
+   - niezbędne (zawsze): sesja logowania, zgoda z banera, zapisane fity i polubienia, widziany ekran powitania;
+   - preferencje (tylko za zgodą z banera): motyw, tło, jakość grafiki, opcje, ostatni dział, historia oglądania gościa */
+const CONSENT_KEY='fitme.consent',PREF_KEYS=['fitme.opts','fitme.theme','fitme.backdrop','fitme.quality','fitme.dept','fitme.history'];
+function consentGet(){try{const c=JSON.parse(localStorage.getItem(CONSENT_KEY)||'null');return c&&typeof c==='object'?c:null;}catch(e){return null;}}
+const prefsAllowed=()=>{const c=consentGet();return !!(c&&c.prefs);};
+function prefSet(k,v){try{if(prefsAllowed()){localStorage.setItem(k,v);sessionStorage.removeItem(k);}else sessionStorage.setItem(k,v);}catch(e){}}
+/* bez zgody wybór żyje do zamknięcia karty (sessionStorage), np. jakość grafiki przetrwa przeładowanie strony */
+function prefGet(k){try{const v=sessionStorage.getItem(k);if(v!=null)return v;return prefsAllowed()?localStorage.getItem(k):null;}catch(e){return null;}}
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 function wrapA(a){a=(a+Math.PI)%TAU;if(a<0)a+=TAU;return a-Math.PI;}
 /* smooth (cubic Hermite) interpolation of profile tables */
@@ -50,7 +59,7 @@ const TILE=0.07;
 /* WebGL drawn by the CPU (no GPU driver / no access to it: SwiftShader, llvmpipe): every frame costs ~10-100x more */
 const GL_INFO=(()=>{try{const c=document.createElement('canvas'),gl=c.getContext('webgl2')||c.getContext('webgl');if(!gl)return{name:'',soft:false};const d=gl.getExtension('WEBGL_debug_renderer_info'),name=d?String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)):'';
   const lose=gl.getExtension('WEBGL_lose_context');if(lose)lose.loseContext();return{name,soft:/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(name)};}catch(e){return{name:'',soft:false};}})();
-const QUALITY=(()=>{let q=null;try{q=localStorage.getItem('fitme.quality');}catch(e){}return ['perf','std','high'].includes(q)?q:GL_INFO.soft?'perf':(window.FITME_APP?'high':'std');})();
+const QUALITY=(()=>{let q=null;q=prefGet('fitme.quality');return ['perf','std','high'].includes(q)?q:GL_INFO.soft?'perf':(window.FITME_APP?'high':'std');})();
 const GEO_Q=QUALITY==='high'?1.6:QUALITY==='perf'?0.8:1;
 const zbk=r=>r.rzb!=null?r.rzb:r.rz;
 const addE=(r,e)=>({rx:r.rx+e,rz:r.rz+e,rzb:zbk(r)+e,n:r.n});

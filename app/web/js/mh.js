@@ -113,8 +113,11 @@ function mhShape(g,F,b){
   const thick=Math.pow(b,0.75),legK=Math.pow(b,0.8)*(1+(F.hips-1)*0.25*0);
   const ad=V3(wr0[0]-sh0[0],wr0[1]-sh0[1],wr0[2]-sh0[2]).normalize();
   /* bigger lats, arms and hips push the arms away from the body */
-  const abd=(3.2*Math.min(1,Math.max(0,BC.fat||0))+5*Math.max(0,(BC.fat||0)-1)+2.6*Math.max(0,(BC.mus||0)-0.4))*Math.PI/180,abC=Math.cos(abd),abS=Math.sin(abd);
-  const hipY=hip0[1],chestY=fem?1.3:1.29,waistY=fem?1.1:1.08;
+  let abd=(3.2*Math.min(1,Math.max(0,BC.fat||0))+5*Math.max(0,(BC.fat||0)-1)+2.6*Math.max(0,(BC.mus||0)-0.4))*Math.PI/180,abC=Math.cos(abd),abS=Math.sin(abd);
+  const hipY=hip0[1],chestY=fem?1.3:1.29,waistY=fem?1.1:1.08,armLen=Math.hypot(wr0[0]-sh0[0],wr0[1]-sh0[1],wr0[2]-sh0[2]);
+  /* the hands never sink into the hips or thighs (wide hips, a full seat, big thighs): the arms are built, the gap between
+     each hand and the body beside it measured, and the arms swung out just enough (a few passes) */
+  for(let pass=0;pass<4;pass++){
   for(let i=0;i<nv;i++){
     const x=P0[i*3],y=P0[i*3+1],z=P0[i*3+2],aw=B.armw[i],lw=B.legw[i],tw=Math.max(0,1-aw-lw),sd=x>=0?1:-1;
     /* trunk */
@@ -123,7 +126,9 @@ function mhShape(g,F,b){
     const fzF=(1+(F.hips-1)*wH*0.5+(F.waist-1)*wW+(F.chest-1)*wC*(fem?1.2:1))*nk*bt,fzB=(1+(F.hips-1)*wH*1.1+(F.waist-1)*wW*0.6+(F.chest-1)*wC*0.3)*nk*bt;
     let tx=x*fx,tz=z*(z>0?fzF:fzB);
     /* the bust sits higher and closer together than the base mesh has it (it hung low and pointed outwards) */
-    let bl=0;if(fem&&z>0){bl=gauss(y-1.235,0.055)*gauss(Math.abs(x)-0.085,0.055)*smooth((z-0.05)/0.05);tx-=sd*0.007*bl;}
+    /* (no lift any more: moving the bust up squeezed the fold under it into a hard shelf - the firmer MakeHuman bust in the
+       recipe sits higher on its own) */
+    let bl=0;if(fem&&z>0){bl=gauss(y-1.24,0.1)*gauss(Math.abs(x)-0.09,0.085)*smooth((z-0.02)/0.06);tx-=sd*0.006*bl;}
     /* mannequin neck: lift the throat so the neck rises straight into the egg head */
     const yN=y+(fem?0.06:0.07)*smooth((y-1.49)/0.08)*clamp((z+0.02)/0.12,0,1);
     /* legs: move with the hip joint, thicken around the leg axis */
@@ -134,7 +139,22 @@ function mhShape(g,F,b){
     let ax0=ax*along*ak+px*ath,ay0=ay*along*ak+py*ath;{const xr=ax0*abC-ay0*abS,yr=ax0*abS+ay0*abC;ax0=xr;ay0=yr;}
     const arx=sd*(sh0[0]+dSh+ax0),ary=sh0[1]+ay0,arz=sh0[2]+az*along*ak+pz*ath;
     const s=tw+lw+aw||1;
-    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=((yN+0.03*bl)*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
+    P[i*3]=(tx*tw+lx*lw+arx*aw)/s;P[i*3+1]=(yN*tw+y*lw+ary*aw)/s;P[i*3+2]=(tz*tw+lz*lw+arz*aw)/s;
+  }
+  {const BW=0.01,bins=new Map(),key=(sd,y,z)=>sd+'|'+Math.round(y/BW)+'|'+Math.round(z/BW);
+    for(let i=0;i<nv;i++){if(B.armw[i]>0.2)continue;const x=P[i*3],sd=x>=0?1:-1,k=key(sd,P[i*3+1],P[i*3+2]),v=sd*x;if(!(bins.get(k)>=v))bins.set(k,v);}
+    /* the hand is built separately (body.js) from the finger joints: test the wrist, palm and finger joints (left side; the
+       body is symmetric) with the finger radius */
+    let worst=0,yh=0;const hp=[J.wrL];for(let f=2;f<=5;f++)for(const k of ['f'+f+'1L','f'+f+'1tL','f'+f+'2tL'])if(J[k])hp.push(J[k]);
+    for(const q of hp.slice()){if(q!==J.wrL&&J['f'+'3'+'1L'])hp.push([(q[0]+J.wrL[0])/2,(q[1]+J.wrL[1])/2,(q[2]+J.wrL[2])/2]);}
+    for(const q of hp){const qx=q[0]-sh0[0],qy=q[1]-sh0[1],qz=q[2]-sh0[2],al=qx*ad.x+qy*ad.y+qz*ad.z;let x0=ad.x*al*F.arms+(qx-ad.x*al)*thick,y0=ad.y*al*F.arms+(qy-ad.y*al)*thick;
+      const xr=x0*abC-y0*abS,yr=x0*abS+y0*abC,x=sh0[0]+dSh+xr,y=sh0[1]+yr,z=sh0[2]+ad.z*al*F.arms+(qz-ad.z*al)*thick;
+      let bx=-9;for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++){const v=bins.get('1|'+(Math.round(y/BW)+dy)+'|'+(Math.round(z/BW)+dz));if(v!=null&&v>bx)bx=v;}
+      if(bx<-8)continue;const d=0.0085+0.004-(x-bx);if(d>worst){worst=d;yh=y;}}
+    for(let i=0;i<nv;i++){if(B.armw[i]<0.9)continue;const x0=P0[i*3],sd=x0>=0?1:-1,al=(sd*x0-sh0[0])*ad.x+(P0[i*3+1]-sh0[1])*ad.y+(P0[i*3+2]-sh0[2])*ad.z;if(al<armLen*0.93)continue;
+      const x=P[i*3],y=P[i*3+1],z=P[i*3+2];let bx=-9;for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++){const v=bins.get(sd+'|'+(Math.round(y/BW)+dy)+'|'+(Math.round(z/BW)+dz));if(v!=null&&v>bx)bx=v;}
+      if(bx<-8)continue;const d=0.008-(sd*x-bx);if(d>worst){worst=d;yh=y;}}
+    if(worst<=0.0005)break;abd+=worst/Math.max(0.3,sh0[1]-yh)*1.05;abC=Math.cos(abd);abS=Math.sin(abd);}
   }
   /* mannequin feet a touch longer than the base mesh (it was made for a shorter figure) */
   {const A=J.ankL,fk=fem?1.05:1.09,fw=fem?1.02:1.04;for(let i=0;i<nv;i++){const w=B.footw[i];if(w<=0)continue;const sd=P[i*3]>=0?1:-1,ax=sd*A[0];
@@ -220,10 +240,12 @@ function seamAttrs(geo,R,feet){
     D[i*4+2]=(ax-A.x)*du.x+(y-A.y)*du.y+(z-A.z)*du.z;Mk[i*4+2]=smooth((aw-0.6)/0.3);
     D[i*4+3]=(ax-Wr.x)*df.x+(y-Wr.y)*df.y+(z-Wr.z)*df.z;Mk[i*4+3]=smooth((aw-0.6)/0.3);}
   geo.setAttribute('seamD',new THREE.BufferAttribute(D,4));geo.setAttribute('seamM',new THREE.BufferAttribute(Mk,4));
+  /* arm weight per vertex (underwear and straps keep off the arms and hands) */
+  {const A=new Float32Array(n);for(let i=0;i<n;i++)A[i]=W[i*3];geo.userData.armw=A;}
 }
 /* =============== the model consumed by body.js =============== */
 function coreModel(){
-  const F=BC.F,key=[BC.g,r3(BC.b),r3(BC.mus||0),r3(BC.fat||0),...Object.keys(FIG).filter(k=>!['legs','torso','neckL','head'].includes(k)).map(k=>r3(F[k]))].join('|');
+  const F=BC.F,key=[BC.g+(BC.bra?'b':''),r3(BC.b),r3(BC.mus||0),r3(BC.fat||0),...Object.keys(FIG).filter(k=>!['legs','torso','neckL','head'].includes(k)).map(k=>r3(F[k]))].join('|');
   return cacheGet('core',key,()=>{
     const B=mhBase(),R=mhShape(BC.g,F,BC.b),P=R.P,legX=R.legX,nv=B.nv,J=mhMorph(BC.g,BC.mus||0,BC.fat||0).J,MP=mhMap(BC.g);
     for(let i=0;i<nv;i++){P[i*3+1]=MP.inv(P[i*3+1]);P[i*3+2]+=MH_DZ;}
@@ -234,7 +256,7 @@ function coreModel(){
       const bump=i=>{let m=0;for(const j of nb[i])m+=P[j*3+2];return P[i*3+2]-m/nb[i].size;};
       /* nipples: the pole of the densest ring of faces on each pec */
       const edgeLen=i=>{let L=0;for(const j of nb[i])L+=Math.hypot(P[j*3]-P[i*3],P[j*3+1]-P[i*3+1],P[j*3+2]-P[i*3+2]);return L/nb[i].size;};
-      const spots=[];for(const sd of [-1,1]){let best=-1,bl=9;for(let i=0;i<nv;i++){const x=P[i*3]*sd,y=P[i*3+1];if(B.armw[i]>0.3||x<0.05||x>0.15||y<1.18||y>1.4||P[i*3+2]<0||!nb[i].size)continue;const L=edgeLen(i);if(L<bl){bl=L;best=i;}}if(best>=0)spots.push([best,0.035]);}
+      const spots=[];const nr=BC.bra?0.06:0.035;for(const sd of [-1,1]){let best=-1,bl=9;for(let i=0;i<nv;i++){const x=P[i*3]*sd,y=P[i*3+1];if(B.armw[i]>0.3||x<0.05||x>0.15||y<1.18||y>1.4||P[i*3+2]<0||!nb[i].size)continue;const L=edgeLen(i);if(L<bl){bl=L;best=i;}}if(best>=0)spots.push([best,nr]);}
       /* navel: the deepest pit on the belly midline, measured against the belly around it (3 cm) */
       {const fr=[];for(let i=0;i<nv;i++){const x=P[i*3],y=P[i*3+1];if(Math.abs(x)<0.06&&y>0.9&&y<1.2&&P[i*3+2]>0&&B.armw[i]<0.3)fr.push(i);}
         let best=-1,bd=-9;for(const i of fr){if(Math.abs(P[i*3])>0.012||P[i*3+1]<0.95||P[i*3+1]>1.15)continue;let sz=0,c=0;for(const j of fr){const dx=P[j*3]-P[i*3],dy=P[j*3+1]-P[i*3+1];const d2=dx*dx+dy*dy;if(d2<0.03*0.03&&d2>0.015*0.015){sz+=P[j*3+2];c++;}}if(c<4)continue;const d=sz/c-P[i*3+2];if(d>bd){bd=d;best=i;}}

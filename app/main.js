@@ -63,13 +63,13 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
   /* software rendering can be slow to report the first frame: never leave only a taskbar icon */
   setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 4000);
-  /* shop links and other external pages open in the system browser */
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    if (/^(https?:\/\/|mailto:)/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  /* linki do sklepów, dokumentów w sieci i adresy e-mail (mailto:) otwierają się w systemie, okno aplikacji zostaje */
   win.webContents.on('will-navigate', (e, url) => {
-    if (/^https?:\/\//.test(url)) { e.preventDefault(); shell.openExternal(url); }
+    if (/^(https?:\/\/|mailto:)/.test(url)) { e.preventDefault(); shell.openExternal(url); }
   });
   win.loadFile(path.join(__dirname, 'web', 'fitme.html'));
   /* after start: did the page get WebGL, on which renderer, in which quality (printed in the terminal) */

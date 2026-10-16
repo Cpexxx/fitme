@@ -9,7 +9,16 @@ const gauss=(x,w)=>Math.exp(-(x*x)/(w*w));
 const TAU=Math.PI*2,FRONT=Math.PI/2,BACKA=-Math.PI/2;
 const HEX=/^#[0-9a-f]{6}$/i;
 const clone=o=>JSON.parse(JSON.stringify(o));
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* pamięć przeglądarki (localStorage, bez ciasteczek):
+   - niezbędne (zawsze): sesja logowania, zgoda z banera, zapisane fity i polubienia, widziany ekran powitania;
+   - preferencje (tylko za zgodą z banera): motyw, tło, jakość grafiki, opcje, ostatni dział, historia oglądania gościa */
+const CONSENT_KEY='fitme.consent',PREF_KEYS=['fitme.opts','fitme.theme','fitme.backdrop','fitme.quality','fitme.dept','fitme.history'];
+function consentGet(){try{const c=JSON.parse(localStorage.getItem(CONSENT_KEY)||'null');return c&&typeof c==='object'?c:null;}catch(e){return null;}}
+const prefsAllowed=()=>{const c=consentGet();return !!(c&&c.prefs);};
+function prefSet(k,v){try{if(prefsAllowed()){localStorage.setItem(k,v);sessionStorage.removeItem(k);}else sessionStorage.setItem(k,v);}catch(e){}}
+/* bez zgody wybór żyje do zamknięcia karty (sessionStorage), np. jakość grafiki przetrwa przeładowanie strony */
+function prefGet(k){try{const v=sessionStorage.getItem(k);if(v!=null)return v;return prefsAllowed()?localStorage.getItem(k):null;}catch(e){return null;}}
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 function wrapA(a){a=(a+Math.PI)%TAU;if(a<0)a+=TAU;return a-Math.PI;}
 /* smooth (cubic Hermite) interpolation of profile tables */
@@ -50,7 +59,7 @@ const TILE=0.07;
 /* WebGL drawn by the CPU (no GPU driver / no access to it: SwiftShader, llvmpipe): every frame costs ~10-100x more */
 const GL_INFO=(()=>{try{const c=document.createElement('canvas'),gl=c.getContext('webgl2')||c.getContext('webgl');if(!gl)return{name:'',soft:false};const d=gl.getExtension('WEBGL_debug_renderer_info'),name=d?String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)):'';
   const lose=gl.getExtension('WEBGL_lose_context');if(lose)lose.loseContext();return{name,soft:/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(name)};}catch(e){return{name:'',soft:false};}})();
-const QUALITY=(()=>{let q=null;try{q=localStorage.getItem('fitme.quality');}catch(e){}return ['perf','std','high'].includes(q)?q:GL_INFO.soft?'perf':(window.FITME_APP?'high':'std');})();
+const QUALITY=(()=>{let q=null;q=prefGet('fitme.quality');return ['perf','std','high'].includes(q)?q:GL_INFO.soft?'perf':(window.FITME_APP?'high':'std');})();
 const GEO_Q=QUALITY==='high'?1.6:QUALITY==='perf'?0.8:1;
 const zbk=r=>r.rzb!=null?r.rzb:r.rz;
 const addE=(r,e)=>({rx:r.rx+e,rz:r.rz+e,rzb:zbk(r)+e,n:r.n});
@@ -271,7 +280,7 @@ function weaveTex(kind){
   const grid=(step,amp)=>{for(let y=0;y<Z;y+=step)for(let x=0;x<Z;x+=step){ctx.fillStyle=g(128+((x/step+y/step)%2?amp:-amp));ctx.fillRect(x,y,step,step);}};
   if(paintStruct(ctx,Z,kind,g,R)){const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;texCache.set(key,t);return t;}
   switch(kind){
-    case 'denim':diag(4,40,1.6);noise(5000,40);break;
+    case 'denim':diag(6,26,2.2);break;
     case 'twill':case 'gabardine':diag(4,26,1.2);noise(2000,15);break;
     case 'canvas':case 'oxford':grid(2,30);noise(3000,20);break;
     case 'poplin':noise(3000,12);break;
@@ -284,7 +293,7 @@ function weaveTex(kind){
     case 'cable':for(let x=0;x<Z;x+=8)for(let y=0;y<Z;y+=8){ctx.fillStyle=g(160);ctx.fillRect(x+1,y+1,6,6);}
       for(const cx of [40,128,216]){for(let y=-20;y<Z+20;y+=32){ctx.lineWidth=12;ctx.strokeStyle=g(220);ctx.beginPath();ctx.moveTo(cx-14,y);ctx.bezierCurveTo(cx-14,y+16,cx+14,y+16,cx+14,y+32);ctx.stroke();ctx.strokeStyle=g(190);ctx.beginPath();ctx.moveTo(cx+14,y);ctx.bezierCurveTo(cx+14,y+16,cx-14,y+16,cx-14,y+32);ctx.stroke();}ctx.fillStyle=g(40);ctx.fillRect(cx-26,0,3,Z);ctx.fillRect(cx+23,0,3,Z);}break;
     case 'wool':noise(9000,30);diag(8,8,2);break;
-    case 'flannel':case 'fleece':case 'velvet':noise(8000,22,2);break;
+    case 'flannel':case 'fleece':case 'velvet':for(let i=0;i<700;i++){const x=R()*Z,y=R()*Z,r=3+R()*7,gr=ctx.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,g(R()<.5?160:96));gr.addColorStop(1,'rgba(128,128,128,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();}break;
     case 'pile':for(let i=0;i<1400;i++){ctx.fillStyle=g(128+Math.round((R()*2-1)*70));ctx.beginPath();ctx.arc(R()*Z,R()*Z,2+R()*5,0,7);ctx.fill();}break;
     case 'suede':noise(9000,20,2);break;
     case 'cord':vstr(10,70);noise(2000,12);break;
@@ -328,14 +337,31 @@ function colorTex(kind,hex,pat,hex2){
   if(pat&&pat!=='solid')drawPattern(ctx,Z,pat,hex,hex2,R);
   const L=a=>`rgba(255,255,255,${a})`,D=a=>`rgba(0,0,0,${a})`,sc=Z/256;
   const noise=(n,a,sz=1)=>{for(let i=0;i<n;i++){ctx.fillStyle=R()<.5?L(a*R()):D(a*R());ctx.fillRect(R()*Z,R()*Z,sz*sc,sz*sc);}};
+  /* the surface of the cloth at the scale it is seen at (a tile is ~7 cm, a pixel ~0.3 mm): details of 1.5-6 mm that read
+     as the material in a close view and average out to the plain colour in a full-length one */
+  const mott=(n,a,r0,r1)=>{for(let i=0;i<n;i++){const x=R()*Z,y=R()*Z,r=(r0+R()*(r1-r0))*sc,gr=ctx.createRadialGradient(x,y,0,x,y,r),c0=R()<.5?L(a*(.5+R()*.5)):D(a*(.5+R()*.5));gr.addColorStop(0,c0);gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;
+    for(const ox of [-Z,0,Z])for(const oy of [-Z,0,Z]){if(x+ox<-r||x+ox>Z+r||y+oy<-r||y+oy>Z+r)continue;ctx.save();ctx.translate(ox,oy);ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.restore();}}};
+  const slub=(n,a,vert,w0,w1)=>{for(let i=0;i<n;i++){const p=R()*Z,l=(20+R()*120)*sc,q=R()*Z,w=(w0+R()*(w1-w0))*sc;ctx.fillStyle=R()<.55?L(a*(.4+R()*.6)):D(a*(.4+R()*.6));
+    for(const o of [-Z,0,Z]){if(vert)ctx.fillRect(p,q+o,w,l);else ctx.fillRect(q+o,p,l,w);}}};
+  const twillL=(step,a,w)=>{ctx.lineWidth=w*sc;for(let k=-Z;k<2*Z;k+=step*sc){ctx.strokeStyle=L(a);ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+Z,Z);ctx.stroke();ctx.strokeStyle=D(a*1.2);ctx.beginPath();ctx.moveTo(k+step*sc/2,0);ctx.lineTo(k+step*sc/2+Z,Z);ctx.stroke();}};
+  const flecks=(n,cols,a)=>{for(let i=0;i<n;i++){ctx.globalAlpha=a*(.5+R()*.5);ctx.fillStyle=cols[Math.floor(R()*cols.length)];const x=R()*Z,y=R()*Z,l=(1.5+R()*4)*sc,an=R()*Math.PI;ctx.save();ctx.translate(x,y);ctx.rotate(an);ctx.fillRect(-l/2,-0.6*sc,l,1.2*sc);ctx.restore();}ctx.globalAlpha=1;};
   switch(kind){
-    case 'denim':ctx.lineWidth=1.3*sc;for(let k=-Z;k<2*Z;k+=4*sc){ctx.strokeStyle=L(.07);ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+Z,Z);ctx.stroke();}noise(5000,.14);for(let i=0;i<40;i++){ctx.fillStyle=L(.05*R());ctx.fillRect(R()*Z,0,(1+R()*2)*sc,Z);}break;
-    case 'linen':for(let i=0;i<120;i++){ctx.fillStyle=R()<.5?L(.07):D(.05);ctx.fillRect(0,R()*Z,Z,sc);ctx.fillRect(R()*Z,0,sc,Z);}noise(2500,.06);break;
-    case 'wool':noise(9000,.08);break;
-    case 'flannel':case 'fleece':case 'pile':case 'suede':case 'velvet':noise(6000,.06,2);break;
-    case 'leather':for(let i=0;i<220;i++){ctx.fillStyle=R()<.5?L(.018):D(.025);ctx.beginPath();ctx.arc(R()*Z,R()*Z,(2+R()*6)*sc,0,7);ctx.fill();}break;
-    case 'knit':case 'waffle':case 'pique':case 'cord':case 'pile':{const[c2,x2]=cnv(256,256);const R2=rng(hash('s'+kind));x2.fillStyle='#808080';x2.fillRect(0,0,256,256);paintStruct(x2,256,kind,v=>`rgb(${v},${v},${v})`,R2);
-      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=kind==='pile'?0.35:0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';break;}
+    case 'denim':/* indigo twill: the diagonal wale (~1.5 mm), slubby warp yarns (vertical streaks of uneven dye), white weft flecks, soft fading */
+      mott(26,.06,18,50);twillL(8,.03,3);slub(260,.07,true,1,2.5);noise(4000,.1);for(let i=0;i<900;i++){ctx.fillStyle=L(.12+R()*.14);ctx.fillRect(R()*Z,R()*Z,sc,(1+R()*2)*sc);}break;
+    case 'twill':case 'gabardine':mott(20,.035,15,40);twillL(kind==='gabardine'?4:5,.04,1.6);noise(2500,.05);break;
+    case 'canvas':mott(24,.04,12,36);slub(110,.035,true,1,2);slub(110,.035,false,1,2);noise(3000,.06);break;
+    case 'oxford':/* two-tone basket weave: fine white and coloured yarns */for(let y=0;y<Z;y+=2*sc)for(let x=(y/(2*sc)%2)*2*sc;x<Z;x+=4*sc){ctx.fillStyle=L(.07);ctx.fillRect(x,y,2*sc,2*sc);}noise(2000,.05);break;
+    case 'linen':mott(18,.05,20,60);slub(180,.08,false,1,2.6);slub(120,.06,true,1,2);noise(2500,.06);break;
+    case 'jersey':case 'tricot':/* knit columns barely visible, a slight heather */for(let x=0;x<Z;x+=3*sc){ctx.fillStyle=D(.035);ctx.fillRect(x,0,sc,Z);}mott(30,.03,8,24);noise(3000,.05);break;
+    case 'wool':/* tweed-like: small fibres in lighter and contrasting tones */mott(30,.05,10,34);noise(9000,.08);flecks(500,[shade(hex,.35),shade(hex,-.3),mixHex(hex,'#c9a34a',.5),mixHex(hex,'#7a3b2e',.5),mixHex(hex,'#4b6a8f',.5)],.45);break;
+    case 'flannel':/* brushed: soft cloudy nap */mott(90,.06,6,22);noise(5000,.06,2);break;
+    case 'fleece':/* sweatshirt fleece: a soft heather (lighter and darker fibre clusters of a few mm) */mott(160,.07,3,10);mott(20,.04,20,60);noise(6000,.05,1.5);break;
+    case 'pile':case 'suede':case 'velvet':mott(70,.06,5,20);noise(6000,.06,2);break;
+    case 'nylon':/* ripstop: a faint 5 mm grid of thicker yarns */{const g=18*sc;ctx.fillStyle=L(.035);for(let k=0;k<Z;k+=g){ctx.fillRect(k,0,1.4*sc,Z);ctx.fillRect(0,k,Z,1.4*sc);}noise(1200,.03);break;}
+    case 'satin':mott(10,.025,30,80);break;
+    case 'leather':for(let i=0;i<220;i++){ctx.fillStyle=R()<.5?L(.018):D(.025);ctx.beginPath();ctx.arc(R()*Z,R()*Z,(2+R()*6)*sc,0,7);ctx.fill();}mott(12,.03,30,70);break;
+    case 'knit':case 'waffle':case 'pique':case 'cord':{const[c2,x2]=cnv(256,256);const R2=rng(hash('s'+kind));x2.fillStyle='#808080';x2.fillRect(0,0,256,256);paintStruct(x2,256,kind,v=>`rgb(${v},${v},${v})`,R2);
+      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';if(kind==='knit')mott(30,.035,8,24);break;}
     case 'rib':for(let x=0;x<Z;x+=6*sc){ctx.fillStyle=D(.08);ctx.fillRect(x,0,2*sc,Z);}break;
     case 'mesh':for(let y=0;y<Z;y+=8*sc)for(let x=(y/(8*sc)%2)*4*sc;x<Z;x+=8*sc){ctx.fillStyle=D(.35);ctx.beginPath();ctx.arc(x+4*sc,y+4*sc,2*sc,0,7);ctx.fill();}break;
     case 'cork':for(let i=0;i<3000;i++){ctx.fillStyle=R()<.5?L(.1):D(.14);ctx.fillRect(R()*Z,R()*Z,2*sc,2*sc);}break;
@@ -345,7 +371,7 @@ function colorTex(kind,hex,pat,hex2){
   const rep={tartan:.5,buffalo:.5,camo:.42}[pat]||1;t.repeat.set(rep,rep);
   texCache.set(key,t);return t;
 }
-const BUMPY={cable:0.35,cord:0.35,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.2};
+const BUMPY={cable:0.35,cord:0.35,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.3,denim:0.22,flannel:0.22};
 function fabric(kind,hex,pat='solid',hex2='#1e1e1f'){
   if(!HEX.test(hex||''))hex='#888888';if(!HEX.test(hex2||''))hex2='#1e1e1f';
   const key=['f',kind,hex,pat||'solid',pat&&pat!=='solid'?hex2:''].join('|');if(matCache.has(key))return matCache.get(key);
@@ -357,7 +383,7 @@ function fabric(kind,hex,pat='solid',hex2='#1e1e1f'){
   matCache.set(key,m);return m;
 }
 /* everything reads matte except polished metal and stones: those catch sharp highlights from the studio lights */
-const SHINY=['gem','pearl','bead','dial','lens'];
+const SHINY=['gem','pearl','bead','dial','lens','acet'];
 function plain(hex,rough=.8,metal=0,key='',extra){
   const k='p|'+hex+'|'+rough+'|'+metal+'|'+key;if(matCache.has(k))return matCache.get(k);
   const met=metal>=0.5,shiny=SHINY.includes(key),ex=Object.assign({},extra||{});
@@ -390,14 +416,39 @@ function hairTex(hex,dir,kind){
   else if(kind==='braid'){for(let y=0;y<Z;y+=16)for(let x=0;x<Z;x+=32){ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x+8,y+8,9,5,0.7,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(x+24,y+16,9,5,-0.7,0,7);ctx.fill();}
     for(let i=0;i<300;i++){ctx.strokeStyle=`rgba(255,255,255,${.05+R()*.08})`;const x=R()*Z;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+(R()-.5)*20,Z);ctx.stroke();}}
   else{/* clumps: broad soft light/dark bands of random width, then fine low-contrast strands */
-    let x=0;while(x<Z){const w=6+R()*22,g=ctx.createLinearGradient(x,0,x+w,0),k=R()*.1;g.addColorStop(0,`rgba(0,0,0,${.07+k})`);g.addColorStop(.45,`rgba(255,255,255,${.03+R()*.05})`);g.addColorStop(1,`rgba(0,0,0,${.07+k})`);ctx.fillStyle=g;ctx.fillRect(x,0,w,Z);x+=w;}
+    let x=0;while(x<Z){const w=6+R()*22,g=ctx.createLinearGradient(x,0,x+w,0),k=R()*.04;g.addColorStop(0,`rgba(0,0,0,${.03+k})`);g.addColorStop(.45,`rgba(255,255,255,${.02+R()*.03})`);g.addColorStop(1,`rgba(0,0,0,${.03+k})`);ctx.fillStyle=g;ctx.fillRect(x,0,w,Z);x+=w;}
     for(let i=0;i<900;i++){const x2=R()*Z,l=R()<.5;ctx.strokeStyle=l?`rgba(255,255,255,${.015+R()*.04})`:`rgba(0,0,0,${.02+R()*.06})`;ctx.lineWidth=.4+R()*.8;ctx.beginPath();ctx.moveTo(x2,-4);ctx.bezierCurveTo(x2+(R()-.5)*5,Z*.33,x2+(R()-.5)*5,Z*.66,x2+(R()-.5)*3,Z+4);ctx.stroke();}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=8;texCache.set(key,t);return t;
+}
+/* hair cards: a strand atlas (4 columns, roots at the top, tips at the bottom) with alpha: many fine strands, denser
+   in the middle of a column, ending at different lengths, each a little lighter or darker than the base colour */
+function hairCardTex(hex,kind){
+  const key='hc|'+hex+kind;if(texCache.has(key))return texCache.get(key);
+  const Z=512,CW=128,[c,ctx]=cnv(Z,Z);if(!ctx){texCache.set(key,null);return null;}
+  ctx.clearRect(0,0,Z,Z);const R=rng(hash(key));ctx.lineCap='round';const rgb=new THREE.Color(hex);
+  const rgba=(sh,a)=>{const k=new THREE.Color(shade(hex,sh));return`rgba(${Math.round(k.r*255)},${Math.round(k.g*255)},${Math.round(k.b*255)},${a})`;};
+  for(let col=0;col<4;col++){const x0=col*CW,n=kind==='coil'?90:kind==='short'?130:150;
+    for(let i=0;i<n;i++){
+      /* across the card: dense in the middle, a few stray strands at the sides */
+      const g=(R()+R()+R()-1.5)/1.5,x=x0+CW/2+g*CW*0.47,y0=R()*Z*0.05,len=Z*(kind==='short'?0.5+0.5*R():0.55+0.45*R());
+      const sh=(R()-0.5)*0.12,a=0.7+0.3*R(),gr=ctx.createLinearGradient(0,y0,0,y0+len);
+      /* each strand fades out over its last third (soft, uneven ends instead of a cut edge) */
+      gr.addColorStop(0,rgba(sh-0.04,0));gr.addColorStop(0.1,rgba(sh-0.04,a));gr.addColorStop(0.62,rgba(sh,a));gr.addColorStop(1,rgba(sh+0.05,0));
+      ctx.strokeStyle=gr;ctx.lineWidth=kind==='coil'?1.6+R()*1.4:1+R()*1.2;ctx.beginPath();
+      if(kind==='coil'){const ph=R()*TAU,amp=3+R()*4,fq=0.09+R()*0.06;ctx.moveTo(x,y0);for(let y=y0;y<y0+len;y+=3)ctx.lineTo(x+Math.sin(y*fq+ph)*amp,y);}
+      else{const bend=(R()-0.5)*12,w1=(R()-0.5)*5;ctx.moveTo(x,y0);ctx.bezierCurveTo(x+w1,y0+len*0.33,x+bend*0.6,y0+len*0.66,x+bend,y0+len);}
+      ctx.stroke();}}
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;texCache.set(key,t);return t;
+}
+function hairCardMat(hex,kind='strand'){
+  const k='hcm|'+hex+kind;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:0xffffff,map:hairCardTex(hex,kind),alphaTest:0.35,side:THREE.DoubleSide,roughness:0.82,metalness:0,envMapIntensity:0.3,vertexColors:true});
+  m.userData.noShadow=true;matCache.set(k,m);return m;
 }
 function hairMat(hex,dir='v',kind='strand'){
   const k='hm|'+hex+dir+kind;if(matCache.has(k))return matCache.get(k);
   const map=hairTex(hex,dir,kind);
-  const m=new THREE.MeshPhysicalMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0022:.004,roughness:kind==='strand'?.78:.88,metalness:0,sheen:kind==='strand'?.2:.1,sheenRoughness:.45,sheenColor:lin(shade(hex,.22)),envMapIntensity:.38,
+  const m=new THREE.MeshStandardMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0018:.0015,roughness:.9,metalness:0,envMapIntensity:.28,
     side:THREE.DoubleSide,vertexColors:true,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
   matCache.set(k,m);return m;
 }

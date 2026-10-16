@@ -5,7 +5,7 @@ name: Build Fitme
 on:
   push:
     branches: [main]
-    paths: ['js/**', 'fitme.html', 'app/**', '.github/workflows/build.yml']
+    paths: ['js/**', 'vendor/**', 'fitme.html', 'legal.html', 'app/**', '.github/workflows/build.yml']
   workflow_dispatch:
     inputs:
       windows:
@@ -68,7 +68,7 @@ jobs:
       - name: Publikacja na gh-pages
         run: |
           rm -rf site && mkdir site
-          cp fitme.html site/index.html && cp fitme.html site/fitme.html && cp -r js site/js && touch site/.nojekyll
+          cp fitme.html site/index.html && cp fitme.html site/fitme.html && cp legal.html site/legal.html && cp -r js vendor site/ && touch site/.nojekyll
           cd site
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"

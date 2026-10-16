@@ -16,7 +16,7 @@ const POSES={
   walk:{label:'Chód',b:{hips:[0,6,0],spine:[2,-3,0],chest:[0,-4,0],head:[0,2,0],
     thighL:[-22,0,1],shinL:[7,0,0],footL:[13,0,0],thighR:[13,0,-1],shinR:[26,0,0],footR:[-14,0,0],
     uarmL:[14,0,2],farmL:[-8,0,0],uarmR:[-16,0,-2],farmR:[-22,0,0]},T:[0,-0.012,0]},
-  hip:{label:'Ręka na biodrze',b:{hips:[0,-2,2],chest:[0,3,-1.5],head:[0,6,1],
+  hip:{label:'Ręka na biodrze',handRest:1,b:{hips:[0,-2,2],chest:[0,3,-1.5],head:[0,6,1],
     uarmL:[12,8,40],farmL:[-6,-25,-88],handL:[0,0,-12],uarmR:[-2,0,-4],farmR:[-12,0,0],
     thighR:[-4,-4,-3],shinR:[8,0,0],footR:[-3,-6,0],thighL:[0,0,1]},T:[0.008,0,0]},
   open:{label:'Szeroka postawa',b:{thighL:[0,-4,7],thighR:[0,4,-7],footL:[0,-5,-7],footR:[0,5,7],uarmL:[0,0,9],uarmR:[0,0,-9],farmL:[-10,0,0],farmR:[-10,0,0],chest:[-2,0,0],head:[-3,0,0]},T:[0,-0.006,0]},
@@ -151,7 +151,37 @@ function poseSkinGeo(g,DQ){
     if(N){const m=rot(N[i*3],N[i*3+1],N[i*3+2]);N[i*3]=m[0];N[i*3+1]=m[1];N[i*3+2]=m[2];}}
   p.needsUpdate=true;if(nr)nr.needsUpdate=true;g.computeBoundingSphere();g.computeBoundingBox();}
 /* bend the finalised body + feet groups; afterwards the lowest point stands on the floor again */
-function posePose(body,feet,key){const def=POSES[key];if(!def||key==='stand')return;const J=poseJoints();if(!J)return;
+/* position of one skinned vertex under a set of bone dual quaternions */
+function poseSkinPt(DQ,I,W,P,i,out){let a0=0,a1=0,a2=0,a3=0,b0=0,b1=0,b2=0,b3=0,r0=0,r1=0,r2=0,r3=0,first=true;
+  for(let k=0;k<4;k++){const w=W[i*4+k];if(w<=0)continue;const o=I[i*4+k]*8;let s=w;
+    if(first){r0=DQ[o];r1=DQ[o+1];r2=DQ[o+2];r3=DQ[o+3];first=false;}else if(DQ[o]*r0+DQ[o+1]*r1+DQ[o+2]*r2+DQ[o+3]*r3<0)s=-w;
+    a0+=DQ[o]*s;a1+=DQ[o+1]*s;a2+=DQ[o+2]*s;a3+=DQ[o+3]*s;b0+=DQ[o+4]*s;b1+=DQ[o+5]*s;b2+=DQ[o+6]*s;b3+=DQ[o+7]*s;}
+  if(first){out[0]=P[i*3];out[1]=P[i*3+1];out[2]=P[i*3+2];return;}const L=Math.hypot(a0,a1,a2,a3)||1;a0/=L;a1/=L;a2/=L;a3/=L;b0/=L;b1/=L;b2/=L;b3/=L;
+  const tx=2*(-b3*a0+b0*a3-b1*a2+b2*a1),ty=2*(-b3*a1+b0*a2+b1*a3-b2*a0),tz=2*(-b3*a2-b0*a1+b1*a0+b2*a3),x=P[i*3],y=P[i*3+1],z=P[i*3+2];
+  const ix=a3*x+a1*z-a2*y,iy=a3*y+a2*x-a0*z,iz=a3*z+a0*y-a1*x,iw=-a0*x-a1*y-a2*z;
+  out[0]=ix*a3+iw*-a0+iy*-a2-iz*-a1+tx;out[1]=iy*a3+iw*-a1+iz*-a0-ix*-a2+ty;out[2]=iz*a3+iw*-a2+ix*-a1-iy*-a0+tz;}
+/* in a pose the hands can come to rest on (and sink into) a hip, a thigh or the clothes over them (relaxed hips, a walk):
+   the hands are posed, their gap to whatever is beside them measured, and each upper arm swung out until they clear */
+function poseHandClear(body,J,def){const meshes=[];body.traverse(o=>{if(o.isMesh&&o.geometry.attributes.skinI)meshes.push(o.geometry);});if(!meshes.length)return def;
+  const arm=new Set(['uarmL','farmL','handL','uarmR','farmR','handR'].map(b=>POSE_IDX[b])),hand={1:POSE_IDX.handL,'-1':POSE_IDX.handR};
+  /* per mesh: hand vertices (mostly hand bone) and other vertices (no arm bone at all) below the chest */
+  const H=[],O=[];for(const g of meshes){const I=g.attributes.skinI.array,W=g.attributes.skinW.array,P=g.attributes.position.array,N=g.attributes.normal.array,n=P.length/3;
+    for(let i=0;i<n;i++){let wa=0,wh=0;for(let k=0;k<4;k++){const b=I[i*4+k],w=W[i*4+k];if(arm.has(b))wa+=w;if(b===hand[1]||b===hand[-1])wh+=w;}
+      if(wh>0.6&&(i%2===0))H.push([g,i]);else if(wa<0.02&&P[i*3+1]<1.25&&P[i*3+1]>0.45&&Math.abs(P[i*3])>0.04)O.push([g,i]);}}
+  if(!H.length||!O.length)return def;
+  let d2={b:Object.assign({},def.b||{}),T:def.T};const p=new Float32Array(3),cs=0.015;
+  for(let pass=0;pass<4;pass++){const DQ=poseBoneDQ(J,d2,0),grid=new Map();
+    for(const[g,i] of O){poseSkinPt(DQ,g.attributes.skinI.array,g.attributes.skinW.array,g.attributes.position.array,i,p);const k=Math.floor(p[0]/cs)+','+Math.floor(p[1]/cs)+','+Math.floor(p[2]/cs);let a=grid.get(k);if(!a)grid.set(k,a=[]);a.push(p[0],p[1],p[2],g,i);}
+    const worst={1:0,'-1':0};
+    for(const[g,i] of H){poseSkinPt(DQ,g.attributes.skinI.array,g.attributes.skinW.array,g.attributes.position.array,i,p);const sd=p[0]>=0?1:-1;let bd=9,bj=null;
+      const gx=Math.floor(p[0]/cs),gy=Math.floor(p[1]/cs),gz=Math.floor(p[2]/cs);/* (the hand on the hip pose rests the hand on purpose) */if(def.handRest&&def.handRest===sd)continue;
+      for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++){const a=grid.get((gx+dx)+','+(gy+dy)+','+(gz+dz));if(!a)continue;for(let q=0;q<a.length;q+=5){const d=Math.hypot(p[0]-a[q],p[1]-a[q+1],p[2]-a[q+2]);if(d<bd){bd=d;bj=q;bj={x:a[q],y:a[q+1],z:a[q+2],g:a[q+3],i:a[q+4]};}}}
+      if(!bj)continue;/* closer than ~1 cm to the body (or anything worn on it) beside it: the fingers touch it or sink in */const need=0.01-bd;if(need>worst[sd])worst[sd]=need;}
+    if(worst[1]<=0.001&&worst[-1]<=0.001)break;
+    for(const sd of [1,-1]){if(worst[sd]<=0.001)continue;const k=sd>0?'uarmL':'uarmR',a=(d2.b[k]||[0,0,0]).slice();a[2]+=sd*Math.min(6,(worst[sd]+0.003)/0.6*180/Math.PI*1.3);d2.b[k]=a;}}
+  return d2;}
+function posePose(body,feet,key){let def=POSES[key];if(!def||key==='stand')return;const J=poseJoints();if(!J)return;
+  def=poseHandClear(body,J,def);
   const dqB=poseBoneDQ(J,def,0),dqF=poseBoneDQ(J,def,LIFT);
   body.traverse(o=>{if(o.isMesh)poseSkinGeo(o.geometry,dqB);});feet.traverse(o=>{if(o.isMesh)poseSkinGeo(o.geometry,dqF);});
   let lo=1e9;body.traverse(o=>{if(o.isMesh&&o.geometry.boundingBox)lo=Math.min(lo,o.geometry.boundingBox.min.y+body.position.y);});feet.traverse(o=>{if(o.isMesh&&o.geometry.boundingBox)lo=Math.min(lo,o.geometry.boundingBox.min.y);});

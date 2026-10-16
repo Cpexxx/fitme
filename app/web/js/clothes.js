@@ -77,14 +77,18 @@ function buildBottom(G){
   if(T.skirt)buildSkirt(G,P,T);else buildPants(G,P,T);
 }
 function buildPants(G,P,T){
-  const fit=PANTS_FITS[P.fit]||PANTS_FITS.straight,len=PANTS_LEN[P.length]||PANTS_LEN.full,waistY=(RISES[P.rise]||RISES.mid).y;
+  const fit=PANTS_FITS[P.fit]||PANTS_FITS.straight,len=PANTS_LEN[P.length]||PANTS_LEN.full,sagD={low:0.045,heavy:0.065}[P.sag]||0;
+  /* sagging: the waistband slides down the hips (never past the top of the crotch), what is under it shows */
+  const waistY=sagD?Math.max(shellBase(1).cy+0.016,(RISES[P.rise]||RISES.mid).y-sagD):(RISES[P.rise]||RISES.mid).y;
   /* illustrative sizes: waist W widens / narrows the seat and legs, inseam L moves the hem */
   const PW=pantsSize(P,waistY);
   const mat=P.mat||T.mat,pat=P.pattern||'solid',c2=P.color2||'#f4f1ea';
   MK_STIFF=(STIFF[mat]||0.3)*(T.tight||fit.e<0.008?0.15:0.8);
   const m=fabric(mat,P.color,pat,c2),mb=fabric(mat,shade(P.color,-0.08),pat,shade(c2,-0.08));
   const thread=mat==='denim'?'#c98a3a':shade(P.color,lumHex(P.color)<0.25?0.12:-0.28);
-  let hem=PW.hem!=null&&['full','stacked','cuffed','jogger'].includes(P.length)?PW.hem:len.hem;const SH=SHOES[S.shoes.type]||{};
+  let hem=PW.hem!=null&&['full','stacked','cuffed','jogger'].includes(P.length)?PW.hem:len.hem;
+  /* the legs slide down with the waist: long trousers bunch over the shoes */
+  if(sagD&&hem<0.2)hem=Math.max(0.02,hem-sagD*0.5);const SH=SHOES[S.shoes.type]||{};
   const hipE0=(T.tight?0.004:0.012)+(fit.hip||0);
   /* the top of each leg widens to meet the side of the seat so there is no ledge at the hip */
   let legR=y=>{const r=pantsLegR(y,fit,T)+PW.leg;if(y<0.68)return r;const h=BC.core.hips(Math.max(y,0.8)).rx+hipE0-BC.legX;return Math.max(r,lerp(r,h,smooth((y-0.68)/0.17)));};
@@ -269,8 +273,8 @@ function buildTop(G,P=S.top){
   const thread=shade(P.color,lumHex(P.color)<0.3?0.25:-0.2);
   /* hem */
   if(!tuck){
-    if(T.rib)G.add(mk(tube(vSamples(hem,hem+0.05,5,y=>addE(rf0(y),0.0015+roundE(y,hem,hem+0.05,0.002))),{seg:84}),md));
-    else{G.add(mk(tube(vSamples(hem,hem+0.016,4,y=>addE(rf0(y),roundE(y,hem,hem+0.016,0.003))),tubeO),m));stitchRing(G,hem+0.022,rf0,thread,0,folds);}
+    if(T.rib){const bd=mk(tube(vSamples(hem,hem+0.05,5,y=>addE(rf0(y),0.0015+roundE(y,hem,hem+0.05,0.002))),{seg:84}),md);bd.userData.band=1;G.add(bd);}
+    else{G.add(mk(tube(vSamples(hem,hem+0.016,4,y=>addE(rf0(y),roundE(y,hem,hem+0.016,0.003))),tubeO),m));stitchRing(G,hem+0.022,rf0,thread,0,folds);G.children.slice(-2).forEach(o=>o.userData.hemPiece=1);}
     if(T.tail){const dropF=a=>0.05*Math.pow(Math.abs(Math.sin(a)),1.5);
       const tl=mk(surf(84,6,(u,v)=>{const a=u*TAU,y=hem-dropF(a)*v;return envPt(rf0(hem),a,y,0.0005);},{noAO:true}),m);tl.userData.tail=true;G.add(tl);}
   }else if(tuckM==='front'){

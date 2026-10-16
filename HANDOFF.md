@@ -259,3 +259,22 @@ Kolejne rundy:
   ramieniem; `hairBandK` (opaska na czoło leży na włosach); `shHairOverNeckwear` — włosy nad bandaną (`userData.neckwear`)
   i cienkimi kołnierzami (`isHair` taguje runBuilders).
 - Sweep: nowe przypadki under/…, bra/…, sag/….
+
+## Runda 10 (2026-10-16): ekran powitania, konta, społeczność, dokumenty prawne
+- **Pliki:** `js/config.js` (adres Supabase + klucz anon, dane operatora, `legalVersion`, `minAge`), `js/social.js` (warstwa
+  danych, supabase-js), `js/account.js` (cały interfejs kont), `js/legal.js` (treść dokumentów, jedno źródło dla okna i
+  `legal.html`), `js/boot.js` (start aplikacji: przeniesiony z końca app.js), `supabase/schema.sql` + `supabase/README.md`.
+- **Bez serwera** (`cloud.url` puste): `Social.on=false`. Tryb gościa jak dawniej, powitanie pokazuje tylko „Przejdź do
+  projektowania”. Konta zaczną działać po wpisaniu adresu i klucza w config.js (instrukcja: supabase/README.md).
+- **Bezpieczeństwo jest w bazie:** RLS na każdej tabeli, pomocnicze funkcje w schemacie `fitme_private` (niewystawionym przez
+  API, zawsze względem `auth.uid()`), granty kolumnowe (liczniki i właściciel poza zasięgiem klienta), triggery dla liczników,
+  powiadomień, limitów nadużyć, historii konta. Konto prywatne = prośby o obserwowanie; blokada działa w obie strony.
+- **Pamięć urządzenia:** `prefSet/prefGet` (core.js). Preferencje (`PREF_KEYS`) trafiają do localStorage tylko za zgodą z
+  banera, bez zgody do sessionStorage. Niezbędne: `fitme.auth`, `fitme.consent`, `fitme.welcomed`, zapisane i polubione fity.
+- **Bez CDN:** three.js, supabase-js 2.75.0 i czcionka Archivo (OFL) leżą w `vendor/`. build.js i workflow Pages je kopiują.
+- **Testy:**
+  - `node tools/cloud/stack.js --reset` stawia lokalny stos zgodny z Supabase: Postgres 16, GoTrue, PostgREST,
+    bramka :54321, skrzynka SMTP. Binarki są w `FITME_BIN`, a w sesji w chmurze trzeba je pobrać z GitHub Releases.
+  - `NODE_PATH=…/node_modules node tools/cloud/test-db.js` (115 testów RLS).
+  - `node tools/cloud/e2e.js <dir>` (scenariusz w przeglądarce).
+  - QA renderów (render/sweep/ui) ustawia zgodę i „powitanie widziane” skryptem startowym.
