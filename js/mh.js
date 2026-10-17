@@ -79,8 +79,10 @@ function footPitch(hh,ay=0.08,dz=0.14){if(hh<=0)return 0;let lo=0,hi=1.2;for(let
 /* returns deformed control points + joints for the current sliders */
 /* body type: muscle and fat (-1..1, a little past 1 allowed) blend the MakeHuman macro shapes (real body types, not scaling) */
 function mhMorph(g,mus,fat){const B=mhBase(),M=B[g],key=g+r3(mus)+'|'+r3(fat);B.morph=B.morph||new Map();if(B.morph.has(key))return B.morph.get(key);
-  /* past the most muscular MakeHuman shape the delta is extrapolated: grow it more slowly (it turned lumpy, like plasticine) */
-  const P=M.pos.slice(),J={},ws=[[mus>0?'mp':'mn',mus>1?1+(mus-1)*0.55:Math.abs(mus)],[fat>0?'wp':'wn',Math.min(1,Math.abs(fat))]];
+  /* past muscle 1.0 the most muscular MakeHuman shape blends into a bodybuilder one (lean, bigger chest, lats, shoulders,
+     arms and legs; tools/mh 'mx') instead of extrapolating the delta, which turned lumpy, like plasticine */
+  const wx=M.d.mx&&mus>1?clamp((mus-1)/0.5,0,1.2):0;
+  const P=M.pos.slice(),J={},ws=wx?[['mp',1-wx],['mx',wx],[fat>0?'wp':'wn',Math.min(1,Math.abs(fat))]]:[[mus>0?'mp':'mn',mus>1?1+(mus-1)*0.55:Math.abs(mus)],[fat>0?'wp':'wn',Math.min(1,Math.abs(fat))]];
   for(const[k,w] of ws){const d=M.d[k];if(!d||!w)continue;for(let i=0;i<P.length;i++)P[i]+=d[i]*w;}
   /* muscular and heavy at once: a little extra volume the two shapes alone miss */
   if(mus>0&&fat>0&&M.d.wp){const w=0.25*Math.min(mus,fat);for(let i=0;i<P.length;i++)P[i]+=M.d.wp[i]*w;}
@@ -207,22 +209,108 @@ function spotNormals(geo,spots){if(!spots)return;const p=geo.attributes.position
     const l=Math.hypot(ax,ay,az);if(!l)continue;ax/=l;ay/=l;az/=l;
     for(const[i,d] of ids){const w=1-smooth(d/(rad*1.3));let x=lerp(nr.getX(i),ax,w),y=lerp(nr.getY(i),ay,w),z=lerp(nr.getZ(i),az,w);const m=Math.hypot(x,y,z)||1;nr.setXYZ(i,x/m,y/m,z/m);}}}
 /* the top of the neck widens smoothly into the underside of the egg head, like a carved mannequin (no crease) */
-function neckFlare(R,n){if(!BC.headC||!BC.hd)return;const c=BC.headC,ry=BC.hd.ry,y1=c.y-ry*0.86,y0=y1-0.06;
-  let cx=0,cz=0,k=0;for(let i=0;i<n;i++){const y=R[i*3+1];if(Math.abs(y-y0)<0.006&&Math.abs(R[i*3])<0.09){cx+=R[i*3];cz+=R[i*3+2];k++;}}if(k<6)return;cx/=k;cz/=k;
-  for(let i=0;i<n;i++){const y=R[i*3+1];if(y<y0||y>y1+0.03)continue;const x=R[i*3],z=R[i*3+2];if(Math.abs(x)>0.12)continue;
-    const t=clamp((y-y0)/(y1-y0),0,1),w=Math.pow(t,2.2),ccx=lerp(cx,c.x,t),ccz=lerp(cz,c.z,t),dx=x-ccx,dz=z-ccz,r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);
-    const hr=headHorizR(Math.min(y,y1),ph);if(hr==null)continue;
-    /* the throat stays a throat: the neck widens into the skull at the sides and the back, never forwards under the chin */
-    const fwd=smooth((dz/r-0.15)/0.6),target=lerp(hr*0.97,r,fwd);if(target<=r)continue;const r2=lerp(r,target,w);
-    R[i*3]=ccx+dx/r*r2;R[i*3+2]=ccz+dz/r*r2;}}
+/* the neck ends in a clean ring a little under the head; a separate smooth strip (buildBody: neckLoftPt) runs from that
+   ring up into the skull - low on the occiput at the back and the sides, under the chin at the front. The scan's own
+   ragged neck top (lumps at the ear roots, a zigzag cut) is folded away inside it. Returns the ring for the strip. */
+function neckFlare(R,n){if(!BC.headC||!BC.hd)return null;
+  const c=BC.headC,ry=BC.hd.ry,yS=c.y-ry-0.03,yA=yS-0.03;
+  const ctr=yy=>{let x=0,z=0,k=0;for(let i=0;i<n;i++){if(Math.abs(R[i*3+1]-yy)<0.005&&Math.abs(R[i*3])<0.11){x+=R[i*3];z+=R[i*3+2];k++;}}return k<8?null:[x/k,z/k];};
+  const C0=ctr(yS),C1=ctr(yS-0.03);if(!C0)return null;const cx=C0[0],cz=C0[1];
+  /* the neck leans forward: the strip leaves the ring along the neck's own axis (no kink at the throat or the nape) */
+  const ax=C1?[(C0[0]-C1[0])/0.03,1,(C0[1]-C1[1])/0.03]:[0,1,0];
+  /* mean radius per direction (a max picked single protruding vertices and left lumps) */
+  const RG=new Float32Array(72),RC=new Float32Array(72);for(let i=0;i<n;i++){if(Math.abs(R[i*3+1]-yS)>0.007||Math.abs(R[i*3])>0.11)continue;const a=Math.atan2(R[i*3+2]-cz,R[i*3]-cx),b=((Math.round(a/TAU*72)%72)+72)%72,r=Math.hypot(R[i*3]-cx,R[i*3+2]-cz);RG[b]+=r;RC[b]++;}
+  for(let b=0;b<72;b++)RG[b]=RC[b]?RG[b]/RC[b]:0;
+  for(let it=0;it<6;it++){const o=RG.slice();for(let b=0;b<72;b++){const a=o[(b+71)%72],m=o[b],d=o[(b+1)%72];RG[b]=m?(a&&d?(a+2*m+d)/4:m):Math.max(a,d);}}
+  const NL={cx,cz,y:yS,RG:Array.from(RG),ax},ring=a=>neckRingR(NL,a),cut=new Uint8Array(n),yC=yS-0.004;
+  for(let i=0;i<n;i++){const y=R[i*3+1];if(y<yA||Math.abs(R[i*3])>0.13)continue;
+    /* below the ring: eased onto a clean tube along the neck axis (the strip starts there, tangent to it); the rest is cut off */
+    const ox=cx+ax[0]*(Math.min(y,yS)-yS),oz=cz+ax[2]*(Math.min(y,yS)-yS),x=R[i*3],z=R[i*3+2],dx=x-ox,dz=z-oz,r=Math.hypot(dx,dz)||1e-6,a=Math.atan2(dz,dx),rr=ring(a);
+    if(y<yC){const r2=lerp(r,rr,smooth((y-yA)/(yC-yA)));R[i*3]=ox+dx/r*r2;R[i*3+2]=oz+dz/r*r2;}
+    else{R[i*3]=cx+Math.cos(a)*rr;R[i*3+1]=yS;R[i*3+2]=cz+Math.sin(a)*rr;cut[i]=1;}}
+  NL.cut=cut;return NL;}
+function neckRingR(NL,a){const f=(((a/TAU*72)%72)+72)%72,i=Math.floor(f)%72;return lerp(NL.RG[i],NL.RG[(i+1)%72],f-Math.floor(f));}
+/* =============== muscle definition ===============
+   MakeHuman's most muscular shape carries the mass, but its coarse mesh (and the smoothing) has no definition. On the
+   dense render mesh the anatomy is carved in as shallow grooves between the muscles, along their real borders: carving
+   only (never outwards), so nothing can poke through tight clothes. Strength: muscle mass minus body fat (fat hides
+   definition first on the belly), lighter on women; the average figure is untouched. */
+function muscleRelief(R,plan,W){const M=BC.core;if(!M||!M.spots||M.spots.length<3)return;
+  const fem=BC.g==='f',mus=BC.mus||0,fat=BC.fat||0;
+  const def=1.9*clamp((mus-0.3)/0.85,0,1.25)*(1-smooth((fat+0.05)/0.85))*(fem?0.55:1);if(def<0.04)return;
+  const n=plan.n,ix=plan.ix,N=new Float32Array(n*3);
+  for(let t=0;t<ix.length;t+=3){const a=ix[t]*3,b=ix[t+1]*3,c=ix[t+2]*3,ux=R[b]-R[a],uy=R[b+1]-R[a+1],uz=R[b+2]-R[a+2],vx=R[c]-R[a],vy=R[c+1]-R[a+1],vz=R[c+2]-R[a+2];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;for(const k of [a,b,c]){N[k]+=nx;N[k+1]+=ny;N[k+2]+=nz;}}
+  const nip=M.spots[1],nav=M.spots[2],yN=nip[1],yV=nav[1],S0=M.S,E0=M.E,W0=M.W,inv=BC.map.inv,yHip=inv(M.J.hipL[1]),yKnee=inv(M.J.kneeL[1]),LX=M.LX;
+  /* distance from point (px,py) to segment (ax,ay)-(bx,by), with the position t along it */
+  const seg=(px,py,ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy,t=clamp(((px-ax)*dx+(py-ay)*dy)/L2,0,1);return[Math.hypot(px-ax-dx*t,py-ay-dy*t),t];};
+  /* soft, wide grooves (a shadow between two muscles, not a cut): at least twice the spacing of the dense mesh */
+  const WS=1.8,groove=(d,w,dep,t=0.5)=>{const ww=w*WS;return dep*Math.exp(-(d*d)/(ww*ww))*Math.sin(Math.PI*clamp(t,0,1))**0.35;};
+  const yPec=ax=>yN-0.048+0.05*Math.pow(clamp(ax/0.16,0,1.2),2);
+  const du=V3(E0.x-S0.x,E0.y-S0.y,E0.z-S0.z),Lu=du.length();du.normalize();
+  const df=V3(W0.x-E0.x,W0.y-E0.y,W0.z-E0.z),Lf=df.length();df.normalize();
+  for(let i=0;i<n;i++){const x=R[i*3],y=R[i*3+1],z=R[i*3+2],sd=x>=0?1:-1,ax=Math.abs(x),aw=W[i*3],lw=W[i*3+1],fw=W[i*3+2];
+    const nl=Math.hypot(N[i*3],N[i*3+1],N[i*3+2])||1,nz=N[i*3+2]/nl,nxs=N[i*3]/nl*sd;let dsp=0;
+    const tw=Math.max(0,1-aw-lw);
+    if(tw>0.05&&y>yHip-0.12&&y<1.5){const k=tw;
+      const front=smooth((nz-0.15)/0.4),back=smooth((-nz-0.15)/0.4);
+      if(front>0){let f=0;
+        if(!fem){/* lower border of the pecs and the groove between them */
+          const yp=yPec(ax);if(ax<0.17&&y<yp+0.03)f+=groove(y-yp,0.011,0.0036*(1-smooth((ax-0.085)/0.07)),1-ax/0.17);
+          if(y>yPec(0)-0.005&&y<yN+0.08)f+=groove(ax,0.009,0.0022,(y-yPec(0))/(yN+0.08-yPec(0)));
+          /* deltopectoral groove */
+          {const[d,t]=seg(ax,y,0.115,S0.y-0.02,0.165,S0.y-0.105);f+=groove(d,0.007,0.0016,t);}}
+        /* linea alba, the three tendinous intersections, the lateral borders of the rectus */
+        const yTop=fem?yN-0.075:yPec(0)-0.005,yBot=yV-0.085;
+        if(y>yBot&&y<yTop)f+=groove(ax,0.0062,0.0021,(y-yBot)/(yTop-yBot));
+        for(const[yy,dep] of (fem?[[yV+0.02,0.001],[yV+0.075,0.0011]]:[[yV+0.02,0.0016],[yV+0.075,0.0018],[yV+0.127,0.0018]])){
+          if(ax<0.068)f+=groove(y-(yy+0.008*Math.pow(ax/0.06,2)),0.0048,dep,ax/0.068*0.5+0.5);}
+        {const xl=lerp(0.047,0.076,smooth((y-(yV-0.09))/0.21));if(y>yV-0.11&&y<yTop+0.01)f+=groove(ax-xl,0.0075,fem?0.0013:0.0023,(y-(yV-0.11))/(yTop+0.01-(yV-0.11)));}
+        /* iliac furrow (the "V" above the hips) */
+        {const[d,t]=seg(ax,y,0.125,yV-0.045,0.048,yV-0.16);f+=groove(d,0.0085,fem?0.0016:0.0028,t);}
+        dsp+=f*front;}
+      /* serratus on the ribs under the arm */
+      if(!fem&&ax>0.11&&ax<0.18&&nxs>0.2){let f=0;for(let k2=0;k2<3;k2++){const y0=yN-0.045-k2*0.03;const[d,t]=seg(ax,y,0.118,y0+0.018,0.168,y0-0.008);f+=groove(d,0.0055,0.0013,t);}dsp+=f*smooth((nxs-0.2)/0.3);}
+      if(back>0){let f=0;
+        /* spine between the erectors, deeper at the lower back */
+        if(y>yV-0.17&&y<1.46)f+=groove(ax,0.008,lerp(0.003,0.0018,smooth((y-1.15)/0.2)),(y-(yV-0.17))/(1.46-(yV-0.17)));
+        /* outer border of the lats and the lower border of the trapezius */
+        {const[d,t]=seg(ax,y,0.158,yN+0.03,0.106,yV-0.07);f+=groove(d,0.009,fem?0.0011:0.0021,t);}
+        {const[d,t]=seg(ax,y,0.0,yN-0.09,0.095,yN+0.06);f+=groove(d,0.008,fem?0.0008:0.0015,t);}
+        dsp+=f*back;}
+      dsp*=k;}
+    /* upper arm: the "V" of the deltoid insertion, biceps/triceps grooves on both sides */
+    if(aw>0.4&&aw*(1-fw)>0.4){const qx=sd*x-S0.x,qy=y-S0.y,qz=z-S0.z,al=qx*du.x+qy*du.y+qz*du.z,t=al/Lu;
+      if(t>0.03&&t<0.98){const px=qx-du.x*al,py=qy-du.y*al,pz=qz-du.z*al;
+        /* angle around the arm: 0 lateral, +90 front, -90 back */
+        const lx=V3(1,0,0).addScaledVector(du,-du.x).normalize(),fz=new THREE.Vector3().crossVectors(lx,du);if(fz.z<0)fz.negate();
+        const phi=Math.atan2(px*fz.x+py*fz.y+pz*fz.z,px*lx.x+py*lx.y+pz*lx.z),r=Math.hypot(px,py,pz);let f=0;
+        for(const sg of [1,-1]){const ph0=sg*lerp(1.2,0.2,smooth((t-0.04)/0.32));if(t<0.4)f+=groove((phi-ph0)*r,0.0068,0.0026,t/0.4);}
+        if(t>0.36&&t<0.9)f+=groove(phi*r,0.006,0.0016,(t-0.36)/0.54);
+        {let pm=Math.abs(phi)-Math.PI;if(t>0.15&&t<0.85)f+=groove(pm*r,0.0065,0.0015,(t-0.15)/0.7);}
+        dsp+=f*smooth((aw-0.4)/0.3);}}
+    /* thigh: vastus medialis teardrop, vastus lateralis and the sartorius line; calf: the two heads of the gastrocnemius */
+    if(lw>0.5&&fw<0.3&&y<yHip){const lx=sd*x-LX,phi=Math.atan2(z,lx),r=Math.hypot(lx,z),ad=(a,b)=>{let d=a-b;while(d>Math.PI)d-=TAU;while(d<-Math.PI)d+=TAU;return d;};let f=0;
+      if(y>yKnee+0.02&&y<yHip-0.04){const u=(y-yKnee)/(yHip-yKnee);
+        f+=groove(ad(phi,lerp(2.0,1.45,smooth((u-0.08)/0.35)))*r,0.007,0.0021,u/0.45);
+        f+=groove(ad(phi,lerp(0.75,1.05,u))*r,0.007,0.0017,u/0.75);
+        f+=groove(ad(phi,lerp(2.55,0.55,u))*r,0.006,0.0013,(u-0.1)/0.85);}
+      if(y<yKnee-0.08&&y>yKnee-0.3){const u=(yKnee-0.08-y)/0.22;f+=groove(ad(phi,-Math.PI/2+0.05)*r,0.006,0.0016,u);}
+      dsp+=f*smooth((lw-0.5)/0.3);}
+    if(dsp>0){const k=def*dsp/nl;R[i*3]-=N[i*3]*k;R[i*3+1]-=N[i*3+1]*k;R[i*3+2]-=N[i*3+2]*k;}}
+}
 function mhGeo(P,feet){
   const p1=mhPlan(feet),hi=GEO_Q>1,plan=hi?mhPlan2(feet):p1,R=hi?ccApply(plan,ccApply(p1,P)):ccApply(p1,P),n=plan.n;smoothSpots(R,plan,BC.core&&BC.core.spots);
-  neckFlare(R,n);
+  {const B=mhBase(),W0=new Float32Array(B.nv*3);for(let i=0;i<B.nv;i++){W0[i*3]=B.armw[i];W0[i*3+1]=B.legw[i];W0[i*3+2]=B.footw[i];}
+    muscleRelief(R,plan,hi?ccApply(plan,ccApply(p1,W0)):ccApply(p1,W0));}
+  const NL=neckFlare(R,n);
   const geo=new THREE.BufferGeometry(),uv=new Float32Array(n*2),col=new Float32Array(n*3);
+  /* the lid of the cut neck (faces with all corners on the ring) goes: the open ring is where the neck strip starts */
+  let IX=plan.ix;if(NL&&NL.cut){const c=NL.cut,o=[];for(let t=0;t<IX.length;t+=3)if(!(c[IX[t]]&&c[IX[t+1]]&&c[IX[t+2]]))o.push(IX[t],IX[t+1],IX[t+2]);IX=Uint32Array.from(o);delete NL.cut;}
   for(let i=0;i<n;i++){const x=R[i*3],y=R[i*3+1],z=R[i*3+2];uv[i*2]=(x*0.7+z*0.7)/TILE;uv[i*2+1]=y/TILE;const a=1-0.08*smooth(1-y/0.04);col[i*3]=col[i*3+1]=col[i*3+2]=a;}
   geo.setAttribute('position',new THREE.BufferAttribute(R,3));geo.setAttribute('uv',new THREE.BufferAttribute(uv,2));geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  geo.setIndex(new THREE.BufferAttribute(plan.ix,1));geo.computeVertexNormals();spotNormals(geo,BC.core&&BC.core.spots);
-  seamAttrs(geo,R,feet);geo.userData.keep=true;geo.userData.bodyFeet=!!feet;geo.userData.bodyPlanN=n;return geo;
+  geo.setIndex(new THREE.BufferAttribute(IX,1));geo.computeVertexNormals();spotNormals(geo,BC.core&&BC.core.spots);
+  seamAttrs(geo,R,feet);geo.userData.keep=true;geo.userData.bodyFeet=!!feet;geo.userData.bodyPlanN=n;geo.userData.neckLoft=NL;return geo;
 }
 /* seams of a tailor's mannequin (hips, upper arms, thighs, wrists): signed distances to the seam planes
    (planes interpolate exactly across triangles) + where each seam applies; drawn in the fabric shader */
@@ -315,10 +403,10 @@ function armTable(m){
   {const k15=Math.round((0.16+0.06)/0.02);for(let k=0;k<k15;k++)R[k]=Math.min(R[k],R[k15]*1.06);}
   return table(-0.06,0.02,R.map(r=>r+0.001),6);
 }
-function bodyGeo(feet){const m=BC.core,k=(feet?'f':'n')+r3(BC.footA);if(m.geo[k])return m.geo[k];
+function bodyGeo(feet){const m=BC.core,k=(feet?'f':'n')+r3(BC.footA);if(m.geo[k]){BC.neckLoft=m.geo[k].userData.neckLoft;return m.geo[k];}
   let P=m.P;if(feet&&BC.footA){P=P.slice();mhPitch(P,m.ank,BC.footA);}
   for(const kk of Object.keys(m.geo))if(kk[0]===k[0]&&kk!==k&&kk.length>1){m.geo[kk].dispose();delete m.geo[kk];}
-  return m.geo[k]=mhGeo(P,feet);}
+  m.geo[k]=mhGeo(P,feet);BC.neckLoft=m.geo[k].userData.neckLoft;return m.geo[k];}
 /* =============== nominal <-> mesh heights ===============
    garments are authored on a nominal 1.80 m figure; the mesh keeps its own (realistic) proportions,
    so the body is moved into nominal heights before dressing and everything is mapped back in finalize */

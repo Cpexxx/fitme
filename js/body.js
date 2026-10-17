@@ -19,6 +19,12 @@ function setupBody(){
   const hk=F.head,MP=mhMap(g);BC.map=MP;
   const SH=SHOES[S.shoes.type]||{},bare=S.shoes.type==='none',hh=bare?0:(SH.stiletto||SH.heel||0),st=bare?0:(SH.sole||0.02);
   LIFT=hh+st;BC.footFloor=hh?-hh+0.0015:null;BC.footA=footPitch(hh,M.ank.y,BC.foot.zmin+0.72*BC.foot.len-M.ank.z);
+  /* the real (pitched, as worn) foot in shoe space: lasts are fitted around it slice by slice */
+  {const B=mhBase(),P=M.P.slice();mhPitch(P,M.ank,BC.footA);const pts=[];
+    let z0=9,z1=-9;for(let i=0;i<B.nv;i++){if(B.footw[i]<0.35||P[i*3]<0)continue;pts.push(P[i*3],MP.G(P[i*3+1])+LIFT,P[i*3+2]);if(B.footw[i]>=0.5){z0=Math.min(z0,P[i*3+2]);z1=Math.max(z1,P[i*3+2]);}}
+    BC.footPts=Float32Array.from(pts);
+    /* in heels the pitched foot is shorter seen from above: the last is measured on it, or the toes end up mid-shoe */
+    BC.footP={zmin:z0,zmax:z1,len:z1-z0};}
   /* height works like in people: mostly longer legs (and a bit of torso), the head barely changes and the frame widens only slightly */
   const H0=g==='f'?168:180,h=clamp((S.height||H0)/H0,0.8,1.25);
   const mk=hk2=>{const SW=makeWarp([[0.10,0.84,1.07*F.legs*Math.pow(h,hk2?0.8:0)],[0.84,1.48,F.torso*Math.pow(h,hk2?0.4:0)],[1.48,1.585,F.neckL]]);return{Y:y=>MP.G(SW.Y(y)),k:y=>SW.k(y)*MP.k(SW.Y(y)),id:false};};
@@ -107,6 +113,19 @@ function headPt(th,ph,h=0){
   if(h){const L=Math.hypot(x,y,z)||1,k=(L+h)/L;x*=k;y*=k;z*=k;}
   return V3(BC.headC.x+x,BC.headC.y+y,BC.headC.z+z);
 }
+/* where the head meets the neck strip: low on the occiput at the back and the sides, under the chin at the front */
+/* where the head meets the neck strip: low on the occiput at the back, under the chin at the front, changing gradually
+   around the jaw (a sudden change folded the strip there) */
+function headAttachTh(ph){const s=seXY(ph,2.12)[1];return Math.acos(lerp(-0.52,-0.88,smooth((s+0.25)/1.15)));}
+/* the strip from the neck's ring (tangent to the upright neck) to the skull (tangent to the head surface): cubic Hermite */
+function neckLoftPt(ph,v){
+  const NL=BC.neckLoft,th=headAttachTh(ph),P1=headPt(th,ph),d=0.004,T1=headPt(th-d,ph).sub(headPt(th+d,ph)).normalize();
+  /* the ring point in the same direction as seen from the head's axis (monotonic around: the strip never twists) */
+  const a=Math.atan2(P1.z-BC.headC.z,P1.x-BC.headC.x),r0=neckRingR(NL,a),P0=V3(NL.cx+Math.cos(a)*r0,NL.y,NL.cz+Math.sin(a)*r0);
+  const L=P1.distanceTo(P0),v2=v*v,v3=v2*v,h00=2*v3-3*v2+1,h10=v3-2*v2+v,h01=-2*v3+3*v2,h11=v3-v2;
+  const A=NL.ax?V3(NL.ax[0],NL.ax[1],NL.ax[2]).normalize():V3(0,1,0);
+  return P0.multiplyScalar(h00).add(A.multiplyScalar(L*h10)).add(P1.multiplyScalar(h01)).add(T1.multiplyScalar(L*h11));
+}
 function headHorizR(y,ph){const ny=(y-BC.headC.y)/BC.hd.ry;if(ny<-0.97||ny>0.999)return null;const P=headPt(Math.acos(ny),ph,0);return Math.hypot(P.x,P.z-BC.headC.z);}
 function earPos(side){const P=headPt(Math.acos(-0.12),side>0?0:Math.PI,0);P.x+=side*0.002;P.z-=0.01;return P;}
 /* =============== skin =============== */
@@ -149,38 +168,67 @@ function skinMat(){
 /* f(x,y,z) > 0 inside; the edge runs where f crosses 0. th: offset along the normal. Keeps the body vertex ids for posing */
 /* fs: one or more constraints f(x,y,z) > 0 inside; each triangle is clipped by every constraint in turn (a band narrower
    than a triangle is still cut exactly), the function evaluated at the clipped points themselves */
-function bodyPatch(geo,fs,th,mat){if(!Array.isArray(fs))fs=[fs];const P=geo.attributes.position,N=geo.attributes.normal,I=geo.index.array,n=P.count,AW=geo.userData.armw;
-  const pos=[],nor=[],uv=[],src=[],thAt=typeof th==='function'?th:()=>th,V=new Float32Array(n*fs.length);
-  for(let i=0;i<n;i++)for(let k=0;k<fs.length;k++)V[i*fs.length+k]=AW&&AW[i]>0.25?-1:fs[k](P.getX(i),P.getY(i),P.getZ(i));
-  const pt=i=>({x:P.getX(i),y:P.getY(i),z:P.getZ(i),nx:N.getX(i),ny:N.getY(i),nz:N.getZ(i),s:i,f:fs.map((_,k)=>V[i*fs.length+k])});
+function bodyPatch(geo,fs,th,mat,opt={}){if(!Array.isArray(fs))fs=[fs];const P=geo.attributes.position,N=geo.attributes.normal,I=geo.index.array,n=P.count,AW=geo.userData.armw;
+  /* the arms are one more clipping constraint (arm weight under 0.25), interpolated along the edges like the others:
+     a smooth side edge instead of a staircase along the mesh faces */
+  const ARM=()=>0;if(AW)fs=[...fs,ARM];
+  const pos=[],nor=[],uv=[],src=[],thAt=typeof th==='function'?th:()=>th,L=fs.length,V=new Float32Array(n*L);
+  for(let i=0;i<n;i++)for(let k=0;k<L;k++)V[i*L+k]=fs[k]===ARM?0.25-AW[i]:fs[k](P.getX(i),P.getY(i),P.getZ(i));
+  const pt=i=>({x:P.getX(i),y:P.getY(i),z:P.getZ(i),nx:N.getX(i),ny:N.getY(i),nz:N.getZ(i),s:i,f:fs.map((_,k)=>V[i*L+k])});
   const mix=(a,b,t,k)=>{const q={x:lerp(a.x,b.x,t),y:lerp(a.y,b.y,t),z:lerp(a.z,b.z,t),nx:lerp(a.nx,b.nx,t),ny:lerp(a.ny,b.ny,t),nz:lerp(a.nz,b.nz,t),s:t<0.5?a.s:b.s};
-    q.f=fs.map((fn,j)=>j<=k?lerp(a.f[j],b.f[j],t):fn(q.x,q.y,q.z));return q;};
-  for(let t=0;t<I.length;t+=3){const a=I[t],b=I[t+1],c=I[t+2];let ok=true;for(let k=0;k<fs.length;k++){const L=fs.length;if(V[a*L+k]<=0&&V[b*L+k]<=0&&V[c*L+k]<=0&&!(fs.length>1)){ok=false;break;}}if(!ok)continue;
+    q.f=fs.map((fn,j)=>j<=k||fn===ARM?lerp(a.f[j],b.f[j],t):fn(q.x,q.y,q.z));return q;};
+  for(let t=0;t<I.length;t+=3){const a=I[t],b=I[t+1],c=I[t+2];let ok=true;for(let k=0;k<L;k++){if(V[a*L+k]<=0&&V[b*L+k]<=0&&V[c*L+k]<=0){ok=false;break;}}if(!ok)continue;
     let poly=[pt(a),pt(b),pt(c)];
-    for(let k=0;k<fs.length&&poly.length>=3;k++){const out=[];for(let q=0;q<poly.length;q++){const A=poly[q],Bv=poly[(q+1)%poly.length],fa=A.f[k],fb=Bv.f[k];if(fa>0)out.push(A);if((fa>0)!==(fb>0))out.push(mix(A,Bv,fa/(fa-fb),k));}poly=out;}
+    for(let k=0;k<L&&poly.length>=3;k++){const out=[];for(let q=0;q<poly.length;q++){const A=poly[q],Bv=poly[(q+1)%poly.length],fa=A.f[k],fb=Bv.f[k];if(fa>0)out.push(A);if((fa>0)!==(fb>0))out.push(mix(A,Bv,fa/(fa-fb),k));}poly=out;}
     if(poly.length<3)continue;
     for(let q=1;q+1<poly.length;q++)for(const v of [poly[0],poly[q],poly[q+1]]){const l=Math.hypot(v.nx,v.ny,v.nz)||1,nx=v.nx/l,ny=v.ny/l,nz=v.nz/l,h=thAt(v.x,v.y,v.z);
       pos.push(v.x+nx*h,v.y+ny*h,v.z+nz*h);nor.push(nx,ny,nz);uv.push(Math.atan2(v.z,v.x)*0.12/TILE,v.y/TILE);src.push(v.s);}}
   if(!pos.length)return null;
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  /* hull:[y0,y1]: the front between those heights spans the body taut (a sports bra: straight over the cleavage and from
+     the apex down to the band); the lift is blurred (no crease round the apex) and tilts the body normals by its slope */
+  if(opt.hull){const [y0,y1]=opt.hull,C=0.004,X0=-0.26,NX=Math.ceil(0.52/C)+1,NY=Math.ceil((y1-y0)/C)+1,nv=pos.length/3,Z=new Float32Array(NX*NY).fill(-9);
+    /* the front height field, rasterised from the (front-facing) triangles */
+    for(let t=0;t<nv;t+=3){if(nor[t*3+2]+nor[t*3+5]+nor[t*3+8]<1.05)continue;const X=[0,1,2].map(k=>(pos[(t+k)*3]-X0)/C),Y=[0,1,2].map(k=>(pos[(t+k)*3+1]-y0)/C),Zt=[0,1,2].map(k=>pos[(t+k)*3+2]);
+      const d=(X[1]-X[0])*(Y[2]-Y[0])-(X[2]-X[0])*(Y[1]-Y[0]);if(Math.abs(d)<1e-9)continue;
+      for(let r=Math.max(0,Math.ceil(Math.min(...Y)));r<=Math.min(NY-1,Math.floor(Math.max(...Y)));r++)for(let c=Math.max(0,Math.ceil(Math.min(...X)));c<=Math.min(NX-1,Math.floor(Math.max(...X)));c++){
+        const u=((c-X[0])*(Y[2]-Y[0])-(X[2]-X[0])*(r-Y[0]))/d,v=((X[1]-X[0])*(r-Y[0])-(c-X[0])*(Y[1]-Y[0]))/d;if(u<-1e-6||v<-1e-6||u+v>1+1e-6)continue;
+        const z=Zt[0]+u*(Zt[1]-Zt[0])+v*(Zt[2]-Zt[0]),q=r*NX+c;if(z>Z[q])Z[q]=z;}}
+    /* taut: the upper convex hull along each row (over the cleavage), then up each column (from the band to the apex) */
+    const H=Z.slice(),hull=(n,at)=>{const h=[];for(let j=0;j<n;j++){const v=H[at(j)];if(v<-8)continue;
+        while(h.length>1){const [j1,v1]=h[h.length-2],[j2,v2]=h[h.length-1];if((v2-v1)*(j-j1)<=(v-v1)*(j2-j1))h.pop();else break;}h.push([j,v]);}
+      for(let a=0;a+1<h.length;a++){const [j1,v1]=h[a],[j2,v2]=h[a+1];for(let j=j1+1;j<j2;j++)if(H[at(j)]>-8)H[at(j)]=v1+(v2-v1)*(j-j1)/(j2-j1);}};
+    for(let r=0;r<NY;r++)hull(NX,j=>r*NX+j);for(let c=0;c<NX;c++)hull(NY,j=>j*NX+c);
+    let L=new Float32Array(NX*NY);for(let q=0;q<L.length;q++)L[q]=Z[q]>-8?Math.min(0.03,H[q]-Z[q]):0;
+    for(let it=0;it<24;it++){const L2=new Float32Array(L.length);for(let r=0;r<NY;r++)for(let c=0;c<NX;c++){let a=0,w=0;
+      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const rr=r+dr,cc=c+dc;if(rr<0||rr>=NY||cc<0||cc>=NX)continue;const ww=(dr?1:2)*(dc?1:2);a+=L[rr*NX+cc]*ww;w+=ww;}L2[r*NX+c]=a/w;}L=L2;}
+    const at=(r,c)=>L[clamp(r,0,NY-1)*NX+clamp(c,0,NX-1)];
+    for(let i=0;i<nv;i++){const fx=(pos[i*3]-X0)/C,fy=(pos[i*3+1]-y0)/C,c=Math.floor(fx),r=Math.floor(fy),tx=fx-c,ty=fy-r;
+      const a=at(r,c),b=at(r,c+1),e=at(r+1,c),f=at(r+1,c+1),w=smooth((nor[i*3+2]-0.2)/0.3)*smooth((pos[i*3+1]-y0)/0.012);if(!w)continue;
+      pos[i*3+2]+=lerp(lerp(a,b,tx),lerp(e,f,tx),ty)*w;
+      const lx=lerp(b-a,f-e,ty)/C*w,ly=lerp(e-a,f-b,tx)/C*w,nz=nor[i*3+2],nx=nor[i*3]/nz-lx,ny=nor[i*3+1]/nz-ly,l=Math.hypot(nx,ny,1);nor[i*3]=nx/l;nor[i*3+1]=ny/l;nor[i*3+2]=1/l;}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
   const ix=new Uint32Array(pos.length/3);for(let i=0;i<ix.length;i++)ix[i]=i;g.setIndex(new THREE.BufferAttribute(ix,1));
   g.userData.bodySrc=src;g.userData.bodySrcFeet=!!geo.userData.bodyFeet;g.userData.bodySrcN=n;
   const m=mk(g,mat);m.userData.under=1;return m;}
 /* a strap laid over the body: path points pulled onto the surface (nearest body point + normal), flat ribbon */
 function bodyStrap(G,geo,path,w,lift,mat){const P=geo.attributes.position,N=geo.attributes.normal,n=P.count;
-  const curve=new THREE.CatmullRomCurve3(path,false,'centripetal'),pts=curve.getSpacedPoints(40),out=[],nrm=[];
-  let lo=9,hi=-9;for(const p of path){lo=Math.min(lo,p.y);hi=Math.max(hi,p.y);}const AW=geo.userData.armw,cand=[];for(let i=0;i<n;i++){const y=P.getY(i);if(y>lo-0.04&&y<hi+0.04&&Math.abs(P.getX(i))<BC.shX*1.05&&!(AW&&AW[i]>0.2))cand.push(i);}
+  const curve=new THREE.CatmullRomCurve3(path,false,'centripetal'),pts=curve.getSpacedPoints(64),out=[],nrm=[];
+  let lo=9,hi=-9;for(const p of path){lo=Math.min(lo,p.y);hi=Math.max(hi,p.y);}const AW=geo.userData.armw,cand=[];for(let i=0;i<n;i++){const y=P.getY(i);if(y>lo-0.04&&y<hi+0.04&&Math.abs(P.getX(i))<BC.shX*1.05&&!(AW&&AW[i]>0.45))cand.push(i);}
   for(const p of pts){let bd=9,bj=-1;for(const i of cand){const d=(P.getX(i)-p.x)**2+(P.getY(i)-p.y)**2+(P.getZ(i)-p.z)**2;if(d<bd){bd=d;bj=i;}}
     const nn=V3(N.getX(bj),N.getY(bj),N.getZ(bj));out.push(V3(P.getX(bj),P.getY(bj),P.getZ(bj)).addScaledVector(nn,lift));nrm.push(nn);}
   /* smooth the snapped path a little (vertex to vertex it zig-zags) */
   for(let it=0;it<3;it++)for(let k=1;k<out.length-1;k++)out[k].lerp(out[k-1].clone().add(out[k+1]).multiplyScalar(0.5),0.5);
+  /* smoothing cuts the corners of a convex stretch (the top of the shoulder): every point back above its nearest body point */
+  for(const p of out){let bd=9,bj=-1;for(const i of cand){const d=(P.getX(i)-p.x)**2+(P.getY(i)-p.y)**2+(P.getZ(i)-p.z)**2;if(d<bd){bd=d;bj=i;}}
+    const nx=N.getX(bj),ny=N.getY(bj),nz=N.getZ(bj),h=(p.x-P.getX(bj))*nx+(p.y-P.getY(bj))*ny+(p.z-P.getZ(bj))*nz;if(h<lift){p.x+=nx*(lift-h);p.y+=ny*(lift-h);p.z+=nz*(lift-h);}}
   const sides=out.map((p,k)=>{const tn=(k<out.length-1?out[k+1].clone().sub(p):p.clone().sub(out[k-1])).normalize();return nrm[k].clone().cross(tn).normalize();});
   const m=mk(ribbon(out,sides,w,{noAO:true}),mat);m.userData.under=1;G.add(m);}
 function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
   const SH=SHOES[S.shoes.type]||{},showFeet=S.shoes.type==='none'||SH.open||SH.low||SH.clog,geo=bodyGeo(!!showFeet);
   const cy=shellBase(1).cy,nav=BC.core.spots&&BC.core.spots[2]?BC.core.spots[2][1]:cy+0.25,lx=BC.legX;
-  /* 'auto': black for men, a soft nude for women (against a light mannequin it reads as underwear, not a swimsuit) */
-  const dark=lumHex((SKINS[S.skin]||SKINS[0])[0])<0.25,c1=U.color&&U.color!=='auto'?U.color:fem?'#d9c2ae':dark?'#a3a3a5':'#1e1e1f',c2=U.color2&&U.color2!=='auto'?U.color2:fem?shade(c1,-0.05):dark?'#5b5d61':'#2b2b2d';
+  /* 'auto': black for men (charcoal heather on a dark mannequin), a soft nude for women */
+  const dark=lumHex((SKINS[S.skin]||SKINS[0])[0])<0.25,c1=U.color&&U.color!=='auto'?U.color:fem?'#d9c2ae':dark?'#5d6066':'#1e1e1f',c2=U.color2&&U.color2!=='auto'?U.color2:fem?shade(c1,-0.05):dark?'#2c2e33':'#2b2b2d';
   const main=fabric('jersey',c1),band=fabric('rib',c2);
   const prevCtx=MK_CTX,prevLayer=MK_LAYER;MK_CTX='none';MK_LAYER='none';
   /* briefs / boxers: waist line (a touch higher at the back) and leg openings around each leg (outer, front, inner, back
@@ -196,29 +244,52 @@ function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
     const wbH=fem?0.014:0.03,m2=bodyPatch(geo,[(x,y,z)=>fW(x,y,z)+0.0004,fL,(x,y,z)=>y-(wy(x,z)-wbH)],0.0024,band);if(m2)G.add(m2);
     /* leg openings: a narrow elastic edge (boxers: a short hem) */
     const m3=bodyPatch(geo,[fW,(x,y,z)=>fL(x,y,z)+0.0003,(x,y,z)=>H(x,z)+(B==='boxer'||B==='trunk'?0.015:0.009)-y],0.0022,B==='boxer'||B==='trunk'?main:band);if(m3)G.add(m3);}
-  /* bra: band under the bust, cups round each apex, the gore between them, straps over the shoulders */
+  /* bra: one continuous outline Top(x,z) over a band (front: gore, cups, side wings; back: the band or a racerback),
+     every edge a smooth curve of the body coordinates, straps laid over the shoulders along the real surface */
   if(fem&&U.bra&&U.bra!=='none'&&BC.core.spots&&BC.core.spots[1]){
-    const sp=BC.core.spots,ax=Math.abs(sp[1][0]),ay=sp[1][1],yu=ay-0.085,T=U.bra;
-    const bandF=(x,y,z)=>Math.min(y-(yu-(T==='sports'?0.05:0.03)),yu+0.014-y);
-    const cup=(x,y,z)=>{if(z<0)return -1;const dx=Math.abs(x)-ax,dy=y-ay,ry=dy>0?(T==='balconette'?0.032:T==='bralette'?0.06:0.055):0.09,rx=dx>0?0.08:0.07;
-      let f=1-Math.hypot(dx/rx,dy/ry);if(T==='bralette')f=Math.min(f,(ay+0.065-y)*0.75-Math.abs(dx)+0.0);return f*0.05;};
-    const gore=(x,y,z)=>z>0?Math.min(ax-Math.abs(x),y-yu,yu+0.035-y,0.02):-1;
-    /* sports bra: front up to a scoop between the cups, the back a band and a racerback (a Y narrowing to the neck) */
-    const sports=(x,y,z)=>{const top=z>0?ay+0.07-0.035*gauss(x,0.05):yu+0.055;let f=Math.min(y-(yu-0.05),top-y);
-      if(z<=0){const t=clamp((y-(yu+0.045))/(BC.shY-0.05-(yu+0.045)),0,1),hw=0.032+0.2*Math.pow(1-t,2.2);f=Math.max(f,Math.min(hw-Math.abs(x),BC.shY-0.05-y,y-(yu-0.05)));}return f;};
-    const fBra=T==='sports'?(x,y,z)=>Math.abs(x)>BC.shX*0.82?-1:sports(x,y,z):(x,y,z)=>Math.abs(x)>BC.shX*0.8?-1:Math.max(bandF(x,y,z),cup(x,y,z),gore(x,y,z));
-    const cupTh=(x,y,z)=>0.0014+0.0012*Math.max(0,cup(x,y,z)/0.05);
-    const mb=bodyPatch(geo,fBra,cupTh,main);if(mb)G.add(mb);
+    const sp=BC.core.spots,ax=Math.abs(sp[1][0]),ay=sp[1][1],yu=ay-0.085,T=U.bra,k=BC.shX/0.175,sports=T==='sports';
+    const P=geo.attributes.position,AW=geo.userData.armw;
+    /* a point on the body surface: the vertex nearest (x,y) on the front (s=1) or the back (s=-1); s=0: the top of the shoulder (max y) at (x,z) */
+    const onBody=(x,a,s)=>{for(let r=0.008;r<0.04;r*=1.5){let best=null,bv=-9;for(let i=0;i<P.count;i++){if(AW&&AW[i]>0.45)continue;
+      const px=P.getX(i),py=P.getY(i),pz=P.getZ(i);if(Math.abs(px-x)>r||Math.abs((s?py:pz)-a)>r||s*pz<0)continue;const v=s?-Math.hypot(px-x,py-a):py;if(v>bv){bv=v;best=V3(px,py,pz);}}if(best)return best;}return V3(x,a,0);};
+    const smax=(a,b,r)=>{const h=clamp(0.5+0.5*(b-a)/r,0,1);return lerp(a,b,h)+r*h*(1-h);};
+    const fr=z=>smooth((z+0.04)/0.06),bandY=yu+0.012,wingY=ay-0.01,yb0=yu-(sports?0.05:T==='bralette'?0.035:0.03);
+    /* front neckline / cup tops along x (dx from the apex; sports: a scoop, then the armhole falling from the strap to the side) */
+    const pk={tshirt:[ay+0.055,0.008,0.08,1.4,0.1,-0.035],balconette:[ay+0.03,0.02,0.06,2,0.11,-0.045]}[T];
+    const topF=x=>{const X=Math.abs(x),dx=X-ax;
+      if(sports){const t=X<0.075*k?ay+0.03+0.05*(X/(0.075*k))**2:ay+0.08;return X<0.1*k?t:ay+0.08*(1-Math.sqrt(Math.max(0,1-((0.155*k-Math.min(X,0.155*k))/(0.055*k))**2)));}
+      if(T==='bralette'){const d=Math.hypot(dx,0.01),tri=ay+0.07-(dx<0?1.9:2.4)*(d-0.01);return smax(tri,bandY,0.01);}
+      const [Pk,d0,dr,pw,sp0,gr]=pk,cup=dx<d0?Pk-dr*Math.pow((d0-dx)/sp0,pw):Pk-(Pk-wingY)*smooth((dx-d0)/0.04);
+      return smax(smax(cup,ay+gr,0.012),bandY,0.01);};
+    /* back: the band rising into the side wings (sports: a panel and the racerback stem up the spine) */
+    const topB=x=>{const X=Math.abs(x);if(sports){const pn=yu+0.05+(ay-0.005-yu-0.05)*smooth((X-0.08*k)/(0.07*k));return smax(pn,yu+0.05+(ay+0.02-yu-0.05)*(1-smooth((X-0.02)/0.03)),0.01);}
+      return T==='bralette'?bandY:bandY+(wingY-bandY)*smooth((X-0.09*k)/(0.06*k));};
+    const top=(x,z)=>lerp(topB(x),topF(x),fr(z));
+    let fBra=(x,y,z)=>Math.min(y-yb0,top(x,z)-y);
+    /* racerback straps: up from the front panel, over the trapezius, down to the spine; distance to the path on the body */
+    if(sports){const path=[];for(const sd of [-1,1]){const c=new THREE.CatmullRomCurve3([onBody(sd*0.0875*k,ay+0.07,1),onBody(sd*0.09*k,ay+0.125,1),onBody(sd*0.09*k,-0.035,0),
+        onBody(sd*0.08*k,ay+0.11,-1),onBody(sd*0.04*k,ay+0.045,-1),onBody(0,ay+0.012,-1)],false,'centripetal');path.push(...c.getSpacedPoints(60));}
+      const hw=y=>0.017-0.003*smooth((y-(ay+0.1))/0.04),f0=fBra;
+      fBra=(x,y,z)=>{let d=9;for(const q of path){const e=(q.x-x)**2+(q.y-y)**2+(q.z-z)**2;if(e<d)d=e;}return smax(f0(x,y,z),hw(y)-Math.sqrt(d),0.008);};}
+    /* molded cups: padding thickest over the bust, thinning to a bare edge */
+    const pad={tshirt:0.0032,balconette:0.0028,bralette:0,sports:0.0006}[T];
+    const cupTh=(x,y,z)=>0.0014+pad*smooth((top(x,z)-y)/0.025)*smooth((y-yu)/0.03)*Math.exp(-(((Math.abs(x)-ax)/0.07)**2))*fr(z);
+    /* a sports bra compresses: the jersey spans the bust (taut over the cleavage and from the apex to the band) */
+    const mb=bodyPatch(geo,fBra,cupTh,main,sports?{hull:[yu,ay+0.09]}:{});if(mb)G.add(mb);
     /* under a strapless top (corset) the bra is strapless too */
     const strapless=S.top&&TOPS[S.top.type]&&TOPS[S.top.type].strap===0;
-    if(T!=='sports'&&!strapless){for(const sd of [-1,1]){const fx=sd*(ax+0.012),ty=T==='balconette'?ay+0.03:ay+0.05;
-      bodyStrap(G,geo,[V3(fx,ty,0.12),V3(sd*BC.shX*0.55,BC.shY-0.02,0.07),V3(sd*BC.shX*0.52,BC.shY+0.01,0.0),V3(sd*BC.shX*0.5,BC.shY-0.05,-0.08),V3(sd*(ax+0.005),yu+0.03,-0.11),V3(sd*(ax+0.01),yu-0.012,-0.12)],T==='bralette'?0.007:0.011,0.0024,band);}}
-    else{const mb2=bodyPatch(geo,[fBra,(x,y,z)=>y-(yu-0.05)+0.0003,(x,y,z)=>yu-0.025-y],0.0024,band);if(mb2)G.add(mb2);}}
+    if(!sports&&!strapless){for(const sd of [-1,1]){const rx=T==='bralette'?ax:ax+pk[1],ry=T==='bralette'?ay+0.064:pk[0]-0.005;
+      bodyStrap(G,geo,[onBody(sd*rx,ry,1),onBody(sd*0.095*k,ay+0.12,1),onBody(sd*0.095*k,-0.035,0),onBody(sd*0.1*k,ay+0.09,-1),onBody(sd*0.105*k,yu+0.035,-1),onBody(sd*0.105*k,bandY-0.002,-1)],
+        T==='bralette'?0.007:0.011,0.0024,band);}}
+    /* the elastic underband (sports, bralette) */
+    if(sports||T==='bralette'){const mb2=bodyPatch(geo,[fBra,(x,y,z)=>y-yb0+0.0003,(x,y,z)=>yb0+(sports?0.025:0.02)-y],0.0024,band);if(mb2)G.add(mb2);}}
   MK_CTX=prevCtx;MK_LAYER=prevLayer;}
 function buildBody(G){
   const skin=skinMat();
   const SH=SHOES[S.shoes.type]||{},showFeet=S.shoes.type==='none'||SH.open||SH.low||SH.clog;
   G.add(mk(bodyGeo(!!showFeet),skin));
-  G.add(mk(surf(96,64,(u,v)=>headPt(v*Math.PI,-u*TAU),{wrapU:true,noAO:true}),skin));
-
+  /* the head ends on the line where the neck strip starts (both share it exactly): watertight and smooth */
+  if(BC.neckLoft){G.add(mk(surf(96,64,(u,v)=>{const ph=-u*TAU;return headPt(v*headAttachTh(ph),ph);},{wrapU:true,noAO:true}),skin));
+    G.add(mk(surf(96,14,(u,v)=>neckLoftPt(-u*TAU,1-v),{wrapU:true,noAO:true}),skin));}
+  else G.add(mk(surf(96,64,(u,v)=>headPt(v*Math.PI,-u*TAU),{wrapU:true,noAO:true}),skin));
 }

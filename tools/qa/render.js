@@ -1,6 +1,7 @@
 // Render QA: headless Chromium (SwiftShader WebGL) + Playwright, bez serwera i bez CDN.
 // Użycie: node tools/qa/render.js <spec.js> <out-dir>
-//   spec.js eksportuje: { W, H, shots: [{ name, state: s => {...mutacja...} | 'inspo:<id>', cams: ['full','side',...] }] }
+//   spec.js eksportuje: { W, H, shots: [{ name, state: s => {...mutacja...} | 'inspo:<id>', cams: ['full','side',...], post?: g => {...} }] }
+//   post: wywoływane po zbudowaniu figury (np. ukrycie części meshy do diagnostyki)
 // Każdy shot daje <out-dir>/<name>.png (kamery obok siebie) + raport błędów konsoli.
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const fs = require('fs'), path = require('path');
@@ -37,10 +38,11 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/pn
   await page.evaluate(() => {
     const CAMS = { full: [0, 1.0, 5.4, 0.9], side: [5.4, 1.0, 0, 0.9], back: [0, 1.0, -5.4, 0.9], q: [3.6, 1.1, 3.9, 0.9],
       upper: [0, 1.4, 2.0, 1.32], upperq: [1.3, 1.45, 1.6, 1.32], uside: [2.0, 1.4, 0, 1.32], legs: [0.6, 0.55, 2.3, 0.5], head: [0.5, 1.65, 1.0, 1.58], feet: [0.7, 0.25, 1.3, 0.1] };
-    window.__render = (state, cams, W, H) => {
+    window.__render = (state, cams, W, H, post) => {
       if (!window.__R) { const r = makeRenderer({ preserveDrawingBuffer: true }); r.setPixelRatio(1); const sc = new THREE.Scene(); const g = new THREE.Group(); sc.add(g); setupScene(sc, r); applyOpts(sc, r, false); window.__R = { r, sc, g }; }
       const { r, sc, g } = window.__R; r.setSize(W, H, false);
       const t0 = performance.now(); buildInto(g, state, false); const ms = performance.now() - t0;
+      if (post) post(g);
       r.shadowMap.needsUpdate = true;
       const out = document.createElement('canvas'); out.width = W * cams.length; out.height = H; const cx = out.getContext('2d');
       const k = (state.height || 177) / 177;
@@ -55,10 +57,10 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/pn
   const report = [];
   for (const sh of spec.shots) {
     const before = errs.length;
-    const res = await page.evaluate(([fnSrc, inspo, cams, W, H]) => {
-      const fn = fnSrc ? eval('(' + fnSrc + ')') : null;
-      return window.__render(window.__state(fn, inspo), cams, W, H);
-    }, [sh.state ? sh.state.toString() : null, sh.inspo || null, sh.cams || ['full', 'side', 'back'], spec.W || 360, spec.H || 640]);
+    const res = await page.evaluate(([fnSrc, inspo, cams, W, H, postSrc]) => {
+      const fn = fnSrc ? eval('(' + fnSrc + ')') : null, post = postSrc ? eval('(' + postSrc + ')') : null;
+      return window.__render(window.__state(fn, inspo), cams, W, H, post);
+    }, [sh.state ? sh.state.toString() : null, sh.inspo || null, sh.cams || ['full', 'side', 'back'], spec.W || 360, spec.H || 640, sh.post ? sh.post.toString() : null]);
     fs.writeFileSync(path.join(outDir, sh.name + '.png'), Buffer.from(res.url.split(',')[1], 'base64'));
     const e = errs.slice(before);
     report.push(`${sh.name}: ${Math.round(res.ms)} ms${e.length ? '  ERR: ' + e.join(' | ') : ''}`);

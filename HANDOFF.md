@@ -278,3 +278,27 @@ Kolejne rundy:
   - `NODE_PATH=…/node_modules node tools/cloud/test-db.js` (115 testów RLS).
   - `node tools/cloud/e2e.js <dir>` (scenariusz w przeglądarce).
   - QA renderów (render/sweep/ui) ustawia zgodę i „powitanie widziane” skryptem startowym.
+
+## Runda 11 (2026-10-17): długie włosy (fizyka), bielizna, buty, mięśnie, szyja
+- **Długie włosy (`js/hair.js`):** każda kolumna arkusza (long, lob, wolf, bob, mullet) i każdy lok (dreads, braids) to
+  symulowane pasmo: `hairDrapeSim` to „dynamic follow the leader” (nierozciągliwe, Verlet, korekta prędkości 0.9), kolizje z polem
+  `hairField` (promień głowy wokół osi głowy i obwiednia ciała + ubrań wokół osi tułowia, stablicowane po y i kącie, z
+  pochodną po y: na barkach pasmo jest wypychane w górę), tarcie przy kontakcie, luźne więzy z sąsiednią kolumną.
+  Włosy sięgające barków dzielą się na panele (`sA=1.5` rad od przodu): kosmyki przed barkami, reszta na plecach (siła
+  wyboru tylko w pasie barku, `xt` = gdzie pasmo ma się ułożyć w poprzek). Arkusz: symulowane co 3. pasmo, pośrednie
+  interpolowane + `hairKeepOff`. Wynik w `DRAPE_CACHE` (klucz: korzenie + sygnatura pola), więc zmiana koloru/butów nic nie kosztuje.
+  Grzywka (`noBody`) zostaje na starym, statycznym generatorze `sheetColsStatic`. Twists (`short`) też po staremu.
+- **Bielizna (`buildUnder`):** stanik to jedna ciągła funkcja konturu `top(x,z)` (przód: mostek, miseczki, skrzydła; tył:
+  pas lub racerback), bez obcinania boków (`side` usunięte, to dawało wcięcia). Sportowy: ramiączka racerback jako
+  odległość od ścieżki po ciele, kompresja `bodyPatch(...,{hull:[y0,y1]})` (otoczka wypukła wierszy i kolumn pola wysokości,
+  rozmyta, normalne ciała przechylone gradientem uniesienia: bez stożków przy szczycie biustu). Ramiączka zwykłych
+  staników: `onBody()` + `bodyStrap` z rzutowaniem z powrotem nad skórę (nie zapadają się na barku).
+- **Buty:** kopyto dopasowane do stopy (`makeLast`, `BC.footPts`), brak dziury przy pięcie (`gx` ograniczone kopytem).
+- **Mięśnie:** `muscleRelief` (rowki anatomiczne) + delta `mx` w mhdata (maxmuscle), patrz `tools/mh/process.py`.
+- **Szyja:** głowa ucięta na `headAttachTh`, loft Hermite'a `neckLoftPt` do pierścienia szyi z `neckFlare` (mh.js).
+- QA tej rundy: specy w `/tmp/claude-0/r11` (nie w repo); render.js ma opcję `post(g)`.
+- `tools/qa/ui.js` naprawiony (3 niestabilne/nieaktualne kroki, 2 z nich padały już po rundzie 10): klik w sekcje manekina
+  przez `openAcc` (panel rysuje się od nowa po kliknięciu), wyszukiwarka czeka na wynik (miniatury blokują wątek), zakładka
+  „Polubione” po tekście (Account rysuje zakładki bez `data-mine`), jawne `outer.close` w teście kodu. Błąd pokazuje linię testu.
+- Sweep 1912/1912 bez uwag. Uwaga: w jednym długim przebiegu Chromium (SwiftShader) padł po ~1720 przypadkach; reszta
+  przeszła osobnym przebiegiem z filtrem. Sterta przy budowie włosów stabilna (cache drapowania ma limit 12).

@@ -47,27 +47,20 @@ function hairOutward(g,axis){const p=g.attributes.position.array,n=g.attributes.
 /* depth in the hair: partings and roots darker, the crowns of the clumps lighter (multiplies the vertex colours) */
 function hairShade(g,SH){const c=g.attributes.color;if(!c||SH.length!==c.count)return;for(let i=0;i<c.count;i++){c.setXYZ(i,c.getX(i)*SH[i],c.getY(i)*SH[i],c.getZ(i)*SH[i]);}c.needsUpdate=true;}
 /* ---------- hanging sheet (bob, long hair, mullet, fringe) ---------- */
-function hairSheet(G,mat,o){
-  const T=hairTexP(),hc=BC.headC,nu=o.nu||96,nv=o.nv||48,cols=[],shs=[];
+/* a fringe (over the forehead only): each column hangs from the scalp, clear of the head, bridging its hollows */
+function sheetColsStatic(o,nu,nv){
+  const T=hairTexP(),hc=BC.headC,cols=[],shs=[];
   for(let i=0;i<=nu;i++){
-    const u=i/nu,ph0=lerp(o.ph0,o.ph1,u),y0=o.y0(ph0),col=[],shc=[];let Rp=null,tb=0,y1=o.y1(ph0);
+    const u=i/nu,ph0=lerp(o.ph0,o.ph1,u),y0=o.y0(ph0),col=[],shc=[];let Rp=null,y1=o.y1(ph0);
     /* the ends are not cut with a ruler: a soft, uneven line (longer and shorter sections) */
     {const ct=0.5+0.5*Math.sin(ph0*7+1.6*fbm(ph0*2,1.3,2.1));y1-=0.016*ct*smooth((y0-y1-0.06)/0.12);}
-    /* hair that ends just past the point where it meets the shoulder does not ride out over it in a flat plate: it ends
-       resting there (longer hair keeps falling, in front of or behind the shoulder) */
-    if(!o.noBody){let yc=null,Rh=0;for(let y=y0;y>y1-0.08;y-=0.004){const hr=headHorizR(y,ph0);Rh=hr!=null?Math.max(Rh*0.0,hr+o.thick):Math.max(Rh,BC.neckR+0.016);if(hr!=null)Rh=hr+o.thick;
-        if(envR(bodyEnv(y,LAYERS),ph0)+0.013>Rh+0.022){yc=y;break;}}
-      if(yc!=null&&y1<yc&&yc-y1<0.09)y1=yc-0.006-0.01*(0.5+0.5*Math.sin(ph0*5));}
-    /* hair does not lie flat out to the shoulder tip: over the shoulders it falls in front of or behind them */
-    const sx=Math.cos(ph0)>=0?1:-1,af=angFront(ph0),toFront=af<1.42,tgt=toFront?FRONT-sx*(0.42+0.3*smooth((af-0.9)/0.5)):BACKA+sx*(0.25+0.5*smooth((Math.PI-af)/1.9)),dph=Math.atan2(Math.sin(tgt-ph0),Math.cos(tgt-ph0));
-    /* pass 1: the radius each row needs (head + thickness, clear of the body and clothes) */
+    /* pass 1: the radius each row needs (head + thickness) */
     const PH=[],RQ=[],st=Math.abs(y1-y0)/nv;
     for(let j=0;j<=nv;j++){
-      const v=j/nv,y=lerp(y0,y1,v);if(!o.noBody){const e=envR(bodyEnv(y,LAYERS),ph0);tb=Math.max(tb,smooth((e-(BC.neckR+0.035))/0.06),smooth((BC.shY+0.1-y)/0.07));}const ph=ph0+tb*dph,hr=headHorizR(y,ph),th=lerp(o.thin||0.006,o.thick,smooth(v/0.2));
+      const v=j/nv,y=lerp(y0,y1,v),ph=ph0,hr=headHorizR(y,ph),th=lerp(o.thin||0.006,o.thick,smooth(v/0.2));
       let R=hr!=null?hr+th:0;
       if(hr!=null){const bk=hairBandK((y-hc.y)/BC.hd.ry,ph);if(bk>0)R=lerp(R,Math.min(R,hr+HB_H-0.003),bk);}
       if(hr!=null)R+=0.017*gauss(angFront(ph)-Math.PI/2,0.33)*gauss(y-(hc.y-0.012),0.045);
-      if(!o.noBody)R=Math.max(R,envR(bodyEnv(y,LAYERS),ph)+0.013);
       if(hr==null)R=Math.max(R,BC.neckR+0.016);
       PH.push(ph);RQ.push(R);}
     /* pass 2: hair is stiff enough to bridge: above an obstacle (the nape, the upper back, a collar) it already leans out
@@ -88,6 +81,128 @@ function hairSheet(G,mat,o){
     }
     cols.push(col);shs.push(shc);
   }
+  return {cols,shs};
+}
+/* collision field for falling hair: the radius a strand keeps round the head axis (the head) and round the body axis (the
+   torso and the clothes over it), tabulated over height and angle, with its slope in y: on a near-flat surface (the top of
+   the shoulders, the crown) a strand is pushed up onto it, not out sideways */
+function hairField(yTop,yBot){
+  const hc=BC.headC,ry=BC.hd.ry,DY=0.004,NA=180,NY=Math.ceil((yTop-yBot)/DY)+2,Hd=new Float32Array(NY*NA),Bd=new Float32Array(NY*NA),yB=hc.y-ry*0.55;
+  for(let j=0;j<NY;j++){const y=yTop-j*DY,env=y<yB?bodyEnv(y,LAYERS):null;
+    for(let a=0;a<NA;a++){const ph=a/NA*TAU,hr=headHorizR(y,ph);Hd[j*NA+a]=hr!=null?hr:0;Bd[j*NA+a]=env?envR(env,ph):0;}}
+  const at=(T,y,ph,out)=>{const fj=(yTop-y)/DY;if(fj<0||fj>NY-1.001){out[0]=0;return;}const j=Math.floor(fj),tj=fj-j,fa=(((ph%TAU)+TAU)%TAU)/TAU*NA,a=Math.floor(fa)%NA,ta=fa-Math.floor(fa),a1=(a+1)%NA;
+    const r0=lerp(T[j*NA+a],T[j*NA+a1],ta),r1=lerp(T[(j+1)*NA+a],T[(j+1)*NA+a1],ta);
+    /* no surface at this height on either row: none (an edge row keeps its own value) */
+    if(r0<=0&&r1<=0){out[0]=0;return;}out[0]=lerp(r0>0?r0:r1,r1>0?r1:r0,tj);out[1]=((r0>0?r0:r1)-(r1>0?r1:r0))/DY;};
+  let sig=yTop.toFixed(4)+','+yBot.toFixed(4);{let h=0;for(let i=0;i<Bd.length;i+=7)h=(h*31+Math.round(Bd[i]*1e4)+Math.round(Hd[i]*1e4)*7)%1000000007;sig+=','+h;}
+  return {sig,head:(y,ph,out)=>at(Hd,y,ph,out),body:(y,ph,out)=>at(Bd,y,ph,out)};
+}
+/* strands of falling hair, simulated (position-based): each one fixed at its root on the scalp, inextensible, stiff against
+   bending, pulled by gravity, held off the head and the body (with friction where it rests on them), its neighbours in the
+   sheet holding it loosely (it fans, it does not tear). Below the shoulders the front locks are drawn in front of them, the
+   rest behind (a push forwards or back where they cross the shoulder decides the side; the tips just follow). A root gives its angle and height on the scalp (or its first two points, p0 and p1), its length, the side it falls
+   to (bias) and where it settles across (xt). Returns the strands as columns of points (root first) */
+const DRAPE_CACHE=new Map();
+function hairDrape(roots,nv,o){
+  /* the same hair over the same body and clothes drapes the same: remembered (a change of colour, shoes, ... is free) */
+  const key=nv+'|'+(o.steps||0)+'|'+[o.thin,o.thick,o.bodyClr,o.lat,o.band,o.stiff].join(',')+'|'+o.field.sig+'|'+roots.map(r=>[r.ph,r.y,r.len,r.bias,r.xt,r.p0?r.p0.x+','+r.p0.y+','+r.p0.z+','+r.p1.x+','+r.p1.y+','+r.p1.z:''].map(v=>typeof v==='number'?v.toFixed(5):v).join(',')).join(';');
+  const hit=DRAPE_CACHE.get(key);if(hit)return hit.map(c=>c.map(p=>p.clone()));
+  /* a wide sheet: every third strand is simulated, the ones between follow their neighbours (kept off the body) */
+  let cols;if(o.lat!==false&&roots.length>12&&!o.all){const gi=[];for(let i=0;i<roots.length;i+=3)gi.push(i);if(gi[gi.length-1]!==roots.length-1)gi.push(roots.length-1);
+    const gc=hairDrapeSim(gi.map(i=>roots[i]),nv,o);cols=[];
+    for(let q=0;q+1<gi.length;q++){const a=gi[q],b=gi[q+1];for(let i=a;i<b;i++){if(i===a){cols.push(gc[q]);continue;}const t=(i-a)/(b-a);
+      cols.push(gc[q].map((P,j)=>{const p=P.clone().lerp(gc[q+1][j],t);return j<2?p:hairKeepOff(p,j/nv,o);}));}}
+    cols.push(gc[gc.length-1]);}
+  else cols=hairDrapeSim(roots,nv,o);
+  DRAPE_CACHE.set(key,cols);if(DRAPE_CACHE.size>12)DRAPE_CACHE.delete(DRAPE_CACHE.keys().next().value);
+  return cols.map(c=>c.map(p=>p.clone()));
+}
+/* push a point between simulated strands out of the head and body (as the strands themselves are) */
+function hairKeepOff(p,v,o){const hc=BC.headC,F=o.field,t=[0,0],cl=lerp(o.thin,o.thick,smooth(v/0.2));
+  for(let it=0;it<2;it++){{const dx=p.x,dz=p.z-hc.z,r=Math.hypot(dx,dz)||1e-6;F.head(p.y,Math.atan2(dz,dx),t);if(t[0]>0&&r<t[0]+cl){const d=(t[0]+cl-r)/(1+t[1]*t[1]);p.x+=dx/r*d;p.z+=dz/r*d;p.y-=t[1]*d;}}
+    {const dx=p.x,dz=p.z,r=Math.hypot(dx,dz)||1e-6;F.body(p.y,Math.atan2(dz,dx),t);if(t[0]>0&&r<t[0]+o.bodyClr){const d=(t[0]+o.bodyClr-r)/(1+t[1]*t[1]);p.x+=dx/r*d;p.z+=dz/r*d;p.y-=t[1]*d;}}}
+  return p;}
+function hairDrapeSim(roots,nv,o){
+  const hc=BC.headC,ry=BC.hd.ry,n=roots.length,np=nv+1,F=o.field,tmp=[0,0];
+  const X=new Float32Array(n*np*3),Q=new Float32Array(n*np*3),D=new Float32Array(n*np*3),SEG=new Float32Array(n),CL=new Float32Array(np);
+  for(let j=0;j<np;j++)CL[j]=lerp(o.thin,o.thick,smooth(j/nv/0.2));
+  /* how far a point keeps from the head: its clearance, more over the ears, less under a headband */
+  const headClr=(j,y,ph)=>{let c=CL[j]+0.017*gauss(angFront(ph)-Math.PI/2,0.33)*gauss(y-(hc.y-0.012),0.045);
+    if(o.band){const bk=hairBandK((y-hc.y)/ry,ph);if(bk>0)c=lerp(c,Math.min(c,HB_H-0.003),bk);}return c;};
+  const yHd=hc.y-ry*0.98,yBd=hc.y-ry*0.55,collide=(k,j)=>{let hit=false;const x=X[k],y=X[k+1],z=X[k+2];
+    /* head (axis through its centre) */
+    if(y>yHd){const dx=x,dz=z-hc.z,r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.head(y,ph,tmp);
+      if(tmp[0]>0){const R=tmp[0]+headClr(j,y,ph);if(r<R){const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit=true;}}}
+    /* body and clothes (axis through the torso) */
+    if(X[k+1]<yBd){const dx=X[k],dz=X[k+2],r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[k+1],ph,tmp);
+      if(tmp[0]>0){const R=tmp[0]+o.bodyClr;if(r<R){const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit=true;}}}
+    return hit;};
+  /* start: hanging straight down from the root, pushed out of the head and body */
+  for(let s=0;s<n;s++){const R0=roots[s],seg=R0.len/nv;SEG[s]=seg;
+    for(let j=0;j<np;j++){const k=(s*np+j)*3;
+      if(j<2&&R0.p0){const P=j?R0.p1:R0.p0;X[k]=P.x;X[k+1]=P.y;X[k+2]=P.z;}
+      else if(j<2){const y=R0.y-j*seg,hr=headHorizR(y,R0.ph),r=(hr!=null?hr:BC.neckR)+o.thin;X[k]=Math.cos(R0.ph)*r;X[k+1]=y;X[k+2]=hc.z+Math.sin(R0.ph)*r;}
+      else{const p=(s*np+j-1)*3;X[k]=X[p];X[k+1]=X[p+1]-seg;X[k+2]=X[p+2];for(let it=0;it<6;it++)collide(k,j);}
+      Q[k]=X[k];Q[k+1]=X[k+1];Q[k+2]=X[k+2];}}
+  /* rest spacing between neighbouring strands (the sheet may fan out to half as much again, not further) */
+  const LAT=new Float32Array(n*np);for(let s=0;s+1<n;s++)for(let j=0;j<np;j++){const a=(s*np+j)*3,b=a+np*3;LAT[s*np+j]=Math.hypot(X[a]-X[b],X[a+1]-X[b+1],X[a+2]-X[b+2])*1.5+0.002;}
+  const loose=o.lat===false,dt=o.dt||(loose?1/65:1/50),G=9.8*dt*dt,yS=BC.shY+0.03,steps=o.steps||(loose?150:80),stiff=o.stiff!=null?o.stiff:0.01;
+  for(let st=0;st<steps;st++){
+    const damp=st<steps*0.6?0.95:0.85;
+    for(let s=0;s<n;s++){const bias=roots[s].bias;for(let j=2;j<np;j++){const k=(s*np+j)*3,vx=(X[k]-Q[k])*damp,vy=(X[k+1]-Q[k+1])*damp,vz=(X[k+2]-Q[k+2])*damp;
+      Q[k]=X[k];Q[k+1]=X[k+1];Q[k+2]=X[k+2];const w=bias?gauss(X[k+1]-yS,0.07)*smooth((nv-j)*SEG[s]/0.1):0;
+      X[k]+=vx+(roots[s].xt-X[k])*8*w*dt*dt;X[k+1]+=vy-G;X[k+2]+=vz+bias*9*w*dt*dt;}}
+    /* neighbours in the sheet: at most half as far again apart as they started */
+    if(o.lat!==false)for(let s=0;s+1<n;s++)for(let j=2;j<np;j++){const a=(s*np+j)*3,b=a+np*3,dx=X[b]-X[a],dy=X[b+1]-X[a+1],dz=X[b+2]-X[a+2],d=Math.sqrt(dx*dx+dy*dy+dz*dz),L=LAT[s*np+j];
+      if(d>L){const c=(d-L)/d*0.5;X[a]+=dx*c;X[a+1]+=dy*c;X[a+2]+=dz*c;X[b]-=dx*c;X[b+1]-=dy*c;X[b+2]-=dz*c;}}
+    /* follow the leader, from the root down: each particle exactly one segment from its parent (the strand cannot stretch),
+       its direction drawn a little towards the segment above (stiffness), then out of the head and body */
+    for(let s=0;s<n;s++){const L=SEG[s];for(let j=2;j<np;j++){const k=(s*np+j)*3,a=k-3,b=k-6;D[k]=X[k];D[k+1]=X[k+1];D[k+2]=X[k+2];
+      let dx=X[k]-X[a],dy=X[k+1]-X[a+1],dz=X[k+2]-X[a+2],d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-9;dx/=d;dy/=d;dz/=d;
+      {const px=X[a]-X[b],py=X[a+1]-X[b+1],pz=X[a+2]-X[b+2],pd=Math.sqrt(px*px+py*py+pz*pz)||1e-9;dx+=(px/pd-dx)*stiff;dy+=(py/pd-dy)*stiff;dz+=(pz/pd-dz)*stiff;d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-9;}
+      X[k]=X[a]+dx/d*L;X[k+1]=X[a+1]+dy/d*L;X[k+2]=X[a+2]+dz/d*L;
+      let hit=false;for(let r=0;r<2;r++){if(!collide(k,j))break;hit=true;const ex=X[k]-X[a],ey=X[k+1]-X[a+1],ez=X[k+2]-X[a+2],ed=Math.sqrt(ex*ex+ey*ey+ez*ez)||1e-9;X[k]=X[a]+ex/ed*L;X[k+1]=X[a+1]+ey/ed*L;X[k+2]=X[a+2]+ez/ed*L;}
+      /* friction: a strand resting on the shoulder slides off it slowly */
+      if(hit){Q[k]=lerp(Q[k],X[k],0.45);Q[k+1]=lerp(Q[k+1],X[k+1],0.45);Q[k+2]=lerp(Q[k+2],X[k+2],0.45);}
+      D[k]=X[k]-D[k];D[k+1]=X[k+1]-D[k+1];D[k+2]=X[k+2]-D[k+2];}
+      /* the moves made by the leader-following become velocity unless taken back: each particle takes back most of its
+         child's move (the damping of "dynamic follow the leader") */
+      for(let j=2;j+1<np;j++){const k=(s*np+j)*3;Q[k]+=0.9*D[k+3];Q[k+1]+=0.9*D[k+4];Q[k+2]+=0.9*D[k+5];}}}
+  const cols=[];for(let s=0;s<n;s++){const c=[];for(let j=0;j<np;j++){const k=(s*np+j)*3;c.push(V3(X[k],X[k+1],X[k+2]));}cols.push(c);}
+  return cols;
+}
+function hairSheet(G,mat,o){
+  const T=hairTexP(),hc=BC.headC,nv=o.nv||48;
+  if(o.noBody){const nu=o.nu||96,{cols,shs}=sheetColsStatic(o,nu,nv);return sheetMesh(G,mat,o,cols,shs,nu,nv);}
+  /* hair long enough to reach the shoulders parts over them: locks in front, the rest down the back */
+  const span=o.ph1-o.ph0,yMin=Math.min(...Array.from({length:25},(_,i)=>o.y1(o.ph0+span*i/24))),split=yMin<BC.shY+0.08,sA=1.5;
+  const parts=[];if(split){const a=FRONT+sA,b=FRONT-sA+TAU;if(a>o.ph0+0.05)parts.push([o.ph0,a,1]);parts.push([Math.max(a,o.ph0),Math.min(b,o.ph1),-1]);if(b<o.ph1-0.05)parts.push([b,o.ph1,1]);}
+  else parts.push([o.ph0,o.ph1,0]);
+  const field=hairField(hc.y+BC.hd.ry*0.7,yMin-0.25);
+  let last=null;
+  for(const [p0,p1,side] of parts){const nu=Math.max(8,Math.round((o.nu||96)*(p1-p0)/span)),roots=[],ys=[];
+    for(let i=0;i<=nu;i++){const ph=lerp(p0,p1,i/nu),y0=o.y0(ph);let y1=o.y1(ph);
+      /* the ends are not cut with a ruler: a soft, uneven line (longer and shorter sections) */
+      {const ct=0.5+0.5*Math.sin(ph*7+1.6*fbm(ph*2,1.3,2.1));y1-=0.016*ct*smooth((y0-y1-0.06)/0.12);}
+      /* where it settles across the body: front locks fan over the collarbone and the bust, the back keeps its spread */
+      const sx=Math.cos(ph)>=0?1:-1,af=angFront(ph),xt=side>0?sx*lerp(0.06,0.13,smooth((af-0.9)/(sA-0.9))):clamp(Math.cos(ph)*0.16,-0.11,0.11);
+      roots.push({ph,y:y0,len:(y0-y1)*1.02,bias:side,xt});}
+    const cols=hairDrape(roots,nv,{field,thin:o.thin||0.006,thick:o.thick+(side<0?0.0015:0),bodyClr:0.013+(side<0?0.0015:0),band:!!(S.acc.headband&&S.acc.headband.type==='forehead'),stiff:o.stiff});
+    /* texture over the drape: waves, clumps with partings, flare and thinning ends (along the outward horizontal) */
+    const shs=[];
+    for(let i=0;i<=nu;i++){const col=cols[i],ph0=roots[i].ph,shc=[];
+      for(let j=0;j<=nv;j++){const v=j/nv,P=col[j],dx=P.x,dz=P.z-hc.z,r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx),y=P.y;
+        let Rw=r+(o.flare||0)*smooth(v)*smooth(v);
+        if(T.wave)Rw+=0.0028*T.wave*Math.sin((roots[i].y-y)*(36+T.wave*22)+ph*3)*smooth(v/0.3);
+        const cl=foldP(ph0*22+2.2*fbm(ph0*3,y*3,1))*0.5+0.5;Rw+=(0.0012+0.003*smooth(v/0.5))*(1-0.75*smooth((v-0.78)/0.22))*(cl-0.5)+0.0012*fbm(ph*9,y*14,2)-0.006*smooth((v-0.88)/0.12);
+        shc.push(lerp(0.9,1.03,cl)*lerp(0.92,1,smooth(v/0.25)));
+        const pw=ph+(T.wave?0.01*T.wave*Math.sin((roots[i].y-y)*28+ph*5)*smooth(v/0.3):0);
+        col[j]=V3(Math.cos(pw)*Rw,y,hc.z+Math.sin(pw)*Rw);}
+      shs.push(shc);}
+    last=sheetMesh(G,mat,Object.assign({},o,o.cards?{cards:Object.assign({},o.cards,{count:Math.round(o.cards.count*(p1-p0)/span)})}:{}),cols,shs,nu,nv);}
+  return last;
+}
+function sheetMesh(G,mat,o,cols,shs,nu,nv){
   const SH=[],g=surf(nu,nv,(u,v)=>{const i=Math.round(u*nu),j=Math.round(v*nv);SH.push(shs[i][j]);return cols[i][j];},{uRep:o.uRep||10,vRep:2,noAO:true});
   hairShade(g,SH);hairOutward(g,true);G.add(mk(g,mat));
   if(o.cards)hairCards(G,g,nu,nv,Object.assign({out:'axis'},o.cards));
@@ -139,27 +254,30 @@ function hairClear(y,ph,extra){
   if(hr==null)R=Math.max(R,BC.neckR+extra);return R;
 }
 function hairLocks(G,mat,o){
-  const hc=BC.headC,n=o.n,ga=Math.PI*(3-Math.sqrt(5)),R=rng(17);
-  for(let i=0;i<n*3&&G.children.length<2000;i++){
+  const hc=BC.headC,n=o.n,ga=Math.PI*(3-Math.sqrt(5)),R=rng(17),locks=[];
+  for(let i=0;i<n*3&&locks.length<600;i++){
     const yy=1-(i/(n*3-1))*1.6;if(yy<-0.6)break;
     const rr=Math.sqrt(Math.max(0,1-yy*yy)),ph0=i*ga;let ph=Math.atan2(Math.sin(ph0)*rr,Math.cos(ph0)*rr);
     const ny=yy;if(ny<hairlineNy(ph)+0.06)continue;
     const th=Math.acos(ny),P0=headPt(th,ph,o.base||0.008,false),pts=[P0];
     const out=P0.clone().sub(hc).normalize();
     let p=P0.clone().addScaledVector(out,o.stand||0.02);p.y-=0.006;
+    /* locks from the front of the head are combed back over it first (they do not fall over the face) */
     if(angFront(ph)<1.05&&!o.short){const v=P0.clone().sub(hc);for(let k=1;k<=4;k++){const a=-k*0.36,c=Math.cos(a),sn=Math.sin(a);const w=V3(v.x,v.y*c-v.z*sn,v.y*sn+v.z*c);w.multiplyScalar((w.length()+(o.base||0.008)+o.r*1.6+0.004)/w.length());p=hc.clone().add(w);pts.push(p.clone());}ph=Math.atan2(p.z-hc.z,p.x);}
     else pts.push(p.clone());
-    const len=o.len*(0.85+R()*0.3),steps=Math.max(3,Math.round(len/0.045)),dy=len/steps;
-    let Rp=Math.hypot(p.x,p.z-hc.z);
-    for(let k=0;k<steps;k++){
-      const y=p.y-dy*(o.short?0.5:1);
-      const d=wrapA(ph-FRONT);if(Math.abs(d)<1.15&&y<hc.y+0.06)ph+=Math.sign(d||1)*0.16;
-      const need=hairClear(y,ph,0.014+o.r);const Rn=Math.max(need,Rp-0.012+(o.short?0.01:0));Rp=Rn;
-      p=V3(Math.cos(ph)*Rn,y,hc.z+Math.sin(ph)*Rn);pts.push(p.clone());
-    }
-    const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');
-    G.add(mk(tubeAlong(curve,Math.max(8,steps*3),t=>o.r*(1-0.3*t*t)*(t<0.04?0.8:1),{seg:7}),mat));
-  }
+    locks.push({pts,ph,len:o.len*(0.85+R()*0.3)});}
+  if(o.short){for(const L of locks){const pts=L.pts;let p=pts[pts.length-1],ph=L.ph;const steps=Math.max(3,Math.round(L.len/0.045)),dy=L.len/steps;let Rp=Math.hypot(p.x,p.z-hc.z);
+      for(let k=0;k<steps;k++){const y=p.y-dy*0.5;const need=hairClear(y,ph,0.014+o.r);const Rn=Math.max(need,Rp-0.012+0.01);Rp=Rn;p=V3(Math.cos(ph)*Rn,y,hc.z+Math.sin(ph)*Rn);pts.push(p.clone());}
+      const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');G.add(mk(tubeAlong(curve,Math.max(8,steps*3),t=>o.r*(1-0.3*t*t)*(t<0.04?0.8:1),{seg:7}),mat));}
+    return;}
+  /* long locks (dreads, braids) hang as simulated strands: over the head, resting on the shoulders, down the back or in
+     front of the shoulders (the ones from the front and sides of the head), each its own way */
+  const nv=18,roots=locks.map(L=>{const p0=L.pts[L.pts.length-2],p1=L.pts[L.pts.length-1],af=angFront(L.ph),side=af<1.45?1:-1;
+    return {p0,p1,ph:L.ph,len:L.len,bias:side,xt:side>0?Math.sign(p1.x||1)*lerp(0.06,0.13,smooth((af-0.6)/0.8)):clamp(p1.x*1.4,-0.13,0.13)};});
+  const yMin=Math.min(...roots.map(r=>r.p1.y-r.len)),field=hairField(hc.y+BC.hd.ry,yMin-0.2);
+  const cols=hairDrape(roots,nv,{field,thin:o.r+0.003,thick:o.r+0.003,bodyClr:o.r+0.005,lat:false,band:!!(S.acc.headband&&S.acc.headband.type==='forehead')});
+  locks.forEach((L,i)=>{const pts=L.pts.slice(0,-2).concat(cols[i]);const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');
+    G.add(mk(tubeAlong(curve,Math.max(16,pts.length*2),t=>o.r*(1-0.3*t*t)*(t<0.04?0.8:1),{seg:7}),mat));});
 }
 function hairBun(G,mat,ny,ph,r){
   const hc=BC.headC,th=Math.acos(ny),P=headPt(th,ph,0.008+r*0.75,false);
@@ -222,7 +340,7 @@ function buildHair(G){
     case 'pixie':hairShell(G,mat,(ny,d)=>0.008+0.018*smooth((ny-0.1)/0.6)*(1+0.3*front(d)),{edge:.45,noise:.8,clump:.4,messy:.004,cards:C(0.045,340,{kind:ck,fan:0.005,drift:0.1})});fr=fr||'side';break;
     case 'bob':hairShell(G,mat,ny=>0.01+0.012*smooth((ny-0.2)/0.6),{edge:.5,clump:.4,cards:C(0.06,280,{endRand:0.55,kind:ck})});sheet(0.86,sheetTo.bob,0.017,{flare:-0.004,cards:C(0.1,260,{kind:ck,w:0.02,v0:0.02,v1:1})});break;
     case 'lob':hairShell(G,mat,ny=>0.01+0.012*smooth((ny-0.2)/0.6),{edge:.5,clump:.4,cards:C(0.06,280,{endRand:0.55,kind:ck})});sheet(0.92,sheetTo.lob,0.017,{flare:0.01,longBack:1,cards:C(0.13,320,{kind:ck,w:0.022,v0:0.02,v1:1})});break;
-    case 'long':hairShell(G,mat,ny=>0.009+0.012*smooth((ny-0.2)/0.6),{edge:.5,clump:.4,cards:C(0.06,280,{endRand:0.55,kind:ck})});sheet(0.92,sheetTo.long,0.017,{flare:0.016,longBack:1,nv:64,cards:C(0.18,380,{kind:ck,w:0.024,v0:0.02,v1:1})});break;
+    case 'long':hairShell(G,mat,ny=>0.007+0.009*smooth((ny-0.2)/0.6),{edge:.5,clump:.4,cards:C(0.06,280,{endRand:0.55,kind:ck})});sheet(0.92,sheetTo.long,0.017,{flare:0.01,nv:64,cards:C(0.18,380,{kind:ck,w:0.024,v0:0.02,v1:1})});break;
     case 'ponytail':hairShell(G,mat,ny=>0.005+0.006*smooth((ny-0.2)/0.6),{edge:.4,noise:.3,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.0015,lift:0.0012,drift:0.02})});if(!hat||capType()==='baseball'||capType()==='trucker'||capType()==='kerchief')hairTail(G,mat,0.3,hairLen(0.2,0.45),0.024);break;
     case 'bun':hairShell(G,mat,ny=>0.005+0.006*smooth((ny-0.2)/0.6),{edge:.4,noise:.3,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.0015,lift:0.0012,drift:0.02})});if(!hat)hairBun(G,mat,0.62,BACKA,0.046);break;
     case 'manbun':hairShell(G,mat,ny=>0.006+0.008*smooth((ny-0.2)/0.6),{edge:.4,noise:.4,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.002,lift:0.0012,drift:0.02})});if(!hat)hairBun(G,mat,0.78,BACKA,0.034);break;

@@ -135,7 +135,7 @@ const SHOES={
   sandal:{label:'Sandały',up:'leather',ups:['leather','nylon'],W:.1,L:.27,sole:.026,open:'sandal',tags:['riviera','gorpcore'],summer:1.5},
   ballet:{label:'Baleriny',up:'leather',ups:['leather','satin','suede'],W:.09,L:.262,H:[.04,.05,.036],sole:.007,low:2,bow:1,toe:'round',tags:['coquette','feminine']},
   maryjane:{label:'Mary Jane',up:'leather',ups:['leather','suede'],W:.092,L:.265,H:[.044,.054,.038],sole:.02,heel:.022,low:2,mj:1,toe:'round',tags:['coquette','y2k']},
-  pump:{label:'Szpilki',up:'leather',ups:['leather','satin','suede'],W:.088,L:.255,H:[.05,.05,.034],sole:.006,stiletto:.085,low:2,toe:'pointed',tags:['office','feminine']}
+  pump:{label:'Szpilki',up:'leather',ups:['leather','satin','suede'],W:.088,L:.255,H:[.06,.05,.034],sole:.006,stiletto:.085,vamp:.55,low:2,toe:'pointed',tags:['office','feminine']}
 };
 const SOCKS={none:'Bez skarpet',ankle:'Stopki',crew:'Do łydki',knee:'Podkolanówki'};
 /* =============== catalogue: shop-like categories, each item lands in its slot =============== */

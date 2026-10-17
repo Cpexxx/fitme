@@ -23,7 +23,7 @@ const ROOT = path.resolve(__dirname, '../..');
     return route.abort();
   });
   const settle = async (ms = 400) => { await page.waitForTimeout(ms); await page.waitForFunction(() => !pending, null, { timeout: 60000 }).catch(() => {}); await page.waitForTimeout(150); };
-  const step = async (name, fn) => { const e0 = errs.length; try { await fn(); } catch (e) { fails.push(name + ': ' + e.message.split('\n')[0]); } const e = errs.slice(e0); if (e.length) fails.push(name + ' -> console: ' + e.join(' | ').slice(0, 300)); log.push((e.length ? 'ERR ' : 'ok  ') + name); };
+  const step = async (name, fn) => { const e0 = errs.length; try { await fn(); } catch (e) { const at = ' (ui.js ' + (e.stack || '').split('\n').filter(l => l.includes('ui.js:')).map(l => l.replace(/.*ui\.js:(\d+).*/, '$1')).join('<') + ')'; fails.push(name + ': ' + e.message.split('\n')[0] + at); } const e = errs.slice(e0); if (e.length) fails.push(name + ' -> console: ' + e.join(' | ').slice(0, 300)); log.push((e.length ? 'ERR ' : 'ok  ') + name); };
   const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
   const shot = n => page.screenshot({ path: path.join(outDir, n + '.png') });
   const S = () => page.evaluate(() => JSON.parse(JSON.stringify(S)));
@@ -71,7 +71,7 @@ const ROOT = path.resolve(__dirname, '../..');
     await fc('[data-page="creator"] >> visible=true'); await settle();
   });
   await step('udostępnij: kod w obie strony', async () => {
-    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.mat = ''; S.outer.fit = 'regular'; S.outer.size = 'XL'; S.bottom.w = 32; update(); }); await settle();
+    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.mat = ''; S.outer.fit = 'regular'; S.outer.size = 'XL'; S.outer.close = 'closed'; S.bottom.w = 32; update(); }); await settle();
     const before = await S(); await fc('#btnShare'); const code = await page.inputValue('#codeOut'); expect(code.startsWith('FIT3.'), 'kod nie zaczyna się od FIT3');
     await fc('#dlgShare [data-close]'); await fc('#btnRandom'); await settle();
     await fc('#btnShare'); await page.fill('#codeIn', code); await fc('#codeLoad'); await settle();
@@ -128,29 +128,41 @@ const ROOT = path.resolve(__dirname, '../..');
   await step('prawy panel: manekin (poza, sylwetka, płeć, skóra, fryzura)', async () => {
     await fc('[data-rtab="body"]'); await page.waitForTimeout(150);
     const heads = await page.$$('#accR .acc .acc-head'); expect(heads.length >= 4, 'brak sekcji manekina');
-    await heads[0].click({ force: true }); await page.waitForTimeout(100); const poses = await page.$$('#accR .acc.open .chip'); for (const p of poses) { await p.click({ force: true }); await settle(300); }
-    await (await page.$$('#accR .acc .acc-head'))[1].click({ force: true }); await page.waitForTimeout(100);
-    const bt = await page.$$('#accR .acc.open .chips[aria-label="Typ sylwetki"] .chip'); for (const b of bt) { await b.click({ force: true }); await settle(300); }
+    /* the panel is drawn again after a click: open a section only when it is closed, look its chips up again every time
+       (forced clicks on stale handles landed on other headers and toggled them) */
+    const openAcc = async name => { if (!(await page.$(`#accR .acc.open .acc-head:has-text("${name}")`))) await page.click(`#accR .acc-head:has-text("${name}")`); await page.waitForSelector(`#accR .acc.open .acc-head:has-text("${name}")`); await page.waitForTimeout(350); };
+    await openAcc('Poza'); const np = (await page.$$('#accR .acc.open .chip')).length;
+    for (let i = 0; i < np; i++) { await openAcc('Poza'); await (await page.$$('#accR .acc.open .chip'))[i].click({ force: true }); await settle(300); }
+    await openAcc('Sylwetka');
+    const nb = (await page.$$('#accR .acc.open .chips[aria-label="Typ sylwetki"] .chip')).length;
+    for (let i = 0; i < nb; i++) { await openAcc('Sylwetka'); await (await page.$$('#accR .acc.open .chips[aria-label="Typ sylwetki"] .chip'))[i].click({ force: true }); await settle(300); }
+    await openAcc('Sylwetka');
     /* the 'Wersja' sub keeps its open state between runs: open it only when closed (toggling closed it picked another sub's chip) */
-    if (!(await page.$('#accR .acc.open .sub.open .chips[aria-label="Wersja"]'))) { const sh = await page.$('#accR .sub:has(.chips[aria-label="Wersja"]) .sub-head'); if (sh) { await sh.click({ force: true }); await page.waitForTimeout(80); } }
-    const g = await page.$$('#accR .acc.open .sub.open .chips[aria-label="Wersja"] .chip'); if (g.length) { await g[g.length - 1].click({ force: true }); await settle(600); }
+    if (!(await page.$('#accR .acc.open .sub.open .chips[aria-label="Wersja"]'))) { const sh = await page.$('#accR .sub:has(.chips[aria-label="Wersja"]) .sub-head'); if (sh) { await sh.click(); await page.waitForSelector('#accR .acc.open .sub.open .chips[aria-label="Wersja"]'); } }
+    /* (a forced click while the sub is still unfolding lands on nothing: a plain click waits until the chip is visible and still) */
+    const g = await page.$$('#accR .acc.open .sub.open .chips[aria-label="Wersja"] .chip'); if (g.length) { await g[g.length - 1].click(); await settle(600); }
     const s = await S(); expect(s.gender === 'f' && s.height === 168, 'zmiana na kobietę nie ustawiła wzrostu 168 (jest ' + s.gender + ' ' + s.height + ')');
     await shot('05-body');
   });
   await step('społeczność: szukaj, filtry, polub, weź element', async () => {
     await fc('[data-page="explore"] >> visible=true'); await settle();
     const n0 = (await page.$$('#exploreGrid .card')).length; expect(n0 === 18, 'kart w Społeczności: ' + n0);
-    await page.fill('#q', 'trencz'); await page.waitForTimeout(400); const n1 = (await page.$$('#exploreGrid .card')).length; expect(n1 >= 1 && n1 < n0, 'wyszukiwanie "trencz" daje ' + n1);
-    await page.fill('#q', 'qqqqqq'); await page.waitForTimeout(400); expect(await page.$('#exploreGrid .empty'), 'brak komunikatu "nic nie pasuje"');
-    await page.fill('#q', ''); await page.waitForTimeout(400);
-    for (const c of (await page.$$('#fStyle .chip')).slice(1, 5)) { await c.click({ force: true }); await page.waitForTimeout(150); }
-    await fc('#fStyle .chip'); for (const c of await page.$$('#fSeason .chip')) { await c.click({ force: true }); await page.waitForTimeout(150); }
-    await fc('#fSeason .chip'); await page.waitForTimeout(200);
+    /* (the search is debounced and the thumbnails render on the main thread: wait for the result, not a fixed time) */
+    const nCards = () => page.evaluate(() => document.querySelectorAll('#exploreGrid .card').length);
+    await page.fill('#q', 'trencz'); await page.waitForFunction(n => document.querySelectorAll('#exploreGrid .card').length < n, n0, { timeout: 30000 }).catch(() => {});
+    const n1 = await nCards(); expect(n1 >= 1 && n1 < n0, 'wyszukiwanie "trencz" daje ' + n1);
+    await page.fill('#q', 'qqqqqq'); await page.waitForSelector('#exploreGrid .empty', { timeout: 30000 }).catch(() => {}); expect(await page.$('#exploreGrid .empty'), 'brak komunikatu "nic nie pasuje"');
+    await page.fill('#q', ''); await page.waitForFunction(n => document.querySelectorAll('#exploreGrid .card').length === n, n0, { timeout: 30000 }).catch(() => {});
+    /* the filter rows are drawn again after every click: locators find the chip again each time */
+    for (let i = 1; i < 5; i++) { await page.locator('#fStyle .chip').nth(i).click({ force: true }); await page.waitForTimeout(150); }
+    await page.locator('#fStyle .chip').first().click({ force: true });
+    const ns = await page.locator('#fSeason .chip').count(); for (let i = 0; i < ns; i++) { await page.locator('#fSeason .chip').nth(i).click({ force: true }); await page.waitForTimeout(150); }
+    await page.locator('#fSeason .chip').first().click({ force: true }); await page.waitForTimeout(200);
     await fc('#exploreGrid .card .heart'); await page.waitForTimeout(150); expect(await page.evaluate(() => load(LIKES).length) === 1, 'polubienie nie zapisane');
     await fc('#exploreGrid .card .cta button:not(.dark)'); await page.waitForTimeout(100);
-    const tk = await page.$$('#exploreGrid .card .take.on button'); expect(tk.length > 0, 'brak przycisków "Weź element"'); await tk[0].click({ force: true }); await settle();
+    const tk = page.locator('#exploreGrid .card .take.on button'); expect(await tk.count() > 0, 'brak przycisków "Weź element"'); await tk.first().click({ force: true }); await settle();
     expect(await page.evaluate(() => page === 'creator'), '"Weź element" nie przeszedł do kreatora');
-    await fc('[data-page="mine"] >> visible=true'); await settle(); await fc('[data-mine="liked"]'); await settle(); expect((await page.$$('#mineGrid .card')).length === 1, 'polubiony fit nie widać w Zachowane');
+    await fc('[data-page="mine"] >> visible=true'); await settle(); await fc('#mineTabs button:has-text("Polubione")'); await settle(); expect((await page.$$('#mineGrid .card')).length === 1, 'polubiony fit nie widać w Zachowane');
     await page.waitForTimeout(3000); await shot('06-liked');
   });
   await step('miniatury w Społeczności generują się', async () => {

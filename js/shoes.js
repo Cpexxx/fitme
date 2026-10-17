@@ -8,21 +8,43 @@ const TOES={
 };
 /* parametric last: s along the foot (0 heel, 1 toe), th across (0 outer side, PI inner side) */
 function makeLast(T,side,o={}){
-  const fem=BC.g==='f',Fo=BC.foot,W=Math.max((o.W||T.W)*Math.pow(BC.b,0.35)*(fem?0.94:1),Fo?Fo.w+(o.flat?0:0.006):0)*Math.sqrt(SHOE_K);
+  const fem=BC.g==='f',Fo=!o.flat&&BC.footP&&BC.foot?Object.assign({},BC.foot,{zmin:BC.footP.zmin,len:BC.footP.len}):BC.foot,W=Math.max((o.W||T.W)*Math.pow(BC.b,0.35)*(fem?0.94:1),Fo?Fo.w+(o.flat?0:0.006):0)*Math.sqrt(SHOE_K);
   /* the last always encloses the mannequin's own foot (plus a little room at the toe); the EU size scales from there */
-  const L0=Math.max((o.L||T.L)*(fem?0.93:1),Fo?Fo.len+(o.flat?0.002:0.014):0),L=L0*SHOE_K;
+  /* room in front of the toes depends on the toe shape: a point or an almond needs it to taper without squaring off */
+  const room=o.flat?0.002:{pointed:0.04,almond:0.026}[o.toe||T.toe]||0.014;
+  const L0=Math.max((o.L||T.L)*(fem?0.93:1),Fo?Fo.len+room:0),L=L0*SHOE_K;
   const toe=TOES[o.toe||T.toe||'round'],hh=o.flat?0:(T.stiletto||T.heel||0),soleT=o.sole!=null?o.sole:(T.sole||0.02);
   const H=o.H||T.H||[.07,.08,.04],zH=(Fo?Fo.zmin-(o.flat?0.001:0.008):-0.27*L0)-0.012*(SHOE_K-1),aw=o.ankleW||1,dx=Fo?Fo.cx-BC.legX:0;
-  const soleY=s=>hh?hh*(1-smooth((s-0.22)/0.48)):0;
-  const OW=s=>W*0.5*interp1(toe,s)*(s<0.5?lerp(aw,1,smooth((s-0.3)/0.2)):1)*(o.wk||1);
+  const soleY0=s=>hh?hh*(1-smooth((s-0.22)/0.48)):0;
+  const OW0=s=>W*0.5*interp1(toe,s)*(s<0.5?lerp(aw,1,smooth((s-0.3)/0.2)):1)*(o.wk||1);
   const cx=s=>-0.006*smooth((s-0.55)/0.4);
-  const Hs=s=>interp1([[0,H[0]],[0.25,H[0]],[0.42,H[1]],[0.62,lerp(H[1],H[2],0.45)],[0.82,H[2]],[0.95,H[2]*0.8],[1,H[2]*0.42]],s)*(o.hk||1);
+  const Hs0=s=>interp1([[0,H[0]],[0.25,H[0]],[0.42,H[1]],[0.62,lerp(H[1],H[2],0.45)],[0.82,H[2]],[0.95,H[2]*0.8],[1,H[2]*0.42]],s)*(o.hk||1);
+  /* the designed last is only a starting point: slice by slice it is opened up around the mannequin's real foot as worn
+     (pitched in heels), so the foot never shows through the sole, the sides or the toe box */
+  const NB=40,FS=o.flat||!BC.footPts?null:(()=>{const P=BC.footPts,lo=new Float32Array(NB+1).fill(9),hiW=new Float32Array(NB+1).fill(-9),loW=new Float32Array(NB+1).fill(9),top=new Float32Array(NB+1).fill(-9);
+    const off=BC.legX+dx;for(let i=0;i<P.length;i+=3){const sv=(P[i+2]-zH)/L;if(sv<-0.02||sv>1.02)continue;const b=clamp(Math.round(sv*NB),0,NB),x=P[i]-off,y=P[i+1];
+      /* the top only from the foot itself (in heels the shin leans over the vamp: it is not inside the toe box) */
+      if(y<lo[b])lo[b]=y;if(y>top[b]&&y<soleY0(sv)+soleT+(o.lift||0)+Hs0(sv)*1.45)top[b]=y;
+      /* width only where the upper covers the foot (below ~the designed height of the last) */
+      if(y<soleY0(sv)+soleT+(o.lift||0)+Hs0(sv)*0.92){if(x>hiW[b])hiW[b]=x;if(x<loW[b])loW[b]=x;}}
+    /* smooth envelopes: empty slices (behind the heel, past the toes) set no requirement; a small max filter then a blur
+       keeps the result above the raw foot and free of slice-to-slice steps (a wavy collar line) */
+    const env=(a,up)=>{const none=up?-9:9,r=new Float32Array(NB+1);for(let b=0;b<=NB;b++){let v=a[b];for(const d of [-1,1]){const c=b+d;if(c<0||c>NB||a[c]===none)continue;if(v===none||(up?a[c]>v:a[c]<v))v=a[c];}r[b]=v;}
+      const o2=new Float32Array(NB+1);for(let b=0;b<=NB;b++){if(r[b]===none){o2[b]=none;continue;}let w=0,acc=0;for(let d=-2;d<=2;d++){const c=b+d;if(c<0||c>NB||r[c]===none)continue;const k=3-Math.abs(d);w+=k;acc+=r[c]*k;}o2[b]=up?Math.max(acc/w,a[b]===none?-9:a[b]):Math.min(acc/w,a[b]===none?9:a[b]);}
+      return o2;};
+    return{lo:env(lo,false),hiW:env(hiW,true),loW:env(loW,false),top:env(top,true)};})();
+  const fsAt=(arr,s,none)=>{if(!FS)return none;const f=clamp(s,0,1)*NB,i=Math.min(NB-1,Math.floor(f)),t=f-i,a=arr[i],b=arr[i+1];if(Math.abs(a)>=9||Math.abs(b)>=9)return Math.abs(a)>=9&&Math.abs(b)>=9?none:(t<0.5?(Math.abs(a)>=9?none:a):(Math.abs(b)>=9?none:b));return a+(b-a)*t;};
+  const clr=o.clear!=null?o.clear:0.003;
+  const soleY=s=>{const d=soleY0(s);if(!FS||!hh)return d;const b=fsAt(FS.lo,s,null);return b==null?d:clamp(Math.min(d,b-soleT-(o.lift||0)-0.0008),0,d);};
+  /* the heel stays closed (the back of the last is a line at s=0): the widening fades out over the last 5% */
+  const OW=s=>{const d=OW0(s),c=cx(s),a=fsAt(FS?FS.hiW:null,s,null),b=fsAt(FS?FS.loW:null,s,null);if(a==null||b==null||a<-8||b>8)return d;return Math.max(d,(Math.max(a-c,c-b)+clr)*smooth(s/0.05));};
+  const Hs=s=>{const d=Hs0(s);if(!FS||s<0.55)return d;const t=fsAt(FS.top,s,null);return t==null?d:Math.max(d,t+clr-(soleY(s)+soleT+(o.lift||0)));};
   const p=s=>lerp(0.42,0.6,smooth(s));
   const base=s=>soleY(s)+soleT+(o.lift||0);
   const W3=(xl,y,s)=>V3(side*(BC.legX+dx+xl),y,zH+s*L);
   const pt=(s,th,off=0)=>{const w=OW(s)+off,h=Hs(s)+off,c=Math.cos(th),sn=Math.sin(th);
     return W3(cx(s)+w*Math.sign(c)*Math.pow(Math.abs(c),0.85),base(s)+h*Math.pow(Math.max(0,sn),p(s)),s);};
-  return{W,L,toe,hh,soleT,H,zH,soleY,OW,cx,Hs,p,base,W3,pt,side,dx};
+  return{W,L,toe,hh,soleT,H,zH,soleY,OW,cx,Hs,p,base,W3,pt,side,dx,FS,soleY0,OW0,Hs0};
 }
 function outline(Lr,rim,N=40){const pts=[];for(let i=0;i<=N;i++){const s=i/N;pts.push([Lr.side*(BC.legX+Lr.dx+Lr.cx(s)+(Lr.OW(s)+rim)),Lr.zH+s*Lr.L,s]);}
   for(let i=N-1;i>=1;i--){const s=i/N;pts.push([Lr.side*(BC.legX+Lr.dx+Lr.cx(s)-(Lr.OW(s)+rim)),Lr.zH+s*Lr.L,s]);}return pts;}
@@ -89,7 +111,7 @@ function buildShoe(GS,G,side,P,T,footM,bare){
   /* ---- sole ---- */
   if(T.cork){GS.add(soleSlab(Lr,0.004,s=>0,s=>st,fabric('cork','#b98a58')));GS.add(soleSlab(Lr,0.001,s=>st,s=>st+0.004,fabric('suede',shade(P.sole,0.2))));}
   else if(T.stiletto){GS.add(soleSlab(Lr,0.002,s=>Lr.soleY(s),s=>Lr.soleY(s)+st,outM));
-    const hp=Lr.W3(Lr.cx(0.06),0,0.07);GS.add(mk(new THREE.CylinderGeometry(0.0095,0.0042,hh,14),outM).translateX(hp.x).translateY(hh/2).translateZ(hp.z));
+    const hp=Lr.W3(Lr.cx(0.06),0,0.07),hy=Lr.soleY(0.07)+0.001;GS.add(mk(new THREE.CylinderGeometry(0.0095,0.0042,hy,14),outM).translateX(hp.x).translateY(hy/2).translateZ(hp.z));
     GS.add(mk(new THREE.CylinderGeometry(0.0046,0.0046,0.004,10),plain('#141312',.7)).translateX(hp.x).translateY(0.002).translateZ(hp.z));}
   else if(T.lug){GS.add(soleSlab(Lr,0.006,s=>0.008,s=>st,soleM));GS.add(soleSlab(Lr,0.007,s=>0,s=>0.0085,outM));
     const ol=outline(Lr,0.007,30);for(let i=0;i<ol.length;i+=2){const p=ol[i],b=mk(new THREE.BoxGeometry(0.012,0.006,0.012),outM);b.position.set(p[0],0.003,p[1]);b.rotation.y=i*0.37;GS.add(b);}}
@@ -102,10 +124,12 @@ function buildShoe(GS,G,side,P,T,footM,bare){
   /* foot / sock inside */
   if(open){openShoe(GS,Lr,P,T,up,acc);return;}
   /* ---- upper ---- */
-  const H0=Lr.H[0],sOpen=T.clog?0.42:boot?0:(T.low===2?0.62:T.low?0.52:0.6),W=Lr.W;
+  const H0=Lr.H[0],sOpen=T.clog?0.42:boot?0:T.vamp?T.vamp:(T.low===2?0.62:T.low?0.52:0.6),W=Lr.W;
   const gxT=T.low===2?[[0,0],[.05,.3],[.25,.44],[sOpen,.42]]:T.low?[[0,0],[.06,.3],[.2,.4],[sOpen,.36]]:[[0,0],[.05,.2],[.15,.4],[.28,.36],[.36,.15],[sOpen,.12]];
-  const TqT=T.low===2?[[0,H0],[.18,.03],[sOpen,.026]]:T.low?[[0,H0],[.25,H0*0.78],[sOpen,Lr.Hs(sOpen)*0.96]]:[[0,H0],[.12,H0-.005],[.22,H0-.013],[.34,H0+.002],[sOpen,Lr.Hs(sOpen)]];
-  const gx=s=>interp1(gxT,Math.min(s,sOpen))*W,Tq=s=>interp1(TqT,Math.min(s,sOpen));
+  const TqT=T.low===2?[[0,H0],[.1,H0*0.94],[.3,.03],[sOpen,.026]]:T.low?[[0,H0],[.25,H0*0.78],[sOpen,Lr.Hs(sOpen)*0.96]]:[[0,H0],[.12,H0-.005],[.22,H0-.013],[.34,H0+.002],[sOpen,Lr.Hs(sOpen)]];
+  /* the collar opening always stays inside the last: around the heel it was wider than the shoe, the side walls had no
+     height there and a slot ran from the collar down to the sole (the "hole" at the heel); keep a wall of at least ~6 mm */
+  const gx=s=>Math.min(interp1(gxT,Math.min(s,sOpen))*W,Math.max(0,Lr.OW(s)*0.82-0.002)),Tq=s=>interp1(TqT,Math.min(s,sOpen));
   const thW=s=>{const ow=Lr.OW(s),hs=Lr.Hs(s);let tg=Math.PI/2;if(ow>1e-4)tg=Math.acos(Math.pow(clamp(gx(s)/ow,0,1),1/0.85));return Math.min(tg,Math.asin(Math.pow(clamp(Tq(s)/hs,0,1),1/Lr.p(s))));};
   GS.add(mk(surf(40,30,(u,v)=>Lr.pt(lerp(sOpen,1,v),u*Math.PI),{noAO:true,uRep:3,vRep:4}),up));
   if(sOpen>0&&!T.clog)for(const inner of [0,1])GS.add(mk(surf(12,30,(u,v)=>{const s=v*sOpen,tw=thW(s);return Lr.pt(s,inner?Math.PI-u*tw:u*tw);},{noAO:true,uRep:3,vRep:4}),up));
