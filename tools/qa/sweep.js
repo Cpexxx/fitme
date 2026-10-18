@@ -51,6 +51,7 @@ const ROOT = path.resolve(__dirname, '../..');
       const ACC = { cap: HATS, glasses: GLASSES, watch: WATCHES, bracelet: BRACELETS, ring: RINGS, chain: NECKLACES, earrings: EARRINGS, wallet: WALLETS, bag: BAGS, scarf: SCARVES, bandana: BANDANAS, headband: HEADBANDS, gloves: GLOVES, tie: TIES };
       for (const [k, tab] of Object.entries(ACC)) for (const t of keys(tab)) add(`${g}/acc/${k}/${t}`, `s=>{${G}s.acc.${k}.type='${t}';${k === 'tie' ? "s.top.type='shirt';" : ''}${k === 'wallet' ? "s.bottom.type='jeans';" : ''}}`);
       for (const h of keys(HAIR)) for (const tx of Object.keys(HAIR_TEX)) add(`${g}/hair/${h}/${tx}`, `s=>{${G}s.hair.style='${h}';s.hair.texture='${tx}';}`);
+      for (const h of DRAPE_STYLES) for (const d of Object.keys(HAIR_DRAPE)) add(`${g}/drape/${h}/${d}`, `s=>{${G}s.hair.style='${h}';s.hair.len=0.8;s.hair.drape='${d}';s.outer.type='trucker';}`);
       for (const fr of keys(FRINGES)) add(`${g}/fringe/${fr}`, `s=>{${G}s.hair.style='bob';s.hair.fringe='${fr}';}`);
       for (const b of keys(BEARDS)) add(`${g}/beard/${b}`, `s=>{${G}s.hair.beard='${b}';}`);
       for (const p of Object.keys(POSES)) add(`${g}/pose/${p}`, `s=>{${G}s.pose='${p}';s.outer.type='overcoat';}`);

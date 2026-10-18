@@ -302,3 +302,8 @@ Kolejne rundy:
   „Polubione” po tekście (Account rysuje zakładki bez `data-mine`), jawne `outer.close` w teście kodu. Błąd pokazuje linię testu.
 - Sweep 1912/1912 bez uwag. Uwaga: w jednym długim przebiegu Chromium (SwiftShader) padł po ~1720 przypadkach; reszta
   przeszła osobnym przebiegiem z filtrem. Sterta przy budowie włosów stabilna (cache drapowania ma limit 12).
+- **Ułożenie długich włosów (`S.hair.drape`, `HAIR_DRAPE`, `DRAPE_STYLES`):** auto (kosmyki z przodu), back, front,
+  left/right (lewe/prawe ramię postaci = +x/−x, jak `handSide`). `drapeSide(ph,mode)` w hair.js daje stronę i `xt`
+  każdego pasma; panele arkusza to ciągi pasm o tej samej stronie. Pchnięcie przód/tył działa tylko na pasma dotykające
+  barku (`CT`), więc nic nie odstaje w powietrzu. Próba „wszystkie włosy przez jedno ramię” z kanałem przy szyi dawała
+  zmięty kołnierz (arkusz nie umie się zebrać w pęk), dlatego left/right = ta strona głowy z przodu, reszta na plecach.

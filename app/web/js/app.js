@@ -1,7 +1,7 @@
 'use strict';
 /* =============== Fitme: scena, interfejs, strony =============== */
-const FEMALE_HAIR={style:'long',color:'#3d2a1e',texture:'wavy',fringe:'none',beard:'none',len:0.5};
-const MALE_HAIR={style:'fade',color:'#2a1d16',texture:'straight',fringe:'none',beard:'none',len:0.5};
+const FEMALE_HAIR={style:'long',color:'#3d2a1e',texture:'wavy',fringe:'none',beard:'none',len:0.5,drape:'auto'};
+const MALE_HAIR={style:'fade',color:'#2a1d16',texture:'straight',fringe:'none',beard:'none',len:0.5,drape:'auto'};
 let S=sanitize(DEFAULT);
 
 /* =============== state hygiene =============== */
@@ -50,7 +50,7 @@ function sanitize(o){
   else if(s.gender==='f')s.under.bottom='brief';
   if(FINISHES[o.finish])s.finish=o.finish;else if(o.finish==='plush')s.finish='fabric';
   if(o.hair&&typeof o.hair==='object'){const h=o.hair;if(HAIR[h.style])s.hair.style=h.style;s.hair.color=hexOr(h.color,s.hair.color);if(HAIR_TEX[h.texture])s.hair.texture=h.texture;
-    if(FRINGES[h.fringe])s.hair.fringe=h.fringe;if(BEARDS[h.beard])s.hair.beard=h.beard;if(Number.isFinite(+h.len))s.hair.len=clamp(+h.len,0,1);}
+    if(FRINGES[h.fringe])s.hair.fringe=h.fringe;if(BEARDS[h.beard])s.hair.beard=h.beard;if(Number.isFinite(+h.len))s.hair.len=clamp(+h.len,0,1);if(HAIR_DRAPE[h.drape])s.hair.drape=h.drape;}
   const copyG=(slot,src,types,extra)=>{if(!src||typeof src!=='object')return;const d=s[slot];
     let t=src.type;if(slot==='outer'&&t==='coat')t='overcoat';if(slot==='shoes'&&t==='sneaker')t='court';
     if(types[t])d.type=t;
@@ -567,6 +567,7 @@ function renderRight(){
     if(H.style!=='none'){
       if(['bob','lob','long','mullet','wolf','curtains','afro','twists','dreads','braids','ponytail'].includes(H.style))pad.append(rangeRow('Długość',0,1,0.01,H.len,v=>v<0.33?'Krótsze':v<0.66?'Średnie':'Dłuższe',(v,live)=>{H.len=v;update(live);}));
       pad.append(chipRow('hair.tex','Rodzaj włosa',HAIR_TEX,H.texture,v=>H.texture=v));
+      if(DRAPE_STYLES.includes(H.style))pad.append(chipRow('hair.drape','Ułożenie',HAIR_DRAPE,H.drape||'auto',v=>H.drape=v));
       pad.append(colorRow('hair.color','Kolor',PAL.hair,H.color,v=>H.color=v));
       if(!['buzz','crew','fade','afro','cornrows','dreads','braids','twists'].includes(H.style))pad.append(chipRow('hair.fringe','Grzywka',FRINGES,H.fringe,v=>H.fringe=v));
     }

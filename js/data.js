@@ -202,6 +202,9 @@ const HAIR={
   long:{label:'Długie'},ponytail:{label:'Kucyk'},bun:{label:'Kok'},manbun:{label:'Man bun'},spacebuns:{label:'Dwa koki'}
 };
 const HAIR_TEX={straight:'Proste',wavy:'Falowane',curly:'Kręcone',coily:'Afro'};
+/* how hair long enough to reach the shoulders falls over them (left/right: the mannequin's own) */
+const DRAPE_STYLES=['long','lob','wolf','braids','dreads'];
+const HAIR_DRAPE={auto:'Kosmyki z przodu',back:'Wszystko z tyłu',front:'Wszystko z przodu',left:'Na lewe ramię',right:'Na prawe ramię'};
 const FRINGES={none:'Bez grzywki',straight:'Prosta grzywka',curtain:'Grzywka curtain',side:'Na bok'};
 const BEARDS={none:'Brak',stubble:'Zarost',short:'Krótka broda',full:'Pełna broda',goatee:'Kozia bródka',mustache:'Wąsy'};
 /* real body types (muscle mass, body fat) - from lean runners to bodybuilders and heavier builds */
@@ -214,7 +217,7 @@ const DEFAULT={v:5,gender:'m',height:180,build:1,mus:0.3,fat:0.15,
   fig:{shoulders:1,chest:1,waist:1,hips:1,legs:1,torso:1,arms:1,neckL:1,neckW:1,head:1},
   skin:13,finish:'fabric',pose:'stand',
   under:{bottom:'boxer',bra:'tshirt',color:'auto',color2:'auto'},
-  hair:{style:'fade',color:'#2a1d16',texture:'straight',fringe:'none',beard:'none',len:0.5},
+  hair:{style:'fade',color:'#2a1d16',texture:'straight',fringe:'none',beard:'none',len:0.5,drape:'auto'},
   top:{type:'tee',fit:'regular',color:'#232325',color2:'#f4f1ea',pattern:'solid',mat:'',neck:'',sleeve:'',tuck:'out',print:'none',size:'auto'},
   mid:{src:'none',type:'none',fit:'regular',color:'#3c4a5c',color2:'#f4f1ea',pattern:'solid',mat:'',neck:'',sleeve:'',tuck:'out',print:'none',close:'closed',size:'auto'},
   outer:{type:'none',fit:'regular',color:'#1e1e1f',color2:'#e9e2d2',pattern:'solid',mat:'',close:'closed',size:'auto'},

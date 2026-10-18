@@ -124,7 +124,7 @@ function hairKeepOff(p,v,o){const hc=BC.headC,F=o.field,t=[0,0],cl=lerp(o.thin,o
   return p;}
 function hairDrapeSim(roots,nv,o){
   const hc=BC.headC,ry=BC.hd.ry,n=roots.length,np=nv+1,F=o.field,tmp=[0,0];
-  const X=new Float32Array(n*np*3),Q=new Float32Array(n*np*3),D=new Float32Array(n*np*3),SEG=new Float32Array(n),CL=new Float32Array(np);
+  const X=new Float32Array(n*np*3),Q=new Float32Array(n*np*3),D=new Float32Array(n*np*3),CT=new Uint8Array(n*np),SEG=new Float32Array(n),CL=new Float32Array(np);
   for(let j=0;j<np;j++)CL[j]=lerp(o.thin,o.thick,smooth(j/nv/0.2));
   /* how far a point keeps from the head: its clearance, more over the ears, less under a headband */
   const headClr=(j,y,ph)=>{let c=CL[j]+0.017*gauss(angFront(ph)-Math.PI/2,0.33)*gauss(y-(hc.y-0.012),0.045);
@@ -151,7 +151,8 @@ function hairDrapeSim(roots,nv,o){
     const damp=st<steps*0.6?0.95:0.85;
     for(let s=0;s<n;s++){const bias=roots[s].bias;for(let j=2;j<np;j++){const k=(s*np+j)*3,vx=(X[k]-Q[k])*damp,vy=(X[k+1]-Q[k+1])*damp,vz=(X[k+2]-Q[k+2])*damp;
       Q[k]=X[k];Q[k+1]=X[k+1];Q[k+2]=X[k+2];const w=bias?gauss(X[k+1]-yS,0.07)*smooth((nv-j)*SEG[s]/0.1):0;
-      X[k]+=vx+(roots[s].xt-X[k])*8*w*dt*dt;X[k+1]+=vy-G;X[k+2]+=vz+bias*9*w*dt*dt;}}
+      /* the push to the front or back only moves hair resting on the shoulder (off it), not hair already falling */
+      X[k]+=vx+(roots[s].xt-X[k])*8*w*dt*dt;X[k+1]+=vy-G;X[k+2]+=vz+(CT[s*np+j]?bias*9*w*dt*dt:0);}}
     /* neighbours in the sheet: at most half as far again apart as they started */
     if(o.lat!==false)for(let s=0;s+1<n;s++)for(let j=2;j<np;j++){const a=(s*np+j)*3,b=a+np*3,dx=X[b]-X[a],dy=X[b+1]-X[a+1],dz=X[b+2]-X[a+2],d=Math.sqrt(dx*dx+dy*dy+dz*dz),L=LAT[s*np+j];
       if(d>L){const c=(d-L)/d*0.5;X[a]+=dx*c;X[a+1]+=dy*c;X[a+2]+=dz*c;X[b]-=dx*c;X[b+1]-=dy*c;X[b+2]-=dz*c;}}
@@ -163,7 +164,7 @@ function hairDrapeSim(roots,nv,o){
       X[k]=X[a]+dx/d*L;X[k+1]=X[a+1]+dy/d*L;X[k+2]=X[a+2]+dz/d*L;
       let hit=false;for(let r=0;r<2;r++){if(!collide(k,j))break;hit=true;const ex=X[k]-X[a],ey=X[k+1]-X[a+1],ez=X[k+2]-X[a+2],ed=Math.sqrt(ex*ex+ey*ey+ez*ez)||1e-9;X[k]=X[a]+ex/ed*L;X[k+1]=X[a+1]+ey/ed*L;X[k+2]=X[a+2]+ez/ed*L;}
       /* friction: a strand resting on the shoulder slides off it slowly */
-      if(hit){Q[k]=lerp(Q[k],X[k],0.45);Q[k+1]=lerp(Q[k+1],X[k+1],0.45);Q[k+2]=lerp(Q[k+2],X[k+2],0.45);}
+      CT[s*np+j]=hit?1:0;if(hit){Q[k]=lerp(Q[k],X[k],0.45);Q[k+1]=lerp(Q[k+1],X[k+1],0.45);Q[k+2]=lerp(Q[k+2],X[k+2],0.45);}
       D[k]=X[k]-D[k];D[k+1]=X[k+1]-D[k+1];D[k+2]=X[k+2]-D[k+2];}
       /* the moves made by the leader-following become velocity unless taken back: each particle takes back most of its
          child's move (the damping of "dynamic follow the leader") */
@@ -171,12 +172,23 @@ function hairDrapeSim(roots,nv,o){
   const cols=[];for(let s=0;s<n;s++){const c=[];for(let j=0;j<np;j++){const k=(s*np+j)*3;c.push(V3(X[k],X[k+1],X[k+2]));}cols.push(c);}
   return cols;
 }
+/* how a strand rooted at angle ph falls over the shoulders (S.hair.drape): side +1 in front of them, -1 down the back;
+   xt: where it settles across the body. auto: the locks from the front of the head in front, the rest behind; front:
+   all but the back of the head in front; left/right: that side of the head (the mannequin's own, front to well behind the ear)
+   in front of that shoulder, the rest down the back */
+function drapeSide(ph,mode){const af=angFront(ph),sx=Math.cos(ph)>=0?1:-1,back={side:-1,xt:clamp(Math.cos(ph)*0.16,-0.11,0.11)};
+  if(mode==='back')return back;
+  if(mode==='left'||mode==='right'){const t=mode==='left'?1:-1;return sx===t&&af<2.6?{side:1,xt:t*lerp(0.05,0.11,smooth((af-0.9)/1.7))}:back;}
+  const sA=mode==='front'?2.3:1.5;return af<sA?{side:1,xt:sx*lerp(0.06,0.13,smooth((af-0.9)/(sA-0.9)))}:back;}
 function hairSheet(G,mat,o){
   const T=hairTexP(),hc=BC.headC,nv=o.nv||48;
   if(o.noBody){const nu=o.nu||96,{cols,shs}=sheetColsStatic(o,nu,nv);return sheetMesh(G,mat,o,cols,shs,nu,nv);}
   /* hair long enough to reach the shoulders parts over them: locks in front, the rest down the back */
-  const span=o.ph1-o.ph0,yMin=Math.min(...Array.from({length:25},(_,i)=>o.y1(o.ph0+span*i/24))),split=yMin<BC.shY+0.08,sA=1.5;
-  const parts=[];if(split){const a=FRONT+sA,b=FRONT-sA+TAU;if(a>o.ph0+0.05)parts.push([o.ph0,a,1]);parts.push([Math.max(a,o.ph0),Math.min(b,o.ph1),-1]);if(b<o.ph1-0.05)parts.push([b,o.ph1,1]);}
+  const span=o.ph1-o.ph0,yMin=Math.min(...Array.from({length:25},(_,i)=>o.y1(o.ph0+span*i/24))),split=yMin<BC.shY+0.08,mode=S.hair.drape||'auto';
+  /* one panel per run of strands falling the same way (a parting over each shoulder where the side changes) */
+  const parts=[];if(split){const K=240;let a=o.ph0,cur=drapeSide(o.ph0,mode).side;
+      for(let k=1;k<=K;k++){const ph=o.ph0+span*k/K,sd=drapeSide(ph,mode).side;if(sd!==cur){const b=ph-span/K/2;parts.push([a,b,cur]);a=b;cur=sd;}}
+      parts.push([a,o.ph1,cur]);}
   else parts.push([o.ph0,o.ph1,0]);
   const field=hairField(hc.y+BC.hd.ry*0.7,yMin-0.25);
   let last=null;
@@ -184,9 +196,7 @@ function hairSheet(G,mat,o){
     for(let i=0;i<=nu;i++){const ph=lerp(p0,p1,i/nu),y0=o.y0(ph);let y1=o.y1(ph);
       /* the ends are not cut with a ruler: a soft, uneven line (longer and shorter sections) */
       {const ct=0.5+0.5*Math.sin(ph*7+1.6*fbm(ph*2,1.3,2.1));y1-=0.016*ct*smooth((y0-y1-0.06)/0.12);}
-      /* where it settles across the body: front locks fan over the collarbone and the bust, the back keeps its spread */
-      const sx=Math.cos(ph)>=0?1:-1,af=angFront(ph),xt=side>0?sx*lerp(0.06,0.13,smooth((af-0.9)/(sA-0.9))):clamp(Math.cos(ph)*0.16,-0.11,0.11);
-      roots.push({ph,y:y0,len:(y0-y1)*1.02,bias:side,xt});}
+            const D=side?drapeSide(ph,mode):{xt:0};roots.push({ph,y:y0,len:(y0-y1)*1.02,bias:side,xt:D.xt});}
     const cols=hairDrape(roots,nv,{field,thin:o.thin||0.006,thick:o.thick+(side<0?0.0015:0),bodyClr:0.013+(side<0?0.0015:0),band:!!(S.acc.headband&&S.acc.headband.type==='forehead'),stiff:o.stiff});
     /* texture over the drape: waves, clumps with partings, flare and thinning ends (along the outward horizontal) */
     const shs=[];
@@ -272,8 +282,8 @@ function hairLocks(G,mat,o){
     return;}
   /* long locks (dreads, braids) hang as simulated strands: over the head, resting on the shoulders, down the back or in
      front of the shoulders (the ones from the front and sides of the head), each its own way */
-  const nv=18,roots=locks.map(L=>{const p0=L.pts[L.pts.length-2],p1=L.pts[L.pts.length-1],af=angFront(L.ph),side=af<1.45?1:-1;
-    return {p0,p1,ph:L.ph,len:L.len,bias:side,xt:side>0?Math.sign(p1.x||1)*lerp(0.06,0.13,smooth((af-0.6)/0.8)):clamp(p1.x*1.4,-0.13,0.13)};});
+  const nv=18,roots=locks.map(L=>{const p0=L.pts[L.pts.length-2],p1=L.pts[L.pts.length-1],D=drapeSide(L.ph,S.hair.drape||'auto');
+    return {p0,p1,ph:L.ph,len:L.len,bias:D.side,xt:D.xt};});
   const yMin=Math.min(...roots.map(r=>r.p1.y-r.len)),field=hairField(hc.y+BC.hd.ry,yMin-0.2);
   const cols=hairDrape(roots,nv,{field,thin:o.r+0.003,thick:o.r+0.003,bodyClr:o.r+0.005,lat:false,band:!!(S.acc.headband&&S.acc.headband.type==='forehead')});
   locks.forEach((L,i)=>{const pts=L.pts.slice(0,-2).concat(cols[i]);const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');

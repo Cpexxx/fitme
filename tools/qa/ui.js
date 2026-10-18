@@ -71,7 +71,7 @@ const ROOT = path.resolve(__dirname, '../..');
     await fc('[data-page="creator"] >> visible=true'); await settle();
   });
   await step('udostępnij: kod w obie strony', async () => {
-    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.mat = ''; S.outer.fit = 'regular'; S.outer.size = 'XL'; S.outer.close = 'closed'; S.bottom.w = 32; update(); }); await settle();
+    await page.evaluate(() => { S.acc.watch.type = 'diver'; S.hair.style = 'wolf'; S.hair.drape = 'left'; S.pose = 'walk'; S.outer.type = 'overcoat'; S.outer.mat = ''; S.outer.fit = 'regular'; S.outer.size = 'XL'; S.outer.close = 'closed'; S.bottom.w = 32; update(); }); await settle();
     const before = await S(); await fc('#btnShare'); const code = await page.inputValue('#codeOut'); expect(code.startsWith('FIT3.'), 'kod nie zaczyna się od FIT3');
     await fc('#dlgShare [data-close]'); await fc('#btnRandom'); await settle();
     await fc('#btnShare'); await page.fill('#codeIn', code); await fc('#codeLoad'); await settle();
