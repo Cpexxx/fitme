@@ -307,3 +307,25 @@ Kolejne rundy:
   każdego pasma; panele arkusza to ciągi pasm o tej samej stronie. Pchnięcie przód/tył działa tylko na pasma dotykające
   barku (`CT`), więc nic nie odstaje w powietrzu. Próba „wszystkie włosy przez jedno ramię” z kanałem przy szyi dawała
   zmięty kołnierz (arkusz nie umie się zebrać w pęk), dlatego left/right = ta strona głowy z przodu, reszta na plecach.
+
+## Runda 12 (2026-10-21): bielizna na pełnych sylwetkach, nogi, włosy, glitche, jakość, nowe ubrania
+- **Bielizna:** linia krocza z biodra (`hipL.y-0.075`), a nie z `shellBase().cy` (ta spadała przy dużych udach i majtki
+  zsuwały się na uda). Pas wyżej, z tyłu +3 cm. Tył stanika wznosi się po kącie wokół tułowia, nie po |x|, bo na szerokich
+  plecach robił się prostokąt. **Mężczyźni:** bez slipów, stare stany zamieniają się w bokserki.
+- **Kozie nogi:** `poplitealFill` (mh.js, na gęstej siatce po `muscleRelief`) ściąga tylny obrys nogi od łydki do połowy
+  uda w stronę jego wygładzonej wersji (σ≈7,5 cm, 90%, limit 1,8 cm).
+- **Włosy:** panele zachodzą na siebie o 0,035 rad (wcześniej szpara od czubka głowy). Pod czapką arkusz zaczyna się pod linią
+  czapki (`y0` po kącie). Pchnięcie przód/tył działa też nad barkami (pasma wcześniej lądowały na barku jak klapka), końce
+  krótkich pasm przy barku zatrzymują się na nim (`CB`), krzywizna ograniczona (`rmin`).
+- **Glitch ze zrzutu 4:** „pasek” to tył koszuli „wpuszczonej z przodu”, sterczący jak dzwon. Teraz to `mkMain` (fizyka
+  tkaniny układa go na spodniach) z osobną lamówką.
+- **Torba tote:** nowa: miękka bryła z dnem, podszewką i lamówką, sztywna (`ctx:'none'`), na tyle prawego biodra za ręką.
+  Uchwyty w V przez szczyt barku (punkt wyszukany na ciele), wygładzone.
+- **Jakość („Wysoka”, domyślna w aplikacji):** gdy widok stoi ≥350 ms, jedna klatka renderuje się w wyższej rozdzielczości
+  (×1,6, do 3, limit ~16 Mpx). Każde pasmo włosów jest symulowane. Więcej iteracji tkaniny nic nie zmieniało (<0,35/255), cofnięte.
+  QA: `QA_QUALITY=high` w render.js (bez tego SwiftShader renderuje 'perf').
+- **Nowe ubrania:**
+  - topy: guayabera (4 kieszenie, zakładki), koszula ze stójką, tangzhuang (żabki/pankou), kurta (`long`, stójka);
+  - kurtki: kamizelka jeansowa, M-65, barn jacket (`collarCord`), kimono/haori (`open`, kołnierz `eri`, szerokie rękawy `wide`);
+  - dół: kilt i salwar (`uni:1`, losowane też dla mężczyzn);
+  - czapka: kufi (`tuck` krawędzi w `hatShell`).

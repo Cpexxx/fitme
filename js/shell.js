@@ -278,6 +278,12 @@ function buildShells(G,GS){
     if(!up.any)continue;const p=cm.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);}}
     p.needsUpdate=true;cm.geometry.computeVertexNormals();}
+  /* a skirt (kept as cut) stays under the fitted shells of the layers above it where they cover it, never inside the body */
+  {const sk=[];G.traverse(o=>{if(o.isMesh&&o.userData.skirtPiece)sk.push(o);});
+    if(sk.length){const up=new PGrid(0);for(const m of shells){const lr={top:2,mid:3,outer:4}[m.userData.layer];if(lr)up.raster(shTrisOf(m,0),0);}
+      if(up.any){const c=new Float32Array(3),q=new Float32Array(3);for(const o of sk){shBake(o,o.parent||G);const p=o.geometry.attributes.position;let ch=false;
+        for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
+        if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}}}
   /* fabric of a lower layer that ends up under an upper one is never seen: drop it, so nothing can poke through
      (only 2 cm inside the upper layer's edge: the coverage grid is coarse and hole-filled, at an open front it reached past the fabric and cut teeth into the trousers) */
   for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean))){const L=layers.find(l=>l.name===m.userData.layer);if(!L||window.__qaNoDrop)continue;

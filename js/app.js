@@ -160,7 +160,7 @@ function applyOpts(sc,r,main){const L=sc.userData.lights,P=LIGHTS[OPT.light]||LI
   if(L){for(const k of ['key','rim','rim2','fill']){L[k].color.setHex(P[k][0]);L[k].intensity=P[k][1];}L.hemi.intensity=P.hemi;L.key.castShadow=!!OPT.shadows;}
   for(const o of sc.userData.ped||[])o.visible=!!OPT.ped;
   r.toneMappingExposure=0.82*OPT.exposure;
-  if(main){const base=QUALITY==='high'?Math.max(window.devicePixelRatio||1,1.5):QUALITY==='perf'?(GL_INFO.soft?0.75:1):(window.devicePixelRatio||1);basePR=clamp(base*OPT.res,0.5,2.5);lowRes=false;r.setPixelRatio(basePR);
+  if(main){const base=QUALITY==='high'?Math.max(window.devicePixelRatio||1,1.5):QUALITY==='perf'?(GL_INFO.soft?0.75:1):(window.devicePixelRatio||1);basePR=clamp(base*OPT.res,0.5,2.5);lowRes=false;stillHi=false;r.setPixelRatio(basePR);
     if(controls)controls.autoRotateSpeed=OPT.spinSpeed;const f=$('#fps');if(f)f.hidden=!OPT.fps;r.shadowMap.needsUpdate=true;dirty=true;
     const st=$('#stage');if(st)window.dispatchEvent(new Event('resize'));}
 }
@@ -171,7 +171,7 @@ const fmtHeight=cm=>{if(OPT.units!=='in')return cm+' cm';const t=Math.round(cm/2
 /* =============== scene & lighting =============== */
 let renderer=null,scene=null,root=null,camera=null,controls=null,glOK=false,spin=false,dirty=true;
 /* adaptive resolution: while the view moves and frames come slowly, draw at a lower pixel ratio; a sharp frame once it stops */
-let basePR=1,lowRes=false,slowN=0,lastMove=0,lastFrame=0,wasMoving=false;
+let basePR=1,lowRes=false,slowN=0,lastMove=0,lastFrame=0,wasMoving=false,stillHi=false,lastBuildAt=0;
 let tR=null,tScene=null,tRoot=null,tCam=null;
 const reduceMotion=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 const fly={active:false,t:0};
@@ -231,8 +231,13 @@ function init3D(){
     if(fly.active){fly.t=Math.min(1,fly.t+1/40);const k=1-Math.pow(1-fly.t,3);camera.position.lerpVectors(fly.fromP,fly.toP,k);controls.target.lerpVectors(fly.fromT,fly.toT,k);if(fly.t>=1)fly.active=false;dirty=true;}
     controls.autoRotate=spin&&!fly.active;const moved=controls.update(),now=performance.now();
     if(moved||spin||fly.active){const dt=now-lastFrame;if(wasMoving){if(dt>34)slowN++;else if(dt<20)slowN=Math.max(0,slowN-1);}lastMove=now;
+      if(stillHi){stillHi=false;renderer.setPixelRatio(basePR);}
       if(!lowRes&&slowN>=3){lowRes=true;renderer.setPixelRatio(Math.max(0.35,basePR*0.5));}}
     else if(lowRes&&now-lastMove>200){lowRes=false;slowN=0;renderer.setPixelRatio(basePR);dirty=true;}
+    /* high quality: once the view has been still for a moment, one frame supersampled (finer hair, seams and fabric
+       texture; capped at ~16 Mpx), back to the normal resolution as soon as it moves */
+    else if(QUALITY==='high'&&!stillHi&&!lowRes&&now-lastMove>350&&now-lastBuildAt>350){const w=renderer.domElement.clientWidth||1,h=renderer.domElement.clientHeight||1,pr=Math.min(basePR*1.6,3,Math.sqrt(16e6/(w*h)));
+      if(pr>basePR+0.05){stillHi=true;renderer.setPixelRatio(pr);dirty=true;}}
     wasMoving=!!(moved||spin||fly.active);
     if(moved||dirty||spin||OPT.fps){renderer.render(scene,camera);dirty=false;lastFrame=performance.now();fpsTick();}};
   loop();
@@ -582,7 +587,7 @@ function update(live=false){
   if(!live){renderLeft();renderRight();renderPoses();}
   renderTags();
   if(pending)return;pending=true;
-  const run=()=>{pending=false;if(root){const t0=performance.now();buildInto(root,S);window.__lastBuild=performance.now()-t0;warmPose();if(renderer)renderer.shadowMap.needsUpdate=true;dirty=true;}};
+  const run=()=>{pending=false;if(root){const t0=performance.now();buildInto(root,S);window.__lastBuild=performance.now()-t0;lastBuildAt=performance.now();warmPose();if(renderer){renderer.shadowMap.needsUpdate=true;if(stillHi){stillHi=false;renderer.setPixelRatio(basePR);}}dirty=true;}};
   if(glOK)requestAnimationFrame(run);else run();
 }
 
@@ -713,8 +718,8 @@ function randomize(){
   Object.assign(s.top,{fit:pick(T.fits),mat:T.mats?pick(T.mats):'',neck:T.necks?pick(T.necks):'',sleeve:pick(T.sleeves),color:pc(PAL.basic),color2:pc(PAL.basic),pattern:T.defPat||(R()<0.75?'solid':pick(Object.keys(PATTERNS))),tuck:T.tuck&&R()<0.35?pick(['in','front']):'out',print:T.print&&R()<0.35?pick(Object.keys(PRINTS).slice(1)):'none'});
   if(R()<0.45)s.outer.type='none';else{const k=pick(Object.keys(OUTERS).slice(1)),O=OUTERS[k];s.outer.type=k;Object.assign(s.outer,{fit:pick(O.fits),mat:O.mats?pick(O.mats):'',close:O.closure==='zip'?pick(['closed','half','open']):pick(['closed','open']),color:pc(palFor(O.mat)),color2:O.def2||pc(PAL.basic),pattern:O.defPat||(R()<0.85?'solid':pick(['tartan','houndstooth','camo','buffalo']))});}
   if(R()<0.35){const k=pick(Object.keys(MID_ITEMS)),[D]=midDefs(k),Mi=D[k];s.mid.type=k;s.mid.src=MID_ITEMS[k];Object.assign(s.mid,{fit:pick(Mi.fits),mat:Mi.mats?pick(Mi.mats):'',color:pc(PAL.basic),color2:pc(PAL.basic),pattern:Mi.defPat||'solid'});}else{s.mid.type='none';s.mid.src='none';}
-  const bottoms=Object.keys(BOTTOMS).filter(k=>k!=='none').filter(k=>fem?R()<0.5||!BOTTOMS[k].skirt:!BOTTOMS[k].skirt&&k!=='leggings'),B=BOTTOMS[s.bottom.type=pick(bottoms)];
-  Object.assign(s.bottom,{fit:pick(B.fits),length:R()<0.6&&B.lens.includes('full')?'full':pick(B.lens),rise:pick(Object.keys(RISES)),mat:B.mats?pick(B.mats):'',pattern:R()<0.85?'solid':pick(['pinstripe','tartan','camo','houndstooth']),belt:R()<0.35,rips:R()<0.2,stripes:R()<0.3});
+  const bottoms=Object.keys(BOTTOMS).filter(k=>k!=='none').filter(k=>fem?R()<0.5||!BOTTOMS[k].skirt:(!BOTTOMS[k].skirt||BOTTOMS[k].uni)&&k!=='leggings'),B=BOTTOMS[s.bottom.type=pick(bottoms)];
+  Object.assign(s.bottom,{fit:pick(B.fits),length:R()<0.6&&B.lens.includes('full')?'full':pick(B.lens),rise:pick(Object.keys(RISES)),mat:B.mats?pick(B.mats):'',pattern:B.defPat||(R()<0.85?'solid':pick(['pinstripe','tartan','camo','houndstooth'])),belt:R()<0.35,rips:R()<0.2,stripes:R()<0.3});
   s.bottom.color=pc(palFor(s.bottom.mat||B.mat));
   const shoes=Object.keys(SHOES).filter(k=>k!=='none'&&(fem||!['pump','ballet','maryjane','kneeboot'].includes(k))),SH=SHOES[s.shoes.type=pick(shoes)];
   Object.assign(s.shoes,{color:pc(PAL.shoe),color2:R()<0.6?s.shoes.color:pc(PAL.shoe),sole:pc(PAL.sole),mat:SH.ups?pick(SH.ups):'',socks:R()<0.4?pick(['ankle','crew']):'none',sockColor:pc(PAL.basic)});

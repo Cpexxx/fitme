@@ -230,6 +230,24 @@ function neckFlare(R,n){if(!BC.headC||!BC.hd)return null;
     else{R[i*3]=cx+Math.cos(a)*rr;R[i*3+1]=yS;R[i*3+2]=cz+Math.sin(a)*rr;cut[i]=1;}}
   NL.cut=cut;return NL;}
 function neckRingR(NL,a){const f=(((a/TAU*72)%72)+72)%72,i=Math.floor(f)%72;return lerp(NL.RG[i],NL.RG[(i+1)%72],f-Math.floor(f));}
+/* the back of the knee and thigh: the MakeHuman legs (more so muscular ones) step out 2 cm at the back of the thigh a
+   hand above the knee and cut a 2-2.5 cm hollow above the calf, so in profile the back of the thigh stood out like a
+   wing (a goat's leg). The back outline of each leg from the calf to below the seat is drawn most of the way to its own smoothed version (bulge down, hollow filled),
+   on the back half of the leg only (on the dense render mesh): a smooth taper from the thigh into the calf */
+function poplitealFill(P,nv,W,kneeY){const DY=0.015,yA=kneeY-0.26,NB=Math.ceil(0.7/DY)+1,lo=kneeY-0.15,hi=kneeY+0.28,Dz=new Float32Array(nv);
+  for(const sd of [-1,1]){const zmin=new Float32Array(NB).fill(9),zsum=new Float32Array(NB),cnt=new Float32Array(NB),idx=[];
+    for(let i=0;i<nv;i++){if(W[i*3+1]<0.6||W[i*3+2]>0.3||sd*P[i*3]<0.02)continue;const b=Math.round((P[i*3+1]-yA)/DY);if(b<0||b>=NB)continue;
+      idx.push(i);const z=P[i*3+2];if(z<zmin[b])zmin[b]=z;zsum[b]+=z;cnt[b]++;}
+    /* the outline: the furthest-back point of each row and its neighbours (a thin row may miss the back), empty rows
+       filled from the nearest measured one */
+    const prof=new Float32Array(NB);for(let b=0;b<NB;b++){let m=9;for(let k=-1;k<=1;k++){const q=b+k;if(q>=0&&q<NB&&cnt[q]&&zmin[q]<m)m=zmin[q];}prof[b]=m;}
+    for(let b=1;b<NB;b++)if(prof[b]===9)prof[b]=prof[b-1];for(let b=NB-2;b>=0;b--)if(prof[b]===9)prof[b]=prof[b+1];if(prof[0]===9)continue;
+    const sm=new Float32Array(NB);for(let b=0;b<NB;b++){let a=0,w=0;for(let k=-12;k<=12;k++){const q=b+k;if(q<0||q>=NB)continue;const ww=Math.exp(-(k*k)/(2*5*5));a+=prof[q]*ww;w+=ww;}sm[b]=a/w;}
+    for(const i of idx){const y=P[i*3+1],fb=(y-yA)/DY,b=clamp(Math.floor(fb),0,NB-2),t=fb-b;
+      const d=clamp(lerp(sm[b]-prof[b],sm[b+1]-prof[b+1],t)*0.9,-0.018,0.018)*smooth((y-lo)/0.04)*smooth((hi-y)/0.05);if(!d)continue;
+      const zc=lerp(zsum[b]/(cnt[b]||1),zsum[b+1]/(cnt[b+1]||1),t),zm=lerp(prof[b],prof[b+1],t),back=smooth(((zc-P[i*3+2])/Math.max(0.01,zc-zm)-0.15)/0.6);
+      Dz[i]=d*back;}}
+  for(let i=0;i<nv;i++)P[i*3+2]+=Dz[i];}
 /* =============== muscle definition ===============
    MakeHuman's most muscular shape carries the mass, but its coarse mesh (and the smoothing) has no definition. On the
    dense render mesh the anatomy is carved in as shallow grooves between the muscles, along their real borders: carving
@@ -302,7 +320,7 @@ function muscleRelief(R,plan,W){const M=BC.core;if(!M||!M.spots||M.spots.length<
 function mhGeo(P,feet){
   const p1=mhPlan(feet),hi=GEO_Q>1,plan=hi?mhPlan2(feet):p1,R=hi?ccApply(plan,ccApply(p1,P)):ccApply(p1,P),n=plan.n;smoothSpots(R,plan,BC.core&&BC.core.spots);
   {const B=mhBase(),W0=new Float32Array(B.nv*3);for(let i=0;i<B.nv;i++){W0[i*3]=B.armw[i];W0[i*3+1]=B.legw[i];W0[i*3+2]=B.footw[i];}
-    muscleRelief(R,plan,hi?ccApply(plan,ccApply(p1,W0)):ccApply(p1,W0));}
+    const Wd=hi?ccApply(plan,ccApply(p1,W0)):ccApply(p1,W0);muscleRelief(R,plan,Wd);if(BC.core&&BC.map)poplitealFill(R,n,Wd,BC.map.inv(BC.core.J.kneeL[1]));}
   const NL=neckFlare(R,n);
   const geo=new THREE.BufferGeometry(),uv=new Float32Array(n*2),col=new Float32Array(n*3);
   /* the lid of the cut neck (faces with all corners on the ring) goes: the open ring is where the neck strip starts */

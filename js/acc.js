@@ -3,7 +3,7 @@
 const handSide=h=>h==='L'?1:-1;
 function hatShell(G,mat,h,o={}){
   G.add(mk(surf(96,22,(u,v)=>{const ph=(o.ph0||0)+u*(o.span||TAU),ny0=hatLineNy(ph)+(o.lineAdd||0),th=v*Math.acos(clamp(ny0,-0.98,0.98));
-    return headPt(th,ph,h+(o.dome?o.dome*Math.pow(1-v,1.5):0)+(o.front?o.front*smooth(Math.sin(ph))*(1-v)*v*4:0),false);},{wrapU:!o.span,uRep:o.uRep||16,vRep:3,noAO:true}),mat));
+    return headPt(th,ph,h*(o.tuck?1-o.tuck*smooth((v-0.8)/0.2):1)+(o.dome?o.dome*Math.pow(1-v,1.5):0)+(o.front?o.front*smooth(Math.sin(ph))*(1-v)*v*4:0),false);},{wrapU:!o.span,uRep:o.uRep||16,vRep:3,noAO:true}),mat));
 }
 function hatEdge(ph,h){return headPt(Math.acos(clamp(hatLineNy(ph),-0.98,0.98)),ph,h,false);}
 function buildHat(G){
@@ -25,6 +25,10 @@ function buildHat(G){
     case 'beanie':case 'fisherman':{
       const m=fabric(t==='beanie'?'knit':'rib',c);hatShell(G,m,H0+0.002,{dome:t==='beanie'?0.014:0.004,uRep:22});
       G.add(mk(surf(96,6,(u,v)=>{const ph=u*TAU,ny0=hatLineNy(ph),th0=Math.acos(ny0),th=th0-v*(t==='beanie'?0.36:0.3);return headPt(th,ph,0.016+0.003*Math.sin(Math.PI*v),false);},{wrapU:true,uRep:22,vRep:1,noAO:true}),fabric('rib',shade(c,-0.04))));break;}
+    case 'kufi':{/* a brimless round cap, its edge drawn in close to the head (no bowl-like lip), with embroidered bands */
+      const m=fabric('knit',c,'dots',shade(c,lumHex(c)<0.3?0.35:-0.25));hatShell(G,m,0.0062,{dome:0.003,uRep:26,tuck:0.25});
+      for(const k of [0.25,0.6]){const pts=[];for(let i=0;i<=72;i++){const ph=i/72*TAU,ny0=hatLineNy(ph),th=Math.acos(ny0)*(1-k*0.45);pts.push(headPt(th,ph,0.0062+0.003*Math.pow(k*0.45,1.5)+0.0012,false));}G.add(mk(cordGeo(pts,0.0016,true,6,144),plain(c2,.5)));}
+      {const pts=[];for(let i=0;i<=96;i++){const ph=i/96*TAU;pts.push(headPt(Math.acos(hatLineNy(ph))-0.004,ph,0.0062*0.75+0.0016,false));}G.add(mk(cordGeo(pts,0.002,true,8,192),fabric('rib',shade(c,-0.06))));}break;}
     case 'bucket':{const m=fabric('canvas',c);hatShell(G,m,H0+0.004,{dome:0.016});
       G.add(mk(surf(96,6,(u,v)=>{const ph=u*TAU,E=hatEdge(ph,H0+0.004);const r=V3(Math.cos(ph),0,Math.sin(ph));return E.clone().addScaledVector(r,0.058*v).add(V3(0,-0.032*v-0.004*Math.sin(ph*3)*v,0));},{wrapU:true,uRep:30,noAO:true}),m));
       for(const k of [0.35,0.7]){const pts=[];for(let i=0;i<=60;i++){const ph=i/60*TAU,E=hatEdge(ph,H0+0.004),r=V3(Math.cos(ph),0,Math.sin(ph));pts.push(E.clone().addScaledVector(r,0.058*k).add(V3(0,-0.032*k+0.0015,0)));}G.add(mk(stitchGeo(pts,true),stitchMat(shade(c,0.3))));}break;}
@@ -281,10 +285,19 @@ function buildWalletChain(G){
 function roundBox(w,h,d,r){const s=new THREE.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);
   const g=new THREE.ExtrudeGeometry(s,{depth:d-0.01,bevelEnabled:true,bevelThickness:0.005,bevelSize:0.005,bevelSegments:3,curveSegments:8});g.translate(0,0,-(d-0.01)/2);return g;}
 function strapRing(G,mat,yc,A,aTop,w,off=0.008){
-  const pts=[],sides=[];for(let i=0;i<=64;i++){const a=aTop+i/64*TAU,y=yc+A*Math.cos(a-aTop);const e=addE(bodyEnv(y,LAYERS),off),P=envPt(e,a,y,0);pts.push(P);}
+  /* (across the sides the strap runs under the arm, close to the trunk: the envelope of loose clothes reaches out over the
+     arms there and the strap wrapped round the outside of the sleeve; it is pushed out over the fitted clothes later, the
+     part under the arm hidden) */
+  const pts=[],sides=[];for(let i=0;i<=64;i++){const a=aTop+i/64*TAU,y=yc+A*Math.cos(a-aTop);const e=addE(bodyEnv(y,LAYERS),off),eb=bodyEnv(y,null);e.rx=Math.min(e.rx,eb.rx+0.02+off);const P=envPt(e,a,y,0);pts.push(P);}
   for(let i=0;i<=64;i++){const t=pts[Math.min(64,i+1)].clone().sub(pts[Math.max(0,i-1)]).normalize(),n=radialN(pts[i]);sides.push(new THREE.Vector3().crossVectors(t,n).normalize());}
-  G.add(mk(ribbon(pts,sides,w,{uRep:1}),mat));return pts;
+  const rb=mk(ribbon(pts,sides,w,{uRep:1}),mat);hideInArms(rb.geometry);G.add(rb);return pts;
 }
+/* the part of a strap that runs under the arm (below the armpit, not over the shoulder) is hidden inside the arm / sleeve (from the side the arm covers it; left in
+   place it poked out through the sleeve in pieces) */
+function hideInArms(g){const p=g.attributes.position,n=p.count,inA=new Uint8Array(n),ax=[];
+  for(const sd of [-1,1])for(let k=0;k<=40;k++){const t=k/40*0.55;ax.push([armPt(t,sd),Math.max(armAt(t),sleeveEnv(t,LAYERS))+0.004]);}
+  const yA=BC.shY-0.09;for(let i=0;i<n;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);if(y>yA)continue;for(const [A,r] of ax){const dx=x-A.x,dy=y-A.y,dz=z-A.z;if(dx*dx+dy*dy+dz*dz<r*r){inA[i]=1;break;}}}
+  if(!g.index)return;const ix=g.index.array,keep=[];for(let t=0;t<ix.length;t+=3)if(!(inA[ix[t]]||inA[ix[t+1]]||inA[ix[t+2]]))keep.push(ix[t],ix[t+1],ix[t+2]);if(keep.length<ix.length)g.setIndex(keep);}
 function buildBag(G0){
   /* everything of the bag goes into one group: it is pushed outside the finished clothes afterwards */
   const G=new THREE.Group();G.userData.bagGroup=true;G0.add(G);
@@ -305,9 +318,38 @@ function buildBag(G0){
     G.add(mk(cordGeo([V3(-0.13,yC+0.15,-zb-0.072),V3(0,yC+0.2,-zb-0.075),V3(0.13,yC+0.15,-zb-0.072)],0.0016),metal));
     G.add(mk(cordGeo([V3(-0.05,yC+0.21,-zb+0.02),V3(0,yC+0.24,-zb+0.02),V3(0.05,yC+0.21,-zb+0.02)],0.005),web));
   }else if(t0==='tote'){
-    /* on the right shoulder, the bag against the side of the hip just behind the hanging arm, its front edge showing */
-    const e=bodyEnv(1.0,LAYERS),x=-(e.rx+0.05),b=mk(roundBox(0.34,0.32,0.06,0.012),fabric('canvas',col));b.position.set(x,0.98,-0.07);b.rotation.y=Math.PI/2+0.12;b.rotation.z=0.06;b.userData.bagBody=true;G.add(b);
-    for(const dz of [-0.06,0.06]){const top=envPt(addE(bodyEnv(1.47,LAYERS),0.006),Math.PI,1.47,0);G.add(mk(cordGeo([b.position.clone().add(V3(0,0.15,dz)),top.clone().add(V3(-0.01,0.0,dz*0.4)),b.position.clone().add(V3(0,0.15,dz*0.2))],0.006,false,6,20),lm));}
+    /* a soft canvas tote on the right shoulder: it hangs against the back of the right hip, just behind the arm; wider at
+       the bottom with a boxed base, thin at the open top (lining showing), two handles rising over the shoulder */
+    const can=fabric('canvas',col),lin=plain(shade(col,-0.45),.85),yB=0.8,H=0.33,a=-2.3,yC=yB+H*0.45;
+    const eC=addE(bodyEnv(yC,LAYERS),0.006),Pc=envPt(eC,a,yC,0),nC=radialN(Pc);nC.y=0;nC.normalize();
+    const bag=new THREE.Group();bag.position.set(Pc.x,0,Pc.z);bag.rotation.y=Math.atan2(nC.x,nC.z);G.add(bag);
+    /* cross-sections bottom to top: width (local x), depth (local z, the bag's back resting on the body), rounded box */
+    const W=t=>lerp(0.3,0.27,t),D=t=>lerp(0.055,0.012,smooth(t))+0.008*Math.sin(Math.PI*Math.min(1,t*1.2)),sm=[];
+    for(let k=0;k<=24;k++){const t=k/24,y=yB+H*t,cl=smooth(k/1.5);sm.push({c:V3(0,y,D(t)),rx:W(t)/2*lerp(0.6,1,cl),rz:D(t)*lerp(0.3,1,cl),rzb:D(t)*lerp(0.3,1,cl),n:lerp(3.4,2.6,t),u:VX,v:VZ,y});}
+    sm.unshift({c:V3(0,yB-0.002,D(0)),rx:0.002,rz:0.002,rzb:0.002,n:2,u:VX,v:VZ,y:yB-0.002});
+    const body=mk(tube(sm,{seg:56,mod:(ang,t,s)=>1+0.012*Math.sin(ang*5+s.y*30)*smooth(t*3)}),can);body.userData.bagBody=true;bag.add(body);
+    /* the lining just inside the opening (faces turned inwards) and a hemmed rim */
+    const ins=sm.slice(-6).map(q=>Object.assign({},q,{rx:q.rx-0.0025,rz:Math.max(0.002,q.rz-0.0025),rzb:Math.max(0.002,q.rzb-0.0025)}));
+    const lg=tube(ins,{seg:56});{const ix=lg.index.array;for(let t=0;t<ix.length;t+=3){const q=ix[t+1];ix[t+1]=ix[t+2];ix[t+2]=q;}const nr=lg.attributes.normal;for(let i=0;i<nr.count;i++)nr.setXYZ(i,-nr.getX(i),-nr.getY(i),-nr.getZ(i));}
+    const li=mk(lg,lin);li.userData.bagBody=true;bag.add(li);
+    const top=sm[sm.length-1],rim=mk(tube([0,1].map(k=>({c:V3(0,top.y-0.012+0.012*k,top.c.z),rx:top.rx+0.0012,rz:top.rz+0.0012,rzb:top.rzb+0.0012,n:top.n,u:VX,v:VZ})),{seg:56}),fabric('canvas',shade(col,-0.08)));rim.userData.bagBody=true;bag.add(rim);
+    /* the bag itself is rigid (as a piece of cloth it was re-seated vertex by vertex onto the clothes and came out pinched);
+       it is moved out over the clothes as a whole (shBagsOut) */
+    bag.traverse(q=>{if(q.isMesh)q.userData.ctx='none';});
+    /* handles: on the outer wall a V from two points of the rim up over the top of the shoulder, on the inner wall the
+       same (between the bag and the body); kept clear of the body and clothes */
+    bag.updateMatrixWorld(true);
+    /* over the top of the shoulder halfway between the neck and the shoulder point (out at the shoulder envelope they
+       looped up off the deltoid) */
+    let shTop=BC.shY+0.03;{const geo=bodyGeo(false),P=geo.attributes.position,AW=geo.userData.armw,xs=-BC.shX*0.62;for(let i=0;i<P.count;i++){if(AW&&AW[i]>0.3)continue;if(Math.abs(P.getX(i)-xs)<0.01&&Math.abs(P.getZ(i)+0.01)<0.03&&P.getY(i)<BC.shY+0.12&&P.getY(i)>shTop)shTop=P.getY(i);}}
+    const sh=V3(-BC.shX*0.62,shTop+0.012+(LAYERS.length?0.006:0),-0.01);
+    const clear=p=>{const e=addE(bodyEnv(Math.min(p.y,1.5),LAYERS),0.009),ang=Math.atan2(p.z,p.x),R=envR(e,ang),r=Math.hypot(p.x,p.z);if(r<R){p.x*=R/r;p.z*=R/r;}return p;};
+    for(const wall of [1,-1]){const zw=top.c.z+wall*top.rz,A=V3(-0.075,top.y-0.004,zw).applyMatrix4(bag.matrixWorld),B=V3(0.075,top.y-0.004,zw).applyMatrix4(bag.matrixWorld);
+      const mid=s0=>A.clone().lerp(sh,0.5).add(V3(0,0,0)).lerp(B.clone().lerp(sh,0.5),s0);
+      const apex=sh.clone().add(V3(0,0.006,0.016*wall)),pts=[A,A.clone().lerp(apex,0.3),A.clone().lerp(apex,0.62),apex,B.clone().lerp(apex,0.62),B.clone().lerp(apex,0.3),B].map(clear);
+      let pp=new THREE.CatmullRomCurve3(pts,false,'centripetal').getSpacedPoints(48).map(clear);
+      for(let it=0;it<6;it++){pp=pp.map((p,k)=>k===0||k===pp.length-1?p:clear(p.clone().lerp(pp[k-1].clone().add(pp[k+1]).multiplyScalar(0.5),0.5)));}
+      const hd=mk(cordGeo(pp,0.0058,false,8,60),fabric('canvas',shade(col,-0.08)));hd.userData.ctx='none';G.add(hd);}
   }
 }
 function buildScarf(G){

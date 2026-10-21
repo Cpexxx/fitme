@@ -183,6 +183,10 @@ function buildSkirt(G,P,T){
     const fly=[[0.03,waistY-0.04],[0.03,waistY-0.13],[0.006,waistY-0.15]].map(([x,y])=>onFront(rf,x,y));stitchPts(G,fly,thread);}
   if(T.belt){beltLoops(G,waistY,0.014,mb,0.036,!!P.belt);if(P.belt)belt(G,waistY,0.014,P);}
   PANTS={waistY,hipE:0.014,rf:y=>addE(pantsSeat(y),0.016),loops:[FRONT-0.5,FRONT+0.5,FRONT-1.35,FRONT+1.35,BACKA-0.55,BACKA+0.55,BACKA]};
+  /* a skirt keeps its own pattern shape: re-seated with the shift of the top fitted over it (there is no trouser shell
+     under it to follow) it sank 4-5 cm into the hips and the skin showed between the two. Where the fitted top covers
+     it, it is pressed under the top's shell afterwards (buildShells) */
+  for(const o of G.children)if(o.userData.layer==='bottom'){o.userData.ctx='none';o.userData.skirtPiece=true;}
   const k=fit.pleat?1.035:1.02;
   LAYERS.push({torso:y=>(y>=hem&&y<=waistY)?mulE(rf(y),k):(y>waistY&&y<=waistY+0.04)?addE(pantsSeat(y),0.014*(1-(y-waistY)/0.04)):null});
 }
@@ -253,7 +257,7 @@ function buildTop(G,P=S.top){
   const md=fabric(ribK,shade(P.color,-0.06),ribK===mat?pat:'solid',c2);
   const trim=T.trim?fabric('rib',c2):md;
   const sleeveless=sleeve==='none';
-  const hemOut=(BC.g==='f'?0.875:0.855)+(F.hem||0)+(T.tail?-0.02:0)-SZ.len;
+  const hemOut=(BC.g==='f'?0.875:0.855)+(F.hem||0)+(T.tail?-0.02:0)-SZ.len-(T.long||0);
   const hem=tuck?waistY-0.05:hemOut,e0=Math.max(0.002,easeCap(F.e+(T.boning?-0.004:0)+SZ.d)),top=sleeveless?(neck==='scoop'?1.345:1.3):NECK_Y;
   const easeAt=y=>{let e=e0;if(y>1.3)e=lerp(e0,Math.min(e0,0.008+e0*0.4),smooth((y-1.3)/0.12));if(y>1.45)e=lerp(e,0.01,smooth((y-1.45)/0.055));if(tuck&&y<waistY+0.06)e=lerp(0.003,e,smooth((y-(waistY-0.015))/0.075));if(T.rib&&!tuck&&y<hem+0.05)e=lerp(e*0.45,e,smooth((y-hem)/0.05));return e;};
   const baseAt=y=>(tuck&&y<waistY)?bodyEnv(y,null):drapeEnv(y,prev);
@@ -278,7 +282,13 @@ function buildTop(G,P=S.top){
     if(T.tail){const dropF=a=>0.05*Math.pow(Math.abs(Math.sin(a)),1.5);
       const tl=mk(surf(84,6,(u,v)=>{const a=u*TAU,y=hem-dropF(a)*v;return envPt(rf0(hem),a,y,0.0005);},{noAO:true}),m);tl.userData.tail=true;G.add(tl);}
   }else if(tuckM==='front'){
-    const panelHem=hemOut-0.02;G.add(mk(surf(60,10,(u,v)=>{const a=BACKA+(u*2-1)*1.5,w=smooth(1-Math.abs(u*2-1)),y=lerp(waistY-0.01,lerp(waistY-0.01,panelHem,w),v);return envPt(addE(bodyEnv(y,prev),e0*0.8+0.002),a,y,0);},{noAO:true}),m));
+    /* the back left out lies on the trousers over the seat (the full ease of a loose shirt, and hanging it straight
+       from the waistband envelope, stood it out round the hips like a stiff bell), a little looser towards its hem,
+       with its own hem fold */
+    const panelHem=hemOut-0.02,pe=y=>Math.min(e0,0.006)+0.004*smooth((waistY-y)/0.08),pr=y=>addE(bodyEnv(y,prev),pe(y));
+    const pa=(u)=>BACKA+(u*2-1)*1.5,py=(u,v)=>{const w=smooth(1-Math.abs(u*2-1));return lerp(waistY+0.004,lerp(waistY-0.01,panelHem,w),v);};
+    G.add(mkMain(surf(60,12,(u,v)=>{const y=py(u,v);return envPt(pr(y),pa(u),y,0.0006*Math.sin(u*40));},{noAO:true}),m));
+    G.add(mk(surf(60,2,(u,v)=>{const y=py(u,1)+0.012*v;return envPt(pr(y),pa(u),y,0.0018);},{noAO:true}),m));
   }
   /* neckline */
   if(neck==='crew'||neck==='henley'||(neck==='hood'&&false))G.add(mk(tube(vSamples(top-0.018,top+0.003,4,y=>addE(rf0(Math.min(y,top)),roundE(y,top-0.018,top+0.003,0.004))),{seg:64}),trim));
@@ -293,15 +303,29 @@ function buildTop(G,P=S.top){
   if(T.collar==='shirt')fallCollar(G,md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.026,drop:0.045,point:0.016,spread:0.012});
   if(T.collar==='polo')fallCollar(G,T.collar2?fabric('twill','#f4f1ea'):md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.018,drop:0.036,point:0.01,spread:0.01});
   if(T.collar==='camp')fallCollar(G,m,{y:top-0.006,env:rf0,gapX:0.07,stand:0.008,drop:0.05,point:0.012,spread:0.03,tip:0});
+  /* mandarin (band) collar: a low stand closed at the front */
+  if(T.collar==='mandarin')standCollar(G,md,{y:top-0.004,h:0.03,env:rf0,gapX:0.005,lean:0.004});
   if(T.placket==='full'){const yb=tuck?waistY-0.03:hem+0.004,yt=T.collar==='camp'?1.34:top-0.01;G.add(mk(patch(rf0,FRONT-0.085,FRONT+0.085,yb,yt,0.0018,{nv:24,seg:3,mod:folds}),md));
     stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT-0.08,thread);stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT+0.08,thread);
     const n=T.buttons||6,ytop=T.collar==='camp'?1.32:top-0.025,ybot=Math.max(yb+0.06,tuck?waistY+0.02:hem+0.08);
-    for(let i=0;i<n;i++){const y=lerp(ytop,ybot,i/(n-1)),Pb=onFront(rf0,0,y,0.0036);buttonAt(G,Pb,V3(0,0,1),0.0052,plain(shade(P.color,-0.22),.35));}}
+    /* frog fastenings (pankou): a knotted cord loop across the opening instead of a button */
+    const fm=T.frogs?fabric('satin',shade(P.color,lumHex(P.color)<0.3?0.3:-0.3)):null;
+    for(let i=0;i<n;i++){const y=lerp(ytop,ybot,i/(n-1));
+      if(T.frogs){const pts=[];for(let k=0;k<=8;k++){const x=lerp(-0.034,0.034,k/8);pts.push(onFront(rf0,x,y+0.003*Math.sin(Math.PI*k/8),0.0045));}cordsAlong(G,fm,pts,0.0022);
+        for(const x of [-0.034,0.034,0.004]){const kn=mk(new THREE.SphereGeometry(x===0.004?0.0048:0.0034,12,8),fm);kn.position.copy(onFront(rf0,x,y,0.005));G.add(kn);}}
+      else{const Pb=onFront(rf0,0,y,0.0036);buttonAt(G,Pb,V3(0,0,1),0.0052,plain(shade(P.color,-0.22),.35));}}}
   if(T.chestPocket){const e=rf0(1.26),a0=angAtX(e,0.115),a1=angAtX(e,0.05);G.add(mk(patch(rf0,a0,a1,1.2,1.3,0.0028,{nv:6,seg:8}),m));
     const sp=[];for(let k=0;k<=8;k++)sp.push(envPt(addE(rf0(1.2+0.1*0),0.004),lerp(a0,a1,k/8),1.2,0));stitchPts(G,sp,thread);}
   if(T.flapPockets)for(const sx of [-1,1]){const e=rf0(1.27),a0=sideAng(sx*0.12,e),a1=sideAng(sx*0.045,e),lo=Math.min(a0,a1),hi=Math.max(a0,a1);
     G.add(mk(patch(rf0,lo,hi,1.19,1.3,0.0028,{nv:6,seg:8}),m));G.add(mk(patch(rf0,lo-0.02,hi+0.02,1.28,1.31,0.0055,{nv:2,seg:8}),md));
     const b=onFront(rf0,sx*0.0825,1.288,0.0075);buttonAt(G,b,V3(0,0,1),0.0042,plain(shade(P.color,-0.3),.4));}
+  /* guayabera: four patch pockets (two on the chest, two low) and pin-tucked pleats running down the front */
+  if(T.guaya){const yLo=Math.max(hem+0.05,tuck?waistY+0.03:hem+0.05);
+    for(const sx of [-1,1]){for(const [x0,x1,y0,y1] of [[0.045,0.12,1.19,1.29],[0.05,0.14,yLo,yLo+0.12]]){if(tuck&&y0<waistY)continue;const e=rf0((y0+y1)/2),a0=sideAng(sx*x1,e),a1=sideAng(sx*x0,e),lo=Math.min(a0,a1),hi=Math.max(a0,a1);
+        G.add(mk(patch(rf0,lo,hi,y0,y1,0.0028,{nv:6,seg:8}),m));G.add(mk(patch(rf0,lo-0.01,hi+0.01,y1-0.022,y1+0.004,0.0048,{nv:2,seg:8}),md));
+        const b=onFront(rf0,sx*(x0+x1)/2,y1-0.012,0.0066);buttonAt(G,b,V3(0,0,1),0.004,plain(shade(P.color,-0.22),.35));}
+      for(const x of [0.07,0.095]){const seg=[];const flush=()=>{if(seg.length>1)stitchPts(G,seg.splice(0),thread);else seg.length=0;};
+        for(let k=0;k<=40;k++){const y=lerp(tuck?waistY+0.02:hem+0.02,1.36,k/40),inP=(y>1.18&&y<1.3&&x<0.125)||(y>yLo-0.01&&y<yLo+0.13);if(inP){flush();continue;}seg.push(onFront(rf0,sx*x,y,0.0022));}flush();}}}
   if(T.yoke){const yk=[];for(let k=0;k<=24;k++){const a=lerp(BACKA-1.5,BACKA+1.5,k/24);yk.push(envPt(rf0(1.4),a,1.4,0.0016));}stitchPts(G,yk,thread);}
   if(T.kangaroo&&!tuck){const y0=hem+0.055,y1=hem+0.18;G.add(mk(patch(rf0,FRONT-0.78,FRONT+0.78,y0,y1,0.004,{nv:8,seg:22,mod:folds}),m));
     for(const sd of [-1,1]){const pts=[];for(let k=0;k<=8;k++){const y=lerp(y0+0.012,y1-0.01,k/8),a=FRONT+sd*(0.78-0.25*(k/8));pts.push(envPt(addE(rf0(y),0.0055),a,y,0));}cordsAlong(G,md,pts,0.003);}}

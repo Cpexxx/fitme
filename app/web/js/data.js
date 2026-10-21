@@ -69,6 +69,10 @@ const TOPS={
   hoodie:{label:'Hoodie',mat:'fleece',sleeves:['long'],necks:['hood'],rib:1,kangaroo:1,print:1,fits:['regular','oversized','boxy'],tags:['streetwear','athleisure'],winter:.7},
   sweater:{label:'Sweter',mat:'cable',mats:['cable','knit','pile'],sleeves:['long'],necks:['crew','v','turtle'],rib:1,fits:['regular','oversized'],tags:['old money','heritage'],winter:1.2},
   jersey:{label:'Koszulka sportowa',mat:'mesh',mats:['mesh','jersey'],sleeves:['short','long'],necks:['v','crew'],trim:1,print:1,defPrint:'number',fits:['regular','oversized'],tags:['blokecore','sport'],summer:.5},
+  guayabera:{label:'Guayabera',mat:'linen',mats:['linen','poplin'],sleeves:['short','long'],collar:'camp',buttons:5,placket:'full',guaya:1,fits:['regular','boxy'],tuck:1,tags:['riviera','latino'],summer:1.2},
+  mandarin:{label:'Koszula ze stójką',mat:'poplin',mats:['poplin','linen','oxford','satin'],sleeves:['long','rolled'],collar:'mandarin',buttons:7,placket:'full',cuffs:1,tail:1,fits:['slim','regular','oversized'],tuck:1,tags:['minimal','smart casual']},
+  tang:{label:'Koszula chińska (tangzhuang)',mat:'satin',mats:['satin','linen','velvet'],sleeves:['long'],collar:'mandarin',buttons:6,placket:'full',frogs:1,fits:['regular'],tags:['chinese','classic']},
+  kurta:{label:'Kurta',mat:'linen',mats:['linen','poplin','satin'],sleeves:['long','rolled'],collar:'mandarin',buttons:4,placket:'short',long:0.27,fits:['regular','oversized'],tags:['south asian','minimal'],summer:.8},
   blouse:{label:'Bluzka',mat:'satin',mats:['satin','poplin','linen'],sleeves:['long','short'],necks:['v','crew'],fits:['regular','oversized'],tuck:1,tags:['feminine','office']}
 };
 const OUTERS={
@@ -93,6 +97,10 @@ const OUTERS={
   racer:{label:'Kurtka skórzana',mat:'leather',mats:['leather','suede'],hem:.93,e:.03,se:.026,closure:'zip',collar:'standLow',cuff:'zip',pockets:'zip',fits:['regular','cropped'],tags:['rock','minimal'],winter:.6},
   cardigan:{label:'Kardigan',mat:'knit',mats:['knit','cable','pile'],hem:.88,e:.03,se:.026,closure:'button',buttons:5,collar:'vrib',vb:1.13,band:'rib',cuff:'rib',pockets:'patch2',fits:['regular','oversized','cropped'],tags:['preppy','grandpa'],winter:.8},
   overshirt:{label:'Koszula wierzchnia',mat:'flannel',mats:['flannel','cord','canvas','wool'],hem:.85,e:.03,se:.026,closure:'button',collar:'shirt',cuff:'button',chestFlaps:1,defPat:'tartan',fits:['regular','oversized'],tags:['workwear','grunge'],winter:.5},
+  denimvest:{label:'Kamizelka jeansowa',mat:'denim',mats:['denim','cord'],hem:.95,e:.03,closure:'button',collar:'shirt',sleeveless:1,band:'waist',chestFlaps:1,pockets:'slant',fits:['regular','oversized','cropped'],tags:['americana','rock']},
+  field:{label:'Kurtka polowa M-65',mat:'twill',mats:['twill','canvas','nylon'],hem:.8,e:.045,se:.038,closure:'zip',storm:1,collar:'stand',cuff:'button',drawWaist:1,chestFlaps:1,pockets:'flap',epaulettes:1,fits:['regular','oversized'],tags:['military','gorpcore'],winter:.9},
+  barn:{label:'Barn jacket',mat:'canvas',mats:['canvas','cord','twill'],hem:.82,e:.04,se:.034,closure:'button',buttons:5,collar:'shirt',collarCord:'#5a3a24',cuff:'button',pockets:'flap',lining:'tartan',fits:['regular','oversized'],tags:['heritage','old money','workwear'],winter:.8},
+  kimono:{label:'Kimono (haori)',mat:'linen',mats:['linen','satin','twill','velvet'],hem:.7,e:.05,se:.03,closure:'none',open:1,collar:'eri',wide:1,def2:'#1e1e1f',fits:['regular','oversized'],tags:['japanese','minimal'],summer:.4},
   sweatervest:{label:'Kamizelka swetrowa',mat:'knit',mats:['knit','cable'],hem:.93,e:.012,closure:'none',collar:'vrib',vb:1.2,sleeveless:1,band:'rib',fits:['regular','oversized'],tags:['preppy','old money']}
 };
 const BOTTOMS={
@@ -112,6 +120,8 @@ const BOTTOMS={
   skirt:{label:'Spódnica',skirt:1,mat:'twill',mats:['twill','wool','leather','cord','linen','suede'],fits:['pencil','aline'],lens:Object.keys(SKIRT_LEN),belt:1,tags:['feminine']},
   pleated:{label:'Spódnica plisowana',skirt:1,mat:'wool',mats:['wool','satin','twill'],fits:['pleated'],lens:Object.keys(SKIRT_LEN),tags:['preppy','coquette']},
   slip:{label:'Spódnica satynowa',skirt:1,mat:'satin',mats:['satin','velvet'],fits:['slip'],lens:['knee','midi','maxi'],tags:['minimal','90s']},
+  kilt:{label:'Kilt',skirt:1,uni:1,mat:'wool',fits:['pleated'],lens:['knee'],defPat:'tartan',kilt:1,tags:['heritage','scottish'],winter:.3},
+  salwar:{label:'Salwar',mat:'linen',mats:['linen','satin','twill'],fits:['balloon'],lens:['jogger'],strings:1,elastic:1,uni:1,tags:['south asian','avant-garde'],summer:.8},
   denimskirt:{label:'Spódnica jeansowa',skirt:1,mat:'denim',pal:'denim',fits:['pencil','aline'],lens:Object.keys(SKIRT_LEN),belt:1,tags:['y2k','casual']}
 };
 /* shoes: W max width, L length, H=[heel collar, instep, toe box], sole thickness */
@@ -143,18 +153,18 @@ const SOCKS={none:'Bez skarpet',ankle:'Stopki',crew:'Do łydki',knee:'Podkolanó
 const MID_ITEMS={sweater:'top',turtle:'top',crewneck:'top',hoodie:'top',cardigan:'outer',sweatervest:'outer',ziphood:'outer',track:'outer',fleece:'outer'};
 const CATALOG=[
   {id:'tees',label:'Koszulki i topy',icon:'tee',slot:'top',items:['tee','longsleeve','henley','polo','rugby','jersey','tank','cami','corset','blouse']},
-  {id:'shirts',label:'Koszule',icon:'shirt',slot:'top',items:['shirt','camp','flannel']},
+  {id:'shirts',label:'Koszule',icon:'shirt',slot:'top',items:['shirt','camp','flannel','mandarin','guayabera','tang','kurta']},
   {id:'knit',label:'Swetry i dzianina',icon:'knit',slot:'mid',items:['sweater','turtle','cardigan','sweatervest']},
   {id:'sweats',label:'Bluzy',icon:'hoodie',slot:'mid',items:['crewneck','hoodie','ziphood','track','fleece']},
-  {id:'jackets',label:'Kurtki',icon:'jacket',slot:'outer',items:['bomber','varsity','trucker','chore','harrington','coach','windbreaker','biker','racer','overshirt']},
+  {id:'jackets',label:'Kurtki',icon:'jacket',slot:'outer',items:['bomber','varsity','trucker','denimvest','chore','barn','field','harrington','coach','windbreaker','biker','racer','overshirt','kimono']},
   {id:'down',label:'Puchowe i bezrękawniki',icon:'puffer',slot:'outer',items:['puffer','puffervest']},
   {id:'coats',label:'Płaszcze i parki',icon:'coat',slot:'outer',items:['overcoat','trench','parka']},
   {id:'tailoring',label:'Marynarki',icon:'blazer',slot:'outer',items:['blazer']},
   {id:'jeans',label:'Jeansy',icon:'pants',slot:'bottom',items:[['jeans',{fit:'skinny'},'Skinny'],['jeans',{fit:'slim'},'Slim'],['jeans',{fit:'straight'},'Straight'],['jeans',{fit:'relaxed'},'Relaxed'],['jeans',{fit:'baggy'},'Baggy'],['jeans',{fit:'wide'},'Wide leg'],['jeans',{fit:'flared'},'Dzwony'],['jeans',{fit:'bootcut'},'Bootcut']]},
-  {id:'trousers',label:'Spodnie',icon:'pants',slot:'bottom',items:['chino','suit','linen','cargo','carpenter','cord','parachute']},
+  {id:'trousers',label:'Spodnie',icon:'pants',slot:'bottom',items:['chino','suit','linen','cargo','carpenter','cord','parachute','salwar']},
   {id:'sport',label:'Dresy i legginsy',icon:'sweatpants',slot:'bottom',items:['sweat','track','leggings']},
   {id:'shorts',label:'Szorty',icon:'shorts',slot:'bottom',items:[['jeans',{length:'shorts',fit:'straight'},'Szorty jeansowe'],['chino',{length:'shorts',fit:'straight'},'Szorty chino'],['cargo',{length:'bermuda',fit:'relaxed'},'Bermudy cargo'],['linen',{length:'bermuda',fit:'relaxed'},'Lniane bermudy'],['sweat',{length:'shorts',fit:'relaxed'},'Szorty dresowe'],'sportshorts']},
-  {id:'skirts',label:'Spódnice',icon:'skirt',slot:'bottom',items:['skirt','pleated','slip','denimskirt']},
+  {id:'skirts',label:'Spódnice',icon:'skirt',slot:'bottom',items:['skirt','pleated','slip','denimskirt','kilt']},
   {id:'sneakers',label:'Sneakersy i trampki',icon:'shoe',slot:'shoes',items:['court','chunky','runner','skate','canvas','hightop']},
   {id:'boots',label:'Botki i kozaki',icon:'boot',slot:'shoes',items:['boot','combat','chelsea','cowboy','kneeboot']},
   {id:'formal',label:'Półbuty, baleriny, szpilki',icon:'loafer',slot:'shoes',items:['loafer','derby','ballet','maryjane','pump']},
@@ -169,8 +179,8 @@ const BANDANAS={none:'Brak',tri:'Trójkąt z przodu',knot:'Zwinięta, węzeł z 
 const HEADBANDS={none:'Brak',forehead:'Opaska na czoło',full:'Chusta na głowę'};
 const GLOVES={none:'Brak',leather:'Skórzane',driving:'Do jazdy (z dziurkami)',knit:'Dzianinowe',fingerless:'Bez palców',work:'Robocze'};
 /* accessories */
-const HATS={none:'Brak',baseball:'Baseball',trucker:'Trucker',beanie:'Beanie',fisherman:'Krótka beanie',bucket:'Bucket',flat:'Kaszkiet',beret:'Beret',fedora:'Fedora'};
-const HAT_TAGS={baseball:['streetwear','casual'],trucker:['y2k','americana'],beanie:['streetwear','workwear'],fisherman:['workwear','gorpcore'],bucket:['y2k','streetwear'],flat:['heritage','old money'],beret:['feminine','retro'],fedora:['classic','retro']};
+const HATS={none:'Brak',baseball:'Baseball',trucker:'Trucker',beanie:'Beanie',fisherman:'Krótka beanie',bucket:'Bucket',flat:'Kaszkiet',beret:'Beret',fedora:'Fedora',kufi:'Kufi'};
+const HAT_TAGS={baseball:['streetwear','casual'],trucker:['y2k','americana'],beanie:['streetwear','workwear'],fisherman:['workwear','gorpcore'],bucket:['y2k','streetwear'],flat:['heritage','old money'],beret:['feminine','retro'],fedora:['classic','retro'],kufi:['west african','minimal']};
 const GLASSES={none:'Brak',aviator:'Aviatory',wayfarer:'Wayfarer',clubmaster:'Clubmaster',round:'Okrągłe (lenonki)',rect:'Prostokątne',oversize:'Duże kwadratowe',cat:'Kocie oko',oval:'Owalne y2k',rimless:'Bez oprawek',shield:'Sportowe'};
 const WATCHES={none:'Brak',classic:'Klasyczny',diver:'Diver',square:'Prostokątny',digital:'Cyfrowy',smart:'Smartwatch'};
 const STRAPS={leather:'Brązowa skóra',black:'Czarna skóra',metal:'Bransoleta',nato:'Nato',rubber:'Guma'};
@@ -181,7 +191,7 @@ const EARRINGS={none:'Brak',stud:'Sztyfty',hoopS:'Małe kółka',hoopL:'Duże k�
 const WALLETS={none:'Brak',single:'Pojedynczy',double:'Podwójny'};
 const BAGS={none:'Brak',crossbody:'Listonoszka',sling:'Nerka na klatkę',backpack:'Plecak',tote:'Torba na ramię'};
 /* underwear (worn by default: the mannequin is never bare under the clothes); bottoms per gender, bras for women */
-const UNDER_M={none:'Brak',boxer:'Bokserki',trunk:'Krótkie bokserki',brief:'Slipy'};
+const UNDER_M={none:'Brak',boxer:'Bokserki',trunk:'Krótkie bokserki'};
 const UNDER_F={none:'Brak',brief:'Figi',hipster:'Hipsterki',boyshort:'Szorty',high:'Wysokie figi'};
 const BRAS={none:'Brak',tshirt:'Gładki (t-shirt)',balconette:'Balkonetka',sports:'Sportowy',bralette:'Bralette'};
 const SAGS={none:'Nie',low:'Lekko zsunięte',heavy:'Mocno zsunięte (sagging)'};

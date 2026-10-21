@@ -23,7 +23,9 @@ function buildOuter(G,P=S.outer){
   const vX=y=>y<yb?0:lerp(0,xg,smooth((y-yb)/(yg-yb))*0.7+clamp((y-yb)/(yg-yb),0,1)*0.3);
   const openX=y=>0.085+0.03*smooth((1.18-y)/0.5)+(T.flare?0.03*smooth((1.0-y)/0.55):0);
   let gapX;
-  if(close==='open')gapX=y=>Math.max(openX(y),lapel||vrib?vX(y):0);
+  /* always open (kimono / haori): the fronts hang apart below the chest, meeting in a V at the back of the neck band */
+  if(T.open)gapX=y=>lerp(0.03,0.075,smooth((1.32-y)/0.3))+0.012*smooth((1.0-y)/0.4)-0.022*smooth((y-1.36)/0.1);
+  else if(close==='open')gapX=y=>Math.max(openX(y),lapel||vrib?vX(y):0);
   else if(close==='half')gapX=y=>y<1.24?0:lerp(0.002,0.062,smooth((y-1.24)/(top-1.24)));
   else gapX=y=>lapel||vrib?vX(y)*(T.closure==='zipAsym'?0.8:1):0;
   const easeAt=y=>{let e=e0;if(T.flare&&y<0.95)e+=T.flare*smooth((0.95-y)/Math.max(0.05,0.95-hem));if(T.band==='rib'&&y<hem+0.05)e=lerp(e*0.55,e,smooth((y-hem)/0.05));
@@ -32,7 +34,7 @@ function buildOuter(G,P=S.outer){
     if(sleeves){const c=topCap(y,Math.min(e0,0.012+e0*0.35),prev,drop);if(c)r=maxE(r,c);}
     else if(y>0.98){r.rx=Math.min(r.rx,b.rx+0.014+0.01*smooth((1.1-y)/0.12));}
     return r;};
-  const isOpen=close!=='closed'||lapel||vrib,chestR=rf0(1.27);
+  const isOpen=close!=='closed'||lapel||vrib||!!T.open,chestR=rf0(1.27);
   /* quilted channels: full, flat-topped baffles pinched in at the stitch lines (not a smooth wave = a balloon) */
   const qm=T.quilt?y=>1+0.055*Math.pow(Math.abs(Math.sin((y-hem)*Math.PI/0.085)),0.28)-0.03:null;
   const mod=(a,t,s)=>{let k=qm?qm(s.y):1;
@@ -66,12 +68,18 @@ function buildOuter(G,P=S.outer){
     case 'stand':standCollar(G,md,{y:top-0.002,h:0.045,env:rf0,gapX:Math.max(gTop,0.0005)});break;
     case 'standLow':standCollar(G,md,{y:top-0.002,h:0.024,env:rf0,gapX:Math.max(gTop,0.0005)});break;
     case 'standTall':standCollar(G,m,{y:top-0.004,h:0.08,env:y=>addE(rf0(y),0.006),gapX:Math.max(gTop,0.0005),lean:0.006,mod:(a,u,s)=>1+0.04*Math.abs(Math.sin(s.y*70))});break;
-    case 'shirt':fallCollar(G,md,{y:top-0.004,env:rf0,gapX:Math.max(gTop,0.008),stand:0.028,drop:0.05,point:0.02,spread:0.016,tip:close==='closed'?undefined:0});break;
+    case 'shirt':fallCollar(G,T.collarCord?fabric('cord',T.collarCord):md,{y:top-0.004,env:rf0,gapX:Math.max(gTop,0.008),stand:0.028,drop:0.05,point:0.02,spread:0.016,tip:close==='closed'?undefined:0});break;
     case 'hood':hoodDown(G,m,{y:top-0.004,env:rf0,gapX:Math.max(gTop,0.042)});if(close!=='open')drawstrings(G,top-0.015,0.15,[-0.05,0.05],y=>addE(rf0(Math.min(y,top-0.01)),0.004));break;
     case 'notch':case 'peak':fallCollar(G,md,{y:top-0.004,env:rf0,gapX:xg-0.004,stand:0.016,drop:0.044,point:0.008,spread:0.012,tip:0});
       lapelPair(G,md,rf0,y=>Math.max(gapX(y),0.0008),Math.max(yb,hem+0.05),yg,T.collar==='peak'?0.092:0.074,T.collar==='peak');break;
     case 'vrib':{for(const sd of [-1,1]){const pts=[];for(let k=0;k<=30;k++){const y=lerp(hem+0.02,top,k/30),g=Math.max(gapX(y),0.0008),r=rf0(y),a=sd>0?angAtX(r,g):Math.PI-angAtX(r,g);pts.push(ringPt(r,a,y,1,0,0.0035));}if(close==='open'||T.closure==='none'?true:true)cordsAlong(G,ribMat,pts,0.0075);}
       const bk=[];for(let k=0;k<=24;k++){const r=rf0(top),gR=angAtX(r,Math.max(gTop,0.001)),a=lerp(Math.PI-gR,gR+TAU,k/24);bk.push(ringPt(r,a,top,1,0,0.003));}cordsAlong(G,ribMat,bk,0.0075);break;}
+    /* eri: the wide flat band along the kimono's front edges and round the back of the neck, in a contrast fabric */
+    case 'eri':{const em=fabric(mat==='satin'?'satin':'twill',c2),W=0.042;
+      for(const sd of [-1,1]){const pts=[],sides=[];for(let k=0;k<=40;k++){const y=lerp(hem+0.004,top-0.002,k/40),g=gapX(y),r=rf0(y),aR=angAtX(r,g),a=sd>0?aR:Math.PI-aR;
+          const p0=ringPt(r,a,y,mod(a,0,{y,rx:r.rx,rz:r.rz}),0,0.004),a2=a+(sd>0?-1:1)*W/Math.max(0.05,r.rx),p1=ringPt(r,a2,y,1,0,0.004);pts.push(p0.clone().lerp(p1,0.5));sides.push(p1.clone().sub(p0).normalize());}
+        G.add(mk(ribbon(pts,sides,W,{uRep:1}),em));}
+      standCollar(G,em,{y:top-0.006,h:0.03,env:y=>addE(rf0(y),0.002),gapX:Math.max(gTop,0.02),lean:0.006});break;}
   }
   /* closures */
   const zipM=metalMat(mat==='leather'?'silver':'steel');
@@ -124,8 +132,10 @@ function buildOuter(G,P=S.outer){
   /* sleeves */
   let sleeveF=null;
   if(sleeves){
-    const len=Math.min(1.0,0.975+Math.max(0,SZ.sl)),se=Math.max(0.006,easeCap(T.se*F.m+SZ.d*0.7,0.03));
-    sleeveF=t=>{if(t>len+1e-9)return null;const inner=Math.max(armAt(t),sleeveEnv(t,prev));let r=inner+se;if(drop&&t<0.25)r+=drop*0.8*(1-t/0.25);if(T.cuff==='rib'&&t>len-0.06)r=inner+0.011;return r;};
+    let len=Math.min(1.0,0.975+Math.max(0,SZ.sl));const se=Math.max(0.006,easeCap(T.se*F.m+SZ.d*0.7,0.03));
+    /* kimono sleeves: wide, straight and open, three-quarter length */
+    if(T.wide)len=Math.min(len,0.8);
+    sleeveF=t=>{if(t>len+1e-9)return null;const inner=Math.max(armAt(t),sleeveEnv(t,prev));let r=inner+se;if(T.wide)r=Math.max(r,inner+0.018+0.05*smooth((t-0.05)/0.3));if(drop&&t<0.25)r+=drop*0.8*(1-t/0.25);if(T.cuff==='rib'&&t>len-0.06)r=inner+0.011;return r;};
     const smod=(a,tt,s)=>T.quilt?1+0.065*Math.pow(Math.abs(Math.sin(s.t*Math.PI/0.12)),0.28)-0.035:1+(gauss(s.t-0.5,0.09)*0.16*se*Math.sin(s.t*46+a*1.5)*(0.6+0.4*Math.sin(a*2+1))+0.12*se*fbm(Math.cos(a)*2,s.t*5,Math.sin(a)*2))/s.rx;
     const sm=T.sleeves2?fabric('leather',c2):m;
     for(const side of [-1,1]){

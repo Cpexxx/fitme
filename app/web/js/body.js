@@ -226,7 +226,9 @@ function bodyStrap(G,geo,path,w,lift,mat){const P=geo.attributes.position,N=geo.
   const m=mk(ribbon(out,sides,w,{noAO:true}),mat);m.userData.under=1;G.add(m);}
 function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
   const SH=SHOES[S.shoes.type]||{},showFeet=S.shoes.type==='none'||SH.open||SH.low||SH.clog,geo=bodyGeo(!!showFeet);
-  const cy=shellBase(1).cy,nav=BC.core.spots&&BC.core.spots[2]?BC.core.spots[2][1]:cy+0.25,lx=BC.legX;
+  /* the crotch from the hip joint (the shell's own crotch line drops where heavy or muscular thighs meet lower down: the
+     briefs slid down onto the thighs) */
+  const cy=BC.core.J.hipL[1]-0.075,nav=BC.core.spots&&BC.core.spots[2]?BC.core.spots[2][1]:cy+0.19,lx=BC.legX;
   /* 'auto': black for men (charcoal heather on a dark mannequin), a soft nude for women */
   const dark=lumHex((SKINS[S.skin]||SKINS[0])[0])<0.25,c1=U.color&&U.color!=='auto'?U.color:fem?'#d9c2ae':dark?'#5d6066':'#1e1e1f',c2=U.color2&&U.color2!=='auto'?U.color2:fem?shade(c1,-0.05):dark?'#2c2e33':'#2b2b2d';
   const main=fabric('jersey',c1),band=fabric('rib',c2);
@@ -234,11 +236,12 @@ function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
   /* briefs / boxers: waist line (a touch higher at the back) and leg openings around each leg (outer, front, inner, back
      heights over the crotch) */
   const B=U.bottom;if(B&&B!=='none'){
-    const W={boxer:0.42,trunk:0.42,brief:0.4,hipster:0.3,boyshort:0.42,high:0.9}[B]*(nav-cy)+cy+(fem&&B==='brief'?0.02:0);
-    const L={boxer:[-0.165,-0.17,-0.172,-0.17],trunk:[-0.095,-0.1,-0.102,-0.1],brief:fem?[0.085,0.03,-0.01,-0.005]:[0.075,0.022,-0.012,0],
+    /* the waistband a few centimetres under the navel at the front, over the top of the seat at the back */
+    const W={boxer:0.55,trunk:0.55,brief:0.52,hipster:0.4,boyshort:0.52,high:0.9}[B]*(nav-cy)+cy+(fem&&B==='brief'?0.015:0);
+    const L={boxer:[-0.165,-0.17,-0.172,-0.17],trunk:[-0.095,-0.1,-0.102,-0.1],brief:[0.085,0.03,-0.01,-0.005],
       hipster:[0.05,0.022,-0.01,-0.012],boyshort:[-0.05,-0.058,-0.062,-0.06],high:[0.085,0.03,-0.01,-0.005]}[B];
     const H=(x,z)=>{const t=Math.atan2(z,Math.abs(x)-lx),c=Math.cos(t),sn=Math.sin(t),a0=(L[0]+L[2])/2,a1=(L[0]-L[2])/2;return cy+a0+a1*c+(sn>0?sn*(L[1]-a0):-sn*(L[3]-a0));};
-    const wy=(x,z)=>W+0.012*Math.max(0,-z/Math.hypot(x,z)||0);
+    const wy=(x,z)=>W+0.03*Math.max(0,-z/Math.hypot(x,z)||0);
     const fB=(x,y,z)=>Math.min(wy(x,z)-y,y-H(x,z));
     const fW=(x,y,z)=>wy(x,z)-y,fL=(x,y,z)=>y-H(x,z),m1=bodyPatch(geo,[fW,fL],0.0011,main);if(m1)G.add(m1);
     const wbH=fem?0.014:0.03,m2=bodyPatch(geo,[(x,y,z)=>fW(x,y,z)+0.0004,fL,(x,y,z)=>y-(wy(x,z)-wbH)],0.0024,band);if(m2)G.add(m2);
@@ -262,9 +265,11 @@ function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
       const [Pk,d0,dr,pw,sp0,gr]=pk,cup=dx<d0?Pk-dr*Math.pow((d0-dx)/sp0,pw):Pk-(Pk-wingY)*smooth((dx-d0)/0.04);
       return smax(smax(cup,ay+gr,0.012),bandY,0.01);};
     /* back: the band rising into the side wings (sports: a panel and the racerback stem up the spine) */
-    const topB=x=>{const X=Math.abs(x);if(sports){const pn=yu+0.05+(ay-0.005-yu-0.05)*smooth((X-0.08*k)/(0.07*k));return smax(pn,yu+0.05+(ay+0.02-yu-0.05)*(1-smooth((X-0.02)/0.03)),0.01);}
-      return T==='bralette'?bandY:bandY+(wingY-bandY)*smooth((X-0.09*k)/(0.06*k));};
-    const top=(x,z)=>lerp(topB(x),topF(x),fr(z));
+    /* (the rise towards the sides by the angle round the torso: by |x| a broad back rose into a box across it) */
+    const topB=(x,z)=>{const X=Math.abs(x),a=Math.atan2(X,Math.max(1e-4,-z));
+      if(sports){const pn=yu+0.05+(ay-0.005-yu-0.05)*smooth((a-0.75)/0.6);return smax(pn,yu+0.05+(ay+0.02-yu-0.05)*(1-smooth((X-0.02)/0.03)),0.01);}
+      return T==='bralette'?bandY:bandY+(wingY-bandY)*smooth((a-0.85)/0.55);};
+    const top=(x,z)=>lerp(topB(x,z),topF(x),fr(z));
     let fBra=(x,y,z)=>Math.min(y-yb0,top(x,z)-y);
     /* racerback straps: up from the front panel, over the trapezius, down to the spine; distance to the path on the body */
     if(sports){const path=[];for(const sd of [-1,1]){const c=new THREE.CatmullRomCurve3([onBody(sd*0.0875*k,ay+0.07,1),onBody(sd*0.09*k,ay+0.125,1),onBody(sd*0.09*k,-0.035,0),
