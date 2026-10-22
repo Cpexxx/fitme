@@ -61,6 +61,12 @@ const GL_SPEC={
   rimless:{o:'rect',h:0.62,rim:'none',bridge:'bar',pads:1,lw:0.95,wrap:0.08},
   shield:{rim:'shield',h:0.7,lw:1.1,wrap:0.3}
 };
+/* the top of the glasses' frame over the eyes (the same sizes as buildGlasses): a cap's brim has to clear it */
+/* (cat-eye: its rim widens by half again at the upswept outer corners - a cap's brim cut into them) */
+function glassesTopY(){const A=S.acc&&S.acc.glasses,t=A&&A.type,SP=GL_SPEC[t];if(!SP)return null;
+  const hc=BC.headC,yc=hc.y+0.004+(SP.dy||0);if(SP.rim==='shield')return yc+0.038/2+0.004;
+  const thE=Math.acos(clamp((yc-hc.y)/BC.hd.ry,-0.99,0.99)),hw=headPt(thE,0).x-hc.x,bh=t==='round'?0.0095:0.0085,rw=SP.rim==='acetate'||SP.rim==='brow'?SP.rw:0,ep=SP.rim==='metal'||SP.rim==='none'?0.004:0.0045;
+  const Lw=(hw*0.88-bh-ep-rw*2)*SP.lw,Lh=Lw*SP.h;return yc+Lh/2+rw*(SP.top||1)*(t==='cat'?1.5:1)+(SP.rim==='brow'?0.004:0.0015);}
 /* lens outlines: points round the lens, x from the nose (-1) to the temple (+1), y from -1 to 1 */
 function glOutline(o,N=96){const pts=[],se=(a,n)=>{const c=Math.cos(a),s=Math.sin(a);return[Math.sign(c)*Math.pow(Math.abs(c),2/n),Math.sign(s)*Math.pow(Math.abs(s),2/n)];};
   for(let i=0;i<N;i++){const a=i/N*TAU;let x,y;
@@ -163,7 +169,9 @@ function glTemple(G,h0,sd,yc,tr,thAt,m){const hc=BC.headC,side=sd>0?0:Math.PI,bk
 /* sport shield: one wrap-around lens across both eyes, a top bar and a nose piece */
 function buildShield(G,SP,yc,hw,face,fm,lm,tr,paths,hinge,thAt){const hc=BC.headC,W2=hw*0.92,Hh=0.038,Rw=0.085,fc=face(0),zc=fc.z+0.014;
   const top=u=>0.5*Hh*(0.92+0.08*Math.cos(u*Math.PI))+0.002,bot=u=>{const a=Math.abs(u);return -0.5*Hh*(0.5+0.5*Math.pow(Math.sin(Math.min(1,a*1.6)*Math.PI/2),0.8))*(1-0.55*smooth((a-0.72)/0.28))+0.005*gauss(a,0.11);};
-  const at=(u,y)=>{const x=u*W2,ang=x/Rw;return V3(hc.x+Rw*Math.sin(ang),yc+y,zc-Rw*(1-Math.cos(ang))-0.004*y/Hh);};
+  /* (the wrap-round ends kept 5 mm off the temples: the arc of the shield cut into the sides of the head) */
+  const at=(u,y)=>{const x=u*W2,ang=x/Rw,P=V3(hc.x+Rw*Math.sin(ang),yc+y,zc-Rw*(1-Math.cos(ang))-0.004*y/Hh);
+    const dx=P.x-hc.x,dz=P.z-hc.z,r=Math.hypot(dx,dz),hr=headHorizR(P.y,Math.atan2(dz,dx));if(hr!=null&&r<hr+0.005){const k=(hr+0.005)/r;P.x=hc.x+dx*k;P.z=hc.z+dz*k;}return P;};
   G.add(mk(surf(48,10,(u,v)=>{const uu=u*2-1;return at(uu,lerp(bot(uu),top(uu),v));},{noAO:true}),lm));
   const bar=[];for(let i=0;i<=40;i++){const u=i/20-1;bar.push(at(u,top(u)+0.0012));}G.add(mk(cordGeo(bar,0.0022,false,8,80),fm));
   const nb=[at(-0.09,bot(-0.09)+0.004),at(0,bot(0)+0.006).add(V3(0,0,0.002)),at(0.09,bot(0.09)+0.004)];G.add(mk(cordGeo(nb,0.0018,false,6,16),fm));
@@ -355,22 +363,42 @@ function buildBag(G0){
 function buildScarf(G){
   const A=S.acc.scarf,t0=A.type;if(!t0||t0==='none')return;
   /* every piece of the scarf is tagged: once the clothes are fitted it is moved out over them (shScarfOut) */
-  const G0=G;G={add:o=>{o.userData.scarf=true;G0.add(o);}};
+  /* (not re-seated point by point with the cloth: that tore the hanging ends into shards; the ends are draped over the
+     clothes already and shScarfOut lifts each piece clear of the fitted clothes as a whole) */
+  const G0=G;G={add:o=>{o.userData.scarf=true;o.userData.ctx='none';G0.add(o);}};
   const m=fabric('wool',A.color,A.pattern||'solid',A.color2||'#26304a');
-  const loose=t0==='long',y0=1.485,y1=1.575;
-  const ring=y=>{const t=(y-y0)/(y1-y0),nb=bodyEnv(Math.min(y,1.53),LAYERS),base=Math.max(BC.neckR+0.012,Math.min(nb.rx,BC.neckR+0.035)),r=base+(loose?0.026:0.02)+0.016*Math.sin(Math.PI*t);return{rx:r*1.04,rz:r,rzb:r*1.02};};
-  G.add(mk(tube(vSamples(y0,y1,10,ring,0,0.004),{seg:56,mod:(a,t,s)=>1+0.05*Math.sin(a*3+s.y*40)}),m));
-  const ends=loose?[[-0.072,1.03],[0.062,1.12]]:[[-0.04,1.24]];
-  /* the hanging ends: thick knitted panels that follow the chest, soft lengthwise folds, a slight twist, fringe */
-  const W=loose?0.105:0.13,TH=0.0075;
-  ends.forEach(([x0,yEnd],ei)=>{const smp=[],N=28;
-    for(let k=0;k<=N;k++){const t=k/N,y=lerp(y0+0.03,yEnd,t),xc=x0+0.008*Math.sin(t*3+ei)*t,e=frontEnv(y,LAYERS,xc);
-      /* the panel rests on the body: its centre sits on the front, a bit further out as it hangs */
-      const z=Math.max(frontZ(e,xc-W*0.4),frontZ(e,xc),frontZ(e,xc+W*0.4))+TH+0.004+0.006*t;
-      const tw=(ei?-1:1)*0.18*Math.sin(t*Math.PI*0.9),u=V3(Math.cos(tw),0,Math.sin(tw)),v=V3(-Math.sin(tw),0,Math.cos(tw));
-      smp.push({c:V3(xc,y,z),rx:W*0.5*(1-0.06*Math.sin(t*9+ei))*lerp(0.55,1,smooth(t/0.18)),rz:TH,n:2.8,u,v,y});}
-    G.add(mk(tube(smp,{seg:40,mod:(a,t,s)=>1+0.35*Math.max(0,Math.sin(a))*Math.sin(Math.cos(a)*14+t*3)*0.25}),m));
-    const last=smp[N];for(let i=0;i<11;i++){const p=last.c.clone().addScaledVector(last.u,(i/10-0.5)*W*0.92);G.add(mk(cordGeo([p,p.clone().add(V3(0.002*Math.sin(i*2),-0.032-0.006*Math.sin(i*3.1),0.002))],0.0022),m));}});
+  const loose=t0==='long',y0=1.485,TH=0.0075;
+  /* the wrap round the neck: two soft passes of the knitted band (the second a little higher and fuller, sagging to the
+     other side), each a full rounded section swept round the neck - not a stiff ringed collar */
+  const neckR=y=>{const nb=bodyEnv(Math.min(y,1.53),LAYERS);return Math.max(BC.neckR+0.012,Math.min(nb.rx,BC.neckR+0.035));};
+  const pass=(yc,sag,aLow,rAdd,h,d)=>G.add(mk(surf(72,14,(u,v)=>{const a=u*TAU,y=yc+sag*Math.cos(a-aLow),r=neckR(y)+rAdd,b=v*TAU,cb=Math.cos(b),sb=Math.sin(b);
+      /* a soft cross-section: fuller at the front (the knot of the two ends), a slight lumpiness of knit */
+      const fr=Math.max(0,Math.sin(a)),k=1+0.25*fr+0.06*Math.sin(a*3+1),R=r+d*k*(1+cb)*0.5+0.002;
+      return V3(Math.cos(a)*(R*1.04),y+h*k*sb*0.5,Math.sin(a)*(Math.sin(a)>=0?R:R*1.02));},{wrapU:true,uRep:14,vRep:2,noAO:true}),m));
+  pass(y0+0.028,0.01,FRONT+0.5,0.002,0.05,0.022);
+  pass(y0+0.05,0.014,FRONT-0.7,0.014,0.042,0.02);
+  /* the hanging ends: cloth simulated like hair (each end a few columns kept side by side, falling over the chest and
+     the coat, resting on them), then given the knit's thickness and a fringe */
+  const ends=loose?[[-0.06,0.5],[0.055,0.4]]:[[-0.035,0.29]],W=loose?0.11:0.13,NC=9,nv=20,yTop=y0+0.032;
+  const field=hairField(1.58,0.6);
+  ends.forEach(([x0,len],ei)=>{const roots=[];
+    /* (the top of each end starts inside the wrap, under its front, and comes out from under it) */
+    for(let c=0;c<NC;c++){const x=x0+(c/(NC-1)-0.5)*W*0.8,r=neckR(yTop)+0.006,z=Math.sqrt(Math.max(0.0004,r*r-x*x))+0.004,p0=V3(x,yTop,z),p1=V3(x*1.04,yTop-len/nv,z+0.012);
+      roots.push({p0,p1,ph:Math.atan2(z,x),len,bias:0,xt:x});}
+    const cols=hairDrape(roots,nv,{field,thin:TH+0.004,thick:TH+0.004,bodyClr:TH+0.005,latK:1.03,pushZ:true,band:false,stiff:0.04});
+    /* the sheet's two faces, its long edges rounded */
+    const P=(c,j)=>cols[c][j],Nf=(c,j)=>{const a=P(Math.min(NC-1,c+1),j).clone().sub(P(Math.max(0,c-1),j)),b=P(c,Math.min(nv,j+1)).clone().sub(P(c,Math.max(0,j-1)));const n=b.cross(a).normalize();if(n.z<0)n.negate();return n;};
+    /* soft lengthwise folds of the knit, growing as it hangs (the same on both faces) */
+    const fold=(cf,j)=>0.0045*Math.sin(cf/(NC-1)*Math.PI*2.6+ei*1.7+j*0.08)*smooth(j/nv/0.35);
+    const at=(s,j)=>{/* s round the section: 0..1 front left->right, 1..2 right edge, 2..3 back right->left, 3..4 left edge */
+      const k=Math.floor(s)%4,f=s-Math.floor(s);
+      if(k===0||k===2){const cf=(k===0?f:1-f)*(NC-1),c=Math.min(NC-2,Math.floor(cf)),t=cf-c,p=P(c,j).clone().lerp(P(c+1,j),t),n=Nf(c,j).lerp(Nf(c+1,j),t).normalize();return p.addScaledVector(n,(k===0?1:-1)*TH*0.5+fold(cf,j));}
+      const c=k===1?NC-1:0,p=P(c,j).clone(),n=Nf(c,j),side=P(k===1?NC-1:0,j).clone().sub(P(k===1?NC-2:1,j)).normalize(),an=(k===1?f:1-f)*Math.PI;
+      return p.addScaledVector(n,Math.cos(an)*TH*0.5+fold(c,j)).addScaledVector(side,Math.sin(an)*TH*0.45);};
+    {const em=mk(surf(4*12,nv,(u,v)=>at(u*4,Math.round(v*nv)),{wrapU:true,uRep:3,vRep:Math.max(2,len/0.05),noAO:true}),m);em.userData.scarfEnd=ei+1;G.add(em);}
+    /* the end: closed by a narrow band, a fringe of knotted tassels */
+    const last=nv;for(let i=0;i<11;i++){const cf=i/10*(NC-1),c=Math.min(NC-2,Math.floor(cf)),t=cf-c,p=P(c,last).clone().lerp(P(c+1,last),t);
+      const fr=mk(cordGeo([p,p.clone().add(V3(0.002*Math.sin(i*2+ei),-0.032-0.006*Math.sin(i*3.1),0.002))],0.0022),m);fr.userData.scarfEnd=ei+1;G.add(fr);}});
 }
 function buildTie(G){
   const A=S.acc.tie,t0=A.type;if(!t0||t0==='none')return;const TL=LAYERS_TOP||LAYERS;

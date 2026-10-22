@@ -251,7 +251,7 @@ const MATDEF={
   denim:{r:.92,sh:.12,b:.016},twill:{r:.9,sh:.45,b:.007},gabardine:{r:.86,sh:.45,b:.005},canvas:{r:.94,sh:.3,b:.012},linen:{r:.95,sh:.4,b:.012},
   jersey:{r:.92,sh:.7,b:.004},pique:{r:.93,sh:.6,b:.01},rib:{r:.9,sh:.7,b:.018},waffle:{r:.92,sh:.7,b:.016},fleece:{r:.96,sh:1,b:.006},pile:{r:1,sh:1,b:.04},
   oxford:{r:.9,sh:.45,b:.008},poplin:{r:.84,sh:.4,b:.003},flannel:{r:.97,sh:1,b:.008},knit:{r:.97,sh:1,b:.016},cable:{r:.97,sh:1,b:.055},
-  wool:{r:.95,sh:.55,b:.008},cord:{r:.92,sh:.95,b:.045},nylon:{r:.62,sh:.25,b:.003,cc:.08},satin:{r:.46,sh:.7,b:.002,cc:.04},tricot:{r:.66,sh:.5,b:.003,cc:.03},
+  wool:{r:.95,sh:.55,b:.008},cord:{r:.88,sh:.55,b:.03},nylon:{r:.62,sh:.25,b:.003,cc:.08},satin:{r:.46,sh:.7,b:.002,cc:.04},tricot:{r:.66,sh:.5,b:.003,cc:.03},
   leather:{r:.58,sh:0,b:.0025,cc:.12},suede:{r:1,sh:.9,b:.01},velvet:{r:.92,sh:1,b:.004},mesh:{r:.85,sh:.3,b:.03},rubber:{r:.82,sh:0,b:.004},cork:{r:1,sh:.2,b:.03}
 };
 /* knit-type structures drawn at their real size (a 256 px tile is ~7 cm): soft shapes, no pixel noise */
@@ -265,7 +265,8 @@ function paintStruct(ctx,Z,kind,g,R){
       for(let k=0;k<Z;k+=c){ctx.fillStyle=g(186);ctx.fillRect(k-1.5,0,3,Z);ctx.fillRect(0,k-1.5,Z,3);}break;}
     case 'pique':{const c=10;for(let y=0;y<Z;y+=c)for(let x=(y/c%2)*c/2;x<Z;x+=c)soft(x+c/2,y+c/2,c*0.38,c*0.38,82);break;}
     case 'pile':{for(let i=0;i<520;i++){const x=R()*Z,y=R()*Z,s=5+R()*7;soft(x,y,s,s*0.8,128+(R()<.5?40:-34),R()*3);}break;}
-    case 'cord':{const w=14;for(let x=0;x<Z;x+=w){const gr=ctx.createLinearGradient(x,0,x+w,0);gr.addColorStop(0,g(70));gr.addColorStop(0.2,g(150));gr.addColorStop(0.5,g(190));gr.addColorStop(0.8,g(150));gr.addColorStop(1,g(70));ctx.fillStyle=gr;ctx.fillRect(x,0,w,Z);}break;}
+    /* wales ~4.5 mm, rounded (a narrow, hard groove between them shimmered as moire at any distance) */
+    case 'cord':{const w=16;for(let x=0;x<Z;x+=w){const gr=ctx.createLinearGradient(x,0,x+w,0);gr.addColorStop(0,g(95));gr.addColorStop(0.25,g(150));gr.addColorStop(0.5,g(170));gr.addColorStop(0.75,g(150));gr.addColorStop(1,g(95));ctx.fillStyle=gr;ctx.fillRect(x,0,w,Z);}break;}
     case 'mesh':{const c=16;for(let y=0;y<Z;y+=c)for(let x=(y/c%2)*c/2;x<Z;x+=c)soft(x+c/2,y+c/2,c*0.3,c*0.3,40);break;}
     default:return false;}
   return true;}
@@ -361,7 +362,8 @@ function colorTex(kind,hex,pat,hex2){
     case 'satin':mott(10,.025,30,80);break;
     case 'leather':for(let i=0;i<220;i++){ctx.fillStyle=R()<.5?L(.018):D(.025);ctx.beginPath();ctx.arc(R()*Z,R()*Z,(2+R()*6)*sc,0,7);ctx.fill();}mott(12,.03,30,70);break;
     case 'knit':case 'waffle':case 'pique':case 'cord':{const[c2,x2]=cnv(256,256);const R2=rng(hash('s'+kind));x2.fillStyle='#808080';x2.fillRect(0,0,256,256);paintStruct(x2,256,kind,v=>`rgb(${v},${v},${v})`,R2);
-      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';if(kind==='knit')mott(30,.035,8,24);break;}
+      /* (the cord's wales only faintly in the colour: at 45% their fine stripes shimmered as moire across the garment) */
+      ctx.globalCompositeOperation='overlay';ctx.globalAlpha=kind==='cord'?0.14:0.45;const k=Z/256;ctx.save();ctx.scale(k,k);ctx.drawImage(c2,0,0);ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';if(kind==='knit')mott(30,.035,8,24);break;}
     case 'rib':for(let x=0;x<Z;x+=6*sc){ctx.fillStyle=D(.08);ctx.fillRect(x,0,2*sc,Z);}break;
     case 'mesh':for(let y=0;y<Z;y+=8*sc)for(let x=(y/(8*sc)%2)*4*sc;x<Z;x+=8*sc){ctx.fillStyle=D(.35);ctx.beginPath();ctx.arc(x+4*sc,y+4*sc,2*sc,0,7);ctx.fill();}break;
     case 'cork':for(let i=0;i<3000;i++){ctx.fillStyle=R()<.5?L(.1):D(.14);ctx.fillRect(R()*Z,R()*Z,2*sc,2*sc);}break;
@@ -371,7 +373,7 @@ function colorTex(kind,hex,pat,hex2){
   const rep={tartan:.5,buffalo:.5,camo:.42}[pat]||1;t.repeat.set(rep,rep);
   texCache.set(key,t);return t;
 }
-const BUMPY={cable:0.35,cord:0.35,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.3,denim:0.22,flannel:0.22};
+const BUMPY={cable:0.35,cord:0.25,waffle:0.5,pique:0.4,pile:0.3,knit:0.45,rib:0.3,leather:0.6,suede:0.35,mesh:0.4,cork:0.6,fleece:0.3,denim:0.22,flannel:0.22};
 function fabric(kind,hex,pat='solid',hex2='#1e1e1f'){
   if(!HEX.test(hex||''))hex='#888888';if(!HEX.test(hex2||''))hex2='#1e1e1f';
   const key=['f',kind,hex,pat||'solid',pat&&pat!=='solid'?hex2:''].join('|');if(matCache.has(key))return matCache.get(key);

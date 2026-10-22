@@ -106,7 +106,27 @@ function mhMorph(g,mus,fat){const B=mhBase(),M=B[g],key=g+r3(mus)+'|'+r3(fat);B.
     for(let it=0;it<6;it++){const d0=Dsp.slice();for(let i=0;i<nv;i++){if(!nb[i].length)continue;let s2=d0[i];for(const j of nb[i])s2+=d0[j];Dsp[i]=s2/(nb[i].length+1);}}
     for(let i=0;i<nv;i++){const nl=Math.hypot(N[i*3],N[i*3+1],N[i*3+2])||1;P[i*3]+=N[i*3]/nl*Dsp[i];P[i*3+1]+=N[i*3+1]/nl*Dsp[i]*0.5;P[i*3+2]+=N[i*3+2]/nl*Dsp[i];}}
   for(const[k,v] of Object.entries(M.J)){const o=v.slice();for(const[kk,w] of ws){const dj=M.dj[kk]&&M.dj[kk][k];if(dj&&w)for(let c=0;c<3;c++)o[c]+=dj[c]*w;}J[k]=o;}
+  limbFill(P,B,J,mus,fat,g==='f');
   const out={pos:P,J};B.morph.set(key,out);if(B.morph.size>8)B.morph.delete(B.morph.keys().next().value);return out;}
+/* MakeHuman's big shapes add their mass to the thighs and the upper arms but not round the knee or along the forearm:
+   a strongman's thigh narrowed into a pinched, hollow-fronted knee and his forearms stayed thin. Muscle and fat fill the
+   lower thigh above the knee (the vastus medialis teardrop, front and inside, not the back of the knee) and the forearm
+   (the flexor / brachioradialis bellies below the elbow, tapering to the wrist), smoothed over the mesh */
+function limbFill(P,B,J,mus,fat,fem){const kM=clamp((mus-0.5)/0.8,0,1.2),kF=clamp(fat-0.3,0,1.6);if(kM<0.02&&kF<0.02)return;
+  const nv=B.nv,Q=B.Q,N=new Float32Array(nv*3),D=new Float32Array(nv);
+  for(let q=0;q<Q.length;q+=4){const a=Q[q],b=Q[q+1],c=Q[q+2],d=Q[q+3];const ux=P[c*3]-P[a*3],uy=P[c*3+1]-P[a*3+1],uz=P[c*3+2]-P[a*3+2],vx=P[d*3]-P[b*3],vy=P[d*3+1]-P[b*3+1],vz=P[d*3+2]-P[b*3+2];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;for(const k of [a,b,c,d]){N[k*3]+=nx;N[k*3+1]+=ny;N[k*3+2]+=nz;}}
+  const kY=J.kneeL[1],E=J.elL,Wr=J.wrL,ex=Wr[0]-E[0],ey=Wr[1]-E[1],ez=Wr[2]-E[2],el2=ex*ex+ey*ey+ez*ez,f=fem?0.7:1;
+  for(let i=0;i<nv;i++){const x=P[i*3],y=P[i*3+1],z=P[i*3+2],nl=Math.hypot(N[i*3],N[i*3+1],N[i*3+2])||1,nx=N[i*3]/nl,nz=N[i*3+2]/nl,sd=x>=0?1:-1;
+    if(B.legw[i]>0.6&&B.footw[i]<0.3){const u=y-kY;if(u<-0.12||u>0.22)continue;
+      /* round the knee and just above it: front most, inside, a little outside (the medial side faces the other leg) */
+      const face=clamp(0.7*Math.max(0,nz)+0.6*Math.max(0,-sd*nx)+0.35*Math.max(0,sd*nx),0,1)*(1-smooth((-nz-0.2)/0.4));
+      D[i]=f*(0.018*kM+0.015*kF)*gauss(u-0.035,0.075)*face;}
+    else if(B.armw[i]>0.6){const px=sd*x-E[0],py=y-E[1],pz=z-E[2],t=(px*ex+py*ey+pz*ez)/el2;if(t<-0.05||t>1)continue;
+      D[i]=f*(0.016*kM*gauss(t-0.27,0.17)+0.006*kF*gauss(t-0.3,0.3))*smooth((t+0.05)/0.1)*smooth((0.95-t)/0.12);}}
+  const nb=Array.from({length:nv},()=>[]);for(let q=0;q<Q.length;q+=4)for(let k=0;k<4;k++){nb[Q[q+k]].push(Q[q+(k+1)%4]);nb[Q[q+(k+1)%4]].push(Q[q+k]);}
+  for(let it=0;it<3;it++){const d0=D.slice();for(let i=0;i<nv;i++){if(!nb[i].length||(B.legw[i]<0.3&&B.armw[i]<0.3))continue;let s2=d0[i];for(const j of nb[i])s2+=d0[j];D[i]=s2/(nb[i].length+1);}}
+  for(let i=0;i<nv;i++){if(!D[i])continue;const nl=Math.hypot(N[i*3],N[i*3+1],N[i*3+2])||1;P[i*3]+=N[i*3]/nl*D[i];P[i*3+1]+=N[i*3+1]/nl*D[i]*0.3;P[i*3+2]+=N[i*3+2]/nl*D[i];}}
 function mhShape(g,F,b){
   const B=mhBase(),MM=mhMorph(g,BC.mus||0,BC.fat||0),P0=MM.pos,nv=B.nv,J=MM.J,P=new Float32Array(nv*3),fem=g==='f';
   const sh0=J.shL,wr0=J.wrL,el0=J.elL,hip0=J.hipL;

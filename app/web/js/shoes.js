@@ -140,7 +140,7 @@ function buildShoe(GS,G,side,P,T,footM,bare){
   if(T.toecap||T.mud)ov(0.83,1,0,Math.PI,T.toecap?soleM:acc,0.0016,20,8);
   if(T.panel||T.cage){for(const inner of [0,1])GS.add(mk(surf(14,4,(u,v)=>{const s=lerp(0.28,0.66,u),th=lerp(0.4,1.0,u)+(v-0.5)*0.22;return Lr.pt(s,inner?Math.PI-th:th,0.0018);},{noAO:true,uRep:3,vRep:4}),acc));
     if(T.cage)for(const inner of [0,1])for(const k of [0,1]){const pts=[];for(let i=0;i<=8;i++){const s=lerp(0.12+k*0.18,0.42+k*0.16,i/8),th=lerp(0.15,Math.min(1.1,thW(Math.min(s,sOpen-0.01))),i/8);pts.push(Lr.pt(s,inner?Math.PI-th:th,0.002));}GS.add(mk(cordGeo(pts,0.0022,false,5,16),acc));}}
-  if(T.heelTab&&sOpen>0){const p=Lr.pt(0.004,Math.PI/2,0.004);const t=mk(new THREE.BoxGeometry(0.022,0.026,0.008),acc);t.position.copy(p).add(V3(0,-0.004,-0.002));GS.add(t);}
+  if(T.heelTab&&sOpen>0){const p=Lr.pt(0.004,Math.PI/2,0.004);const t=mk(new THREE.BoxGeometry(0.022,0.026,0.008),acc);t.position.copy(p).add(V3(0,-0.004,-0.002));t.userData.tab=true;GS.add(t);}
   if(T.moc){const pts=[];for(let i=0;i<=24;i++){const t=i/24,th=lerp(0.55,Math.PI-0.55,t),s=0.6+0.3*Math.sin(Math.PI*t);pts.push(Lr.pt(s,th,0.0015));}GS.add(mk(stitchGeo(pts),stitchMat(shade(P.color,0.3))));GS.add(mk(cordGeo(pts,0.0022,false,5,40),dark));}
   if(T.penny){GS.add(mk(surf(12,3,(u,v)=>Lr.pt(lerp(0.53,0.58,v),lerp(0.3,Math.PI-0.3,u),0.002),{noAO:true,uRep:3,vRep:4}),dark));const p=Lr.pt(0.555,Math.PI/2,0.004);const sl=mk(new THREE.BoxGeometry(0.02,0.003,0.006),plain('#141312',.6));sl.position.copy(p);GS.add(sl);}
   if(T.bow){const p=Lr.pt(sOpen+0.01,Math.PI/2,0.004);for(const sd of [-1,1]){const b=mk(new THREE.SphereGeometry(1,10,8),acc);b.scale.set(0.009,0.004,0.006);b.position.copy(p).add(V3(sd*0.008,0.002,0));GS.add(b);}}

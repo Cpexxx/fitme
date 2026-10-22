@@ -108,8 +108,9 @@ function headPt(th,ph,h=0){
   /* the lowest point is the chin at the front, not the middle of an egg: the lower half leans forward */
   if(ny<0)z+=D.zf*0.3*Math.pow(-ny,1.7);
   /* behind the jaw and at the back the skull runs smoothly into the neck (no round bottom with the neck stuck under it) */
-  /* under the jawline the head tucks in towards the neck (all round except the chin): the jaw reads as an edge, not a bowl */
-  if(ny<-0.2&&BC.neckR){const back=smooth((0.3-s)/0.85),chin=gauss(c,0.4)*smooth(s/0.4),tb=smooth((-ny-0.2)/0.8)*back,tj=smooth((-ny-0.6)/0.3)*(1-chin),t=Math.max(tb*tb*0.85,tj*0.7),hr=Math.hypot(x,z),nr=BC.neckR*1.12;if(hr>nr&&t>0){const k=lerp(hr,nr,t)/hr;x*=k;z*=k;}}
+  /* under the jawline the head tucks in towards the neck (all round except the chin): the jaw reads as an edge, not a bowl;
+     the chin is spared over a wide, smooth span (a narrow one cut a hooked groove at each corner of the chin) */
+  if(ny<-0.2&&BC.neckR){const back=smooth((0.3-s)/0.85),chin=Math.pow(Math.max(0,s),1.5)*smooth((0.85-Math.abs(c))/0.7),tb=smooth((-ny-0.2)/0.8)*back,tj=smooth((-ny-0.55)/0.4)*(1-chin),t=Math.max(tb*tb*0.85,tj*0.6),hr=Math.hypot(x,z),nr=BC.neckR*1.12;if(hr>nr&&t>0){const k=lerp(hr,nr,t)/hr;x*=k;z*=k;}}
   if(h){const L=Math.hypot(x,y,z)||1,k=(L+h)/L;x*=k;y*=k;z*=k;}
   return V3(BC.headC.x+x,BC.headC.y+y,BC.headC.z+z);
 }

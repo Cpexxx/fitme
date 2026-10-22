@@ -10,7 +10,12 @@ HAT_LINES.trucker=HAT_LINES.baseball;HAT_LINES.kufi=[[0,.34],[1.57,.24],[Math.PI
 function capType(){const c=S.acc.cap.type;if(c&&c!=='none')return c;return S.acc.headband&&S.acc.headband.type==='full'?'kerchief':'none';}
 const angFront=ph=>Math.abs(wrapA(ph-FRONT));
 function hairlineNy(ph){return interp1(HAIRLINE,angFront(ph));}
-function hatLineNy(ph){const t=capType(),tab=HAT_LINES[t];if(!tab)return null;let d=angFront(ph);if(S.acc.cap.back&&(t==='baseball'||t==='trucker'))d=Math.PI-d;return interp1(tab,d);}
+function hatLineNy(ph){const t=capType(),tab=HAT_LINES[t];if(!tab)return null;let d=angFront(ph);const back=S.acc.cap.back&&(t==='baseball'||t==='trucker');if(back)d=Math.PI-d;
+  /* with glasses on, a cap with a brim sits higher at the front: the brim clears the frame (it cut through it) */
+  return interp1(tab,d)+(back?0:hatLiftNy(t)*smooth((1.6-d)/0.9));}
+const BRIM_DROP={baseball:0.014,trucker:0.014,flat:0.008,fedora:0.004,bucket:0.03};
+function hatLiftNy(t){if(!BRIM_DROP[t]||typeof glassesTopY!=='function')return 0;const yT=glassesTopY();if(yT==null)return 0;
+  const hc=BC.headC,ry=BC.hd.ry,tab=HAT_LINES[t],edge=hc.y+ry*interp1(tab,0);return Math.max(0,(yT+0.004-(edge-BRIM_DROP[t]))/ry);}
 /* a headband across the forehead lies over the hair: the hair under it is pressed below its surface (it went through it at
    the sides and the back). Returns how far the band covers a point (0..1) and the band's height over the scalp */
 const HB_H=0.011;
@@ -105,7 +110,7 @@ function hairField(yTop,yBot){
 const DRAPE_CACHE=new Map();
 function hairDrape(roots,nv,o){
   /* the same hair over the same body and clothes drapes the same: remembered (a change of colour, shoes, ... is free) */
-  const key=nv+'|'+(o.steps||0)+'|'+[o.thin,o.thick,o.bodyClr,o.lat,o.band,o.stiff].join(',')+'|'+o.field.sig+'|'+roots.map(r=>[r.ph,r.y,r.len,r.bias,r.xt,r.p0?r.p0.x+','+r.p0.y+','+r.p0.z+','+r.p1.x+','+r.p1.y+','+r.p1.z:''].map(v=>typeof v==='number'?v.toFixed(5):v).join(',')).join(';');
+  const key=nv+'|'+(o.steps||0)+'|'+[o.thin,o.thick,o.bodyClr,o.lat,o.band,o.stiff,o.latK||0,o.pushZ||0].join(',')+'|'+o.field.sig+'|'+roots.map(r=>[r.ph,r.y,r.len,r.bias,r.xt,r.p0?r.p0.x+','+r.p0.y+','+r.p0.z+','+r.p1.x+','+r.p1.y+','+r.p1.z:''].map(v=>typeof v==='number'?v.toFixed(5):v).join(',')).join(';');
   const hit=DRAPE_CACHE.get(key);if(hit)return hit.map(c=>c.map(p=>p.clone()));
   /* a wide sheet: every third strand is simulated, the ones between follow their neighbours (kept off the body); in high
      quality every strand is */
@@ -134,9 +139,10 @@ function hairDrapeSim(roots,nv,o){
     /* head (axis through its centre) */
     if(y>yHd){const dx=x,dz=z-hc.z,r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.head(y,ph,tmp);
       if(tmp[0]>0){const R=tmp[0]+headClr(j,y,ph);if(r<R){const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit|=1;}}}
-    /* body and clothes (axis through the torso) */
+    /* body and clothes (axis through the torso; pushZ: a sheet on the front is pushed straight forward, not out from the
+       axis, which spread its columns sideways) */
     if(X[k+1]<yBd){const dx=X[k],dz=X[k+2],r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[k+1],ph,tmp);
-      if(tmp[0]>0){const R=tmp[0]+o.bodyClr;if(r<R){const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit|=2;}}}
+      if(tmp[0]>0){const R=tmp[0]+o.bodyClr;if(r<R){if(o.pushZ&&dz>0){X[k+2]=Math.max(dz,Math.sqrt(Math.max(0,R*R-dx*dx)));hit|=2;}else{const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit|=2;}}}}
     return hit;};
   /* start: hanging straight down from the root, pushed out of the head and body */
   for(let s=0;s<n;s++){const R0=roots[s],seg=R0.len/nv;SEG[s]=seg;
@@ -146,7 +152,7 @@ function hairDrapeSim(roots,nv,o){
       else{const p=(s*np+j-1)*3;X[k]=X[p];X[k+1]=X[p+1]-seg;X[k+2]=X[p+2];for(let it=0;it<6;it++)collide(k,j);}
       Q[k]=X[k];Q[k+1]=X[k+1];Q[k+2]=X[k+2];}}
   /* rest spacing between neighbouring strands (the sheet may fan out to half as much again, not further) */
-  const LAT=new Float32Array(n*np);for(let s=0;s+1<n;s++)for(let j=0;j<np;j++){const a=(s*np+j)*3,b=a+np*3;LAT[s*np+j]=Math.hypot(X[a]-X[b],X[a+1]-X[b+1],X[a+2]-X[b+2])*1.5+0.002;}
+  const LAT=new Float32Array(n*np);for(let s=0;s+1<n;s++)for(let j=0;j<np;j++){const a=(s*np+j)*3,b=a+np*3;LAT[s*np+j]=Math.hypot(X[a]-X[b],X[a+1]-X[b+1],X[a+2]-X[b+2])*(o.latK||1.5)+(o.latK?0:0.002);}
   const loose=o.lat===false,dt=o.dt||(loose?1/65:1/50),G=9.8*dt*dt,yS=BC.shY+0.03,steps=o.steps||(loose?150:80),stiff=o.stiff!=null?o.stiff:0.01;
   for(let st=0;st<steps;st++){
     const damp=st<steps*0.6?0.95:0.85;
@@ -176,7 +182,12 @@ function hairDrapeSim(roots,nv,o){
       D[k]=X[k]-D[k];D[k+1]=X[k+1]-D[k+1];D[k+2]=X[k+2]-D[k+2];}
       /* the moves made by the leader-following become velocity unless taken back: each particle takes back most of its
          child's move (the damping of "dynamic follow the leader") */
-      for(let j=2;j+1<np;j++){const k=(s*np+j)*3;Q[k]+=0.9*D[k+3];Q[k+1]+=0.9*D[k+4];Q[k+2]+=0.9*D[k+5];}}}
+      for(let j=2;j+1<np;j++){const k=(s*np+j)*3;Q[k]+=0.9*D[k+3];Q[k+1]+=0.9*D[k+4];Q[k+2]+=0.9*D[k+5];}}
+    /* a cloth sheet (latK: a scarf's end) keeps its width: its columns are held at their spacing after they fall (the
+       collision pushes each one out from the body's axis, spreading the sheet into a cape), then kept off the body */
+    if(o.latK)for(let it=0;it<3;it++){for(let s=0;s+1<n;s++)for(let j=2;j<np;j++){const a=(s*np+j)*3,b=a+np*3,dx=X[b]-X[a],dy=X[b+1]-X[a+1],dz=X[b+2]-X[a+2],d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-9,L=LAT[s*np+j]/o.latK;
+        if(Math.abs(d-L)>L*0.03){const c=(d-L)/d*0.5;X[a]+=dx*c;X[a+1]+=dy*c;X[a+2]+=dz*c;X[b]-=dx*c;X[b+1]-=dy*c;X[b+2]-=dz*c;}}
+      for(let s=0;s<n;s++)for(let j=2;j<np;j++)collide((s*np+j)*3,j);}}
   /* hair that ends just past where it meets the shoulders or a collar rests there (its ends a little beyond the
      contact): left to lie on, it slid down the slope of the shoulder and lay out flat to its tip like a wing */
   const yRest=BC.shY+0.15;

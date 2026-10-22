@@ -90,6 +90,8 @@ Na Linuksie (użytkownik pracuje teraz na Ubuntu): `npm run package:linux` daje 
   - `buildInto(group, state, false)` buduje bez cache.
 - Błędy łapie hook `window.__errs` w shot.js. Zawsze sprawdzaj, że jest pusty.
 - Profilowanie: `cpuprof.js` (CDP Profiler, tryb `incl`).
+- **Od rundy 13:** `tools/qa/clip.js` wykrywa automatycznie prześwity, przecięcia i załamania (opis w „Runda 13”). Uruchamiaj
+  go na `bodies`, `acc` i `random:40` przed każdym pushem i porównuj z poprzednim commitem (worktree), żeby łapać regresje.
 
 ## Pułapki
 - Pliki JS mają końce linii **LF** (stara notatka o CRLF jest nieaktualna).
@@ -329,3 +331,50 @@ Kolejne rundy:
   - kurtki: kamizelka jeansowa, M-65, barn jacket (`collarCord`), kimono/haori (`open`, kołnierz `eri`, szerokie rękawy `wide`);
   - dół: kilt i salwar (`uni:1`, losowane też dla mężczyzn);
   - czapka: kufi (`tuck` krawędzi w `hatShell`).
+
+## Runda 13 (2026-10-22): strongman, szalik, czapka z okularami, podbródek, sztruks, prześwity + automatyczny detektor
+- **Automatyczny detektor usterek `tools/qa/clip.js`** (nowy; uruchamiać w każdej rundzie przed pushem):
+  `node tools/qa/clip.js <out> [random:N[:seed]|bodies|acc|all|plik.js] [--png]`, kod wyjścia 1 = są usterki, `QA_DEBUG=1`
+  wypisuje współrzędne krawędzi. Buduje postać jak aplikacja (`qaBuild`), renderuje bufor ID+głębokości z 8 stron i zgłasza:
+  - **prześwit:** niższa warstwa (ciało < bielizna < spodnie < top < mid < outer, buty 2.2) widoczna wewnątrz obrysu wyższej,
+    0,4 mm–4 cm przed nią, ≥ 6 px; części ramion (`:arm`) osobno (ręka przed bokiem koszuli to nie błąd);
+  - **przecięcie:** sztywne pary (czapka, okulary, kolczyki, głowa, opaska) zmieniają kolejność przód/tył na sąsiednich
+    pikselach przy odstępie < 5 mm;
+  - **załamanie:** krawędź siatki ostrzejsza niż 60° na ciele/głowie (bez pachy, krocza, szczeliny pośladków, biegunów siatki)
+    albo zawinięta (> 135°) na tkaninie. Na ciele pomijane są linia środka (rowek kręgosłupa, mostek) i palce stóp. Tkanina:
+    tylko duże kawałki (≥ 1500 wierzchołków; kieszenie, szlufki i nity to małe bryły z celowymi krawędziami), tylko
+    w obrębie jednego źródłowego kawałka (`userData.pieces`) i nie bliżej niż 2 pierścienie od wolnego brzegu (podwinięcia,
+    kołnierze, klapy).
+  - Zestawy: `random` (losowe stroje), `bodies` (8 sylwetek × 2 płcie × stroje), `acc` (czapki × okulary). Pełny `all` ~1,5 h.
+    `QA_ONLY=<regexp>` sprawdza wybrane przypadki. `clip.json` zapisuje stan każdego przypadku z usterką (do odtworzenia).
+  - Pomijane: wypustka pięty buta (`userData.tab`, noga przed nią to nie stopa przez but) i stopa w otwartych butach.
+  - Test detektora: nowa wersja uruchomiona na kodzie sprzed rundy 13 wskazuje wszystkie zgłoszone usterki
+    (kolano 354 px, szlufki, kolec na plecach, daszek × okulary), a na obecnym kodzie nic.
+  - Nie ocenia estetyki (kształt, tekstura, proporcje). Obrazy przed/po nadal trzeba oglądać.
+- **Prześwit za kolanem (zdj. 14):** `poplitealFill` działa też na bazie powłok (`shellBase`: P i Ps), a nie tylko na siatce renderu.
+- **Strongman:** `limbFill` (mh.js) wypełnia kolano i przedramię zależnie od mięśni i tłuszczu.
+- **Podbródek:** w `headPt` cofnięcie żuchwy wygasza się pod brodą (`chin`), bez haczykowatego rowka.
+- **Czapka z daszkiem i okulary:** daszek podnosi się nad `glassesTopY()` (`hatLiftNy`, `BRIM_DROP`); cat-eye liczy szerszą
+  oprawkę w rogach (×1,5). Okulary typu shield trzymają 5 mm od głowy.
+- **Szalik:** przebudowany: 2 miękkie owinięcia + końce z symulacji `hairDrape` (`latK` stała szerokość, `pushZ`), frędzle;
+  `shScarfOut` podnosi końce osobno od owinięcia.
+- **Sztruks:** słabsze prążki (alfa 0,14, szerszy gradient, `BUMPY.cord=0.25`, `MATDEF.cord`): bez mory.
+- **Tkanina na plecach / siedzeniu (wykryte detektorem):**
+  - `shMidTrunk` (przed cięciem w `shEmit`, góry): tkanina nie przechodzi przez linię środka (normalne Ps w szczelinie
+    wskazywały na drugą stronę i dawały kolec na plecach koszulki), punkty na środku nie odstają, a pionowe przesunięcie jest
+    wyrównane w pasie 10 cm (paski się nie łamią);
+  - `shMidline`: tkanina z tyłu nie wchodzi głębiej niż wypełnione Ps;
+  - (próbowane i cofnięte: mostek siedzenia spodni w `shBodyClear` aż do prawdziwego krocza. Bez wygładzania ścianki
+    szczeliny zgniatały się w kolce, a z wygładzaniem Laplace wciągał tkaninę pod krocze i przebijała skóra (kobieta, strongman).)
+- **UV na granicy wykroju** (tułów/noga, tułów/rękaw): trójkąt mieszany dostaje współrzędne jednej części, więc w szwie nie ma
+  zygzaka. Dół nogawki (`shUvKept`) ma UV jak powłoka, bez linii na łydce. `cy ≥ hipL−0,085` dla silnych sylwetek.
+- **Szlufki boczne przez koszulkę:** `shHideCovered` sprawdza też kurtyny wyższych warstw.
+- `shRelax`: górne 3 cm spodni są przypięte (`pin`). Pod brzuchem pas zjeżdżał o 1,5 cm z dala od paska i na plecach robiło się „V”.
+  Wygładzanie panelu w `shBodyClear` nie rusza krawędzi.
+- **Znane, niezrobione (detektor je wskazuje; odtwarzanie przez `QA_ONLY`):**
+  - pełna sylwetka (heavy) + obcisłe spodnie: pod brzuchem, pod paskiem, wykrój zawija się w ząbki (było już wcześniej;
+    powstaje przy pierwszym rozłożeniu wykroju, nie w drape);
+  - losowe stroje: spódnica z wysokim stanem + top na wierzch + krótka kurtka – spódnica wychodzi bokami spod kurtki;
+    tu i ówdzie koszula prześwituje przez sweter w talii (kolejność warstw);
+  - przy niskich sneakersach krawędź uciętej nogi bywa 2–4 mm nad tylnym kołnierzem (widać tylko w zbliżeniu;
+    niższe cięcie stóp, czyli próg `footw`, przebija boki buta).
