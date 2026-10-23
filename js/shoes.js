@@ -61,6 +61,17 @@ function buildFoot(GS,side,T,mat,bare){
     const toes=[[0.93,2.75,0.0125],[0.95,2.2,0.0095],[0.94,1.7,0.0088],[0.92,1.25,0.008],[0.89,0.75,0.0072]];
     for(const[s,th,r] of toes){const P=Lr.pt(s,th,-0.002);const t=mk(new THREE.SphereGeometry(1,16,12),mat);t.scale.set(r,r*0.8,r*1.35);t.position.copy(P);t.position.y=Math.max(r*0.8,P.y-0.004);GS.add(t);}}
 }
+/* a closed shoe without socks: the leg ends (the foot is cut away inside the shoe) a few mm over the low back of the collar
+   and its open edge showed in a gap there; a band of skin carries it on down into the shoe (sinking 4.5 mm inside the
+   leg from the cut down: the foot's own surface stands through the shoe) */
+function buildInnerAnkle(G,P){const SH=SHOES[P.type]||{};if(!P.type||P.type==='none'||SH.open||SH.low||SH.clog||SH.shaft)return;
+  const src=bodyGeo(true),p=src.attributes.position,nr=src.attributes.normal,ix=src.index.array,map=new Int32Array(p.count).fill(-1),pos=[],idx=[],yb=0.045,yt=0.098,th=0.0045;
+  const vid=i=>{if(map[i]<0){map[i]=pos.length/3;const d=th*smooth((0.09-p.getY(i))/0.018);pos.push(p.getX(i)-nr.getX(i)*d,p.getY(i)-nr.getY(i)*d,p.getZ(i)-nr.getZ(i)*d);}return map[i];};
+  for(let t=0;t<ix.length;t+=3){const a=ix[t],b=ix[t+1],c=ix[t+2],ya=p.getY(a),y2=p.getY(b),yc=p.getY(c);if(Math.max(ya,y2,yc)>yt||Math.min(ya,y2,yc)<yb)continue;
+    /* (the back half only: at the front the tongue rises over the cut, a band there stood through it) */
+    if(Math.max(p.getZ(a),p.getZ(b),p.getZ(c))>-0.004)continue;idx.push(vid(a),vid(b),vid(c));}
+  if(!idx.length)return;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+  const o=mk(g,skinMat());o.userData.ctx='none';o.userData.innerAnkle=true;G.add(o);}
 function buildSocks(G,P){
   if(!P.socks||P.socks==='none')return;
   const ctx0=MK_CTX;MK_CTX='cloth';try{buildSocks0(G,P);}finally{MK_CTX=ctx0;}}
@@ -92,7 +103,7 @@ let SHOE_K=1;
 function buildShoes(GS,G){
   const P=S.shoes,T=SHOES[P.type],sk=skinMat(),m=BC.meas,fl=e=>e/1.5-1.5;
   SHOE_K=m&&P.eu&&P.eu!=='auto'?clamp(fl(+P.eu)/fl(m.eu),0.85,1.2):1;
-  buildSocks(G,P);
+  buildSocks(G,P);if(!P.socks||P.socks==='none')buildInnerAnkle(G,P);
   const sockM=P.socks&&P.socks!=='none'?fabric('rib',P.sockColor||'#f4f1ea'):null;
   for(const side of [-1,1]){
     if(!T||P.type==='none')continue;

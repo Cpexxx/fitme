@@ -95,8 +95,9 @@ function poseAssign(G,GS){
       else if(!(ax==='torso'||['top','mid','outer','bottom'].includes(o.userData.layer))){const st=Math.max(1,Math.floor(n/12));let arm=0,tot=0;
         for(let i=0;i<n;i+=st){v.fromBufferAttribute(p,i).applyMatrix4(mw);let y=v.y;if(shoe)y=winv(y-LIFT);const[j]=H.any(v.x,y,v.z);if(j>=0){tot++;if(reg[j]===1||reg[j]===2)arm++;}}
         if(arm>tot*0.5)mode='arm';}}
-    const pos=p.array;
-    for(let i=0;i<n;i++){acc.fill(0);let x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2];v.set(x,y,z).applyMatrix4(mw);x=v.x;y=v.y;z=v.z;if(shoe)y=winv(y-LIFT);
+    /* (hair strands: the two vertices of each point are at the same place - looked up once) */
+    const pos=p.array,pairs=!!ud.strands;
+    for(let i=0;i<n;i++){if(pairs&&(i&1)){for(let k=0;k<4;k++){I[i*4+k]=I[i*4-4+k];W[i*4+k]=W[i*4-4+k];}continue;}acc.fill(0);let x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2];v.set(x,y,z).applyMatrix4(mw);x=v.x;y=v.y;z=v.z;if(shoe)y=winv(y-LIFT);
       const hw=smooth((y-headY)/0.05);
       if(direct)addD(direct,ud.src?ud.src[i]:ud.bodySrc?ud.bodySrc[i]:i,1-hw);
       else if(hw<1){let j=-1;
@@ -162,11 +163,12 @@ function poseSkinPt(DQ,I,W,P,i,out){let a0=0,a1=0,a2=0,a3=0,b0=0,b1=0,b2=0,b3=0,
   out[0]=ix*a3+iw*-a0+iy*-a2-iz*-a1+tx;out[1]=iy*a3+iw*-a1+iz*-a0-ix*-a2+ty;out[2]=iz*a3+iw*-a2+ix*-a1-iy*-a0+tz;}
 /* in a pose the hands can come to rest on (and sink into) a hip, a thigh or the clothes over them (relaxed hips, a walk):
    the hands are posed, their gap to whatever is beside them measured, and each upper arm swung out until they clear */
-function poseHandClear(body,J,def){const meshes=[];body.traverse(o=>{if(o.isMesh&&o.geometry.attributes.skinI)meshes.push(o.geometry);});if(!meshes.length)return def;
+function poseHandClear(body,J,def){const meshes=[],sub=new Map();body.traverse(o=>{if(o.isMesh&&o.geometry.attributes.skinI){meshes.push(o.geometry);sub.set(o.geometry,o.material&&o.material.userData&&o.material.userData.depthMat?16:1);}});if(!meshes.length)return def;
   const arm=new Set(['uarmL','farmL','handL','uarmR','farmR','handR'].map(b=>POSE_IDX[b])),hand={1:POSE_IDX.handL,'-1':POSE_IDX.handR};
   /* per mesh: hand vertices (mostly hand bone) and other vertices (no arm bone at all) below the chest */
   const H=[],O=[];for(const g of meshes){const I=g.attributes.skinI.array,W=g.attributes.skinW.array,P=g.attributes.position.array,N=g.attributes.normal.array,n=P.length/3;
-    for(let i=0;i<n;i++){let wa=0,wh=0;for(let k=0;k<4;k++){const b=I[i*4+k],w=W[i*4+k];if(arm.has(b))wa+=w;if(b===hand[1]||b===hand[-1])wh+=w;}
+    /* (hair strands: a sample of their points is plenty, there are a million of them) */
+    const st=sub.get(g)||1;for(let i=0;i<n;i+=st){let wa=0,wh=0;for(let k=0;k<4;k++){const b=I[i*4+k],w=W[i*4+k];if(arm.has(b))wa+=w;if(b===hand[1]||b===hand[-1])wh+=w;}
       if(wh>0.6&&(i%2===0))H.push([g,i]);else if(wa<0.02&&P[i*3+1]<1.25&&P[i*3+1]>0.45&&Math.abs(P[i*3])>0.04)O.push([g,i]);}}
   if(!H.length||!O.length)return def;
   let d2={b:Object.assign({},def.b||{}),T:def.T};const p=new Float32Array(3),cs=0.015;

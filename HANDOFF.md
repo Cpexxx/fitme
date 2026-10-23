@@ -371,10 +371,47 @@ Kolejne rundy:
 - **Szlufki boczne przez koszulkę:** `shHideCovered` sprawdza też kurtyny wyższych warstw.
 - `shRelax`: górne 3 cm spodni są przypięte (`pin`). Pod brzuchem pas zjeżdżał o 1,5 cm z dala od paska i na plecach robiło się „V”.
   Wygładzanie panelu w `shBodyClear` nie rusza krawędzi.
-- **Znane, niezrobione (detektor je wskazuje; odtwarzanie przez `QA_ONLY`):**
+- **Znane po rundzie 13 (zrobione w rundzie 14, zob. niżej):**
   - pełna sylwetka (heavy) + obcisłe spodnie: pod brzuchem, pod paskiem, wykrój zawija się w ząbki (było już wcześniej;
     powstaje przy pierwszym rozłożeniu wykroju, nie w drape);
   - losowe stroje: spódnica z wysokim stanem + top na wierzch + krótka kurtka – spódnica wychodzi bokami spod kurtki;
     tu i ówdzie koszula prześwituje przez sweter w talii (kolejność warstw);
   - przy niskich sneakersach krawędź uciętej nogi bywa 2–4 mm nad tylnym kołnierzem (widać tylko w zbliżeniu;
     niższe cięcie stóp, czyli próg `footw`, przebija boki buta).
+
+## Runda 14 (2026-10-23): zaległości z rundy 13 + nowy silnik włosów (pasma)
+- **Ząbki spodni pod brzuchem (heavy):** w `shBodyClear` przedni panel krocza nie działa powyżej fałdy pod brzuchem (`yCr`:
+  najniższy punkt skóry skierowanej w górę nad kroczem, z pominięciem pępka). Spodnie pod zwisem brzucha zwisają z paska:
+  na kolumnę 1 cm z przodu cofają się w dół najwyżej o 0,35 na jednostkę wysokości (`lift`, rozlany po sąsiadach, tylko
+  rośnie). Wcześniej to „V” w fałdzie i zawinięte trójkąty.
+- **Kolejność warstw:** spódnica (`skirtPiece`) leży pod najniższą warstwą, która ją przykrywa (top na wierzch, sweter,
+  kurtka), a nie tylko pod kurtką. Do siatek korpusu wchodzą tylko trójkąty korpusu (`shTrunkTris`): w układzie korpusu
+  rękaw zwisający przy boku udawał tkaninę tułowia i spódnica wychodziła z boku. Tak samo kurtyny i kaptury.
+- **Szczelina nogi nad kołnierzem buta:** `buildInnerAnkle` (shoes.js) dodaje przy zamkniętych butach bez skarpet pas
+  skóry w tylnej połowie kostki, schodzący 4,5 mm do środka nogi. Z przodu nie, bo przebijał język buta. Detektor zgłasza
+  tam teraz „ciało przez buty” w otworze nad językiem; to widoczna kostka, czyli fałszywy alarm.
+- **Nowy silnik włosów: pasma zamiast arkuszy i kart.**
+  - `strandGeo` (hair.js): każde pasmo to łamana z dwoma wierzchołkami na punkt, oba na linii środka. `normal` = kierunek
+    pasma, `uv.x` = ±połowa szerokości. `userData.strands`.
+  - `strandMat` (core.js): w shaderze wierzchołków pasmo obraca się do kamery (do światła przy cieniu: `customDepthMaterial`)
+    i ma co najmniej ~0,7 px szerokości. Cieniowanie jak cienki walec: normalna w płaszczyźnie widoku obrócona w poprzek
+    pasma, rozproszone owinięte, dwa refleksy Kajiya-Kay (biały przesunięty ku końcom, kolorowy ku nasadzie).
+    Odbicie otoczenia ×0,04, bo przy normalnej do kamery mapa otoczenia dawała szron.
+  - **Długie włosy** (`sheetStrands`): symulowana powierzchnia (`hairDrape`) jest prowadnicą. Na kolumnę ~120 pasm
+    (`STRAND_Q`: perf 0,38, std 0,62, high 0,85), rozłożonych w grubości arkusza (ciemniejsze w środku). Pasma zbierają
+    się w kosmyki zwężające się ku końcom (`pull`), a kosmyk w przekroju jest okrągły (`bul`). Kołysanie na boki to gładkie
+    pole w poprzek arkusza (`swayAt`, sąsiednie pasma razem), fale i loki z fazą wolno płynącą w poprzek (`wvPh`), puszenie,
+    pojedyncze odstające włosy, rzednące brzegi (otwarte i rozchodzące się nad ramieniem). Końce w różnej długości, tępe
+    w krótkich fryzurach.
+  - Pasma długich fryzur (`crown`) zaczynają się między wirem na czubku a pierścieniem arkusza. Biegną po powłoce skalpu
+    (`SHELL_HF`, 2–3 mm nad nią), ze skrętem wokół wiru, i płynnie wchodzą w arkusz. Złącze jest wygładzone, a punkty
+    rozłożone równo co ~1 cm (6,5 mm przy falach). Wcześniej był ciemny szew wokół głowy.
+  - Pod pasmami matowy, ciemniejszy rdzeń (`hairCoreMat`) głębiej niż najgłębsze pasmo, kończący się przed końcami i nie
+    sięgający brzegów. Powłoka skalpu pod arkuszem schodzi do skóry (`under`) i jest gładka (bez szumu, który przebijał).
+  - **Krótkie fryzury i grzywki** (`hairCards` przepisane): pasma po powierzchni powłoki zamiast kart z teksturą, część
+    pod nią, część nad, loki jako spirala. `minNy` wygasza końce w paśmie 0,22 (bez linii). `front`: zaczesane z czoła na
+    boki. Kucyk (`tailStrands`): pasma wypełniające przekrój ze skrętem.
+  - Pozy: wagi liczone raz na parę wierzchołków pasma, `poseHandClear` próbkuje co 16. punkt. `warpGeo(..,tan)` rozciąga
+    kierunek pasma inaczej niż normalną.
+  - Koszt (perf / high, długie włosy): +0,85 s / +2 s budowy; ~0,66 / ~1,3 mln wierzchołków pasm.
+- Detektor `clip.js` nie widzi pasm włosów jako powierzchni (bez rozszerzania w shaderze), więc obrazy włosów trzeba oglądać.

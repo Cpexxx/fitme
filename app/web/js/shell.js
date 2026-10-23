@@ -140,6 +140,11 @@ PGrid.prototype.sdfAt=function(th,x){const NA=SH_NA,g=((th/TAU*NA-0.5)%NA+NA)%NA
 function shTrisOf(mesh,r){
   const ck=mesh.matrixWorld.elements.join(',')+'|'+r+'|'+mesh.geometry.uuid;mesh.userData.__tris=mesh.userData.__tris||{};if(mesh.userData.__tris.k===ck)return mesh.userData.__tris.T;
   const T0=shTrisOf0(mesh,r);mesh.userData.__tris={k:ck,T:T0};return T0;}
+/* the trunk part of a shell only (no sleeve triangles): in trunk coordinates a hanging sleeve lies over the side of the
+   body, and its radius stood for the garment's there */
+function shTrunkTris(mesh){const T=shTrisOf(mesh,0),rg=mesh.geometry.userData.reg,ix=mesh.geometry.index?mesh.geometry.index.array:null;if(!rg||!ix)return T;
+  const out=[];for(let t=0;t<ix.length/3;t++){const a=rg[ix[t*3]],b=rg[ix[t*3+1]],c=rg[ix[t*3+2]];if(a===1||a===2||b===1||b===2||c===1||c===2)continue;for(let k=0;k<9;k++)out.push(T[t*9+k]);}
+  return Float32Array.from(out);}
 function shTrisOf0(mesh,r){
   const g=mesh.geometry,p=g.attributes.position,ix=g.index?g.index.array:null,m=mesh.matrixWorld,v=new THREE.Vector3(),n=p.count,co=new Float32Array(n*3);
   for(let i=0;i<n;i++){v.fromBufferAttribute(p,i).applyMatrix4(m);shCoord(r,v.x,v.y,v.z,co,i*3);}
@@ -293,15 +298,18 @@ function buildShells(G,GS){
   for(const o of others){if(o.userData.tailFitted)continue;const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G,L&&L.curtainMesh?L.lowerCut:null);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&!o.userData.hood&&!o.userData.band&&!o.userData.hemPiece)shDetailOnFabric(o,L);if(L&&(o.userData.band||o.userData.hemPiece)){if(L.curtainMesh)shHemOnCurtain(o,L);else if(o.userData.band)shBandOnFabric(o,L);}if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
-    G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrisOf(o,0),0);});
+    G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrunkTris(o),0);});
     if(!up.any)continue;const p=cm.geometry.attributes.position,c=new Float32Array(3),q=new Float32Array(3);
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);}}
     p.needsUpdate=true;cm.geometry.computeVertexNormals();}
   /* a skirt (kept as cut) stays under the fitted shells of the layers above it where they cover it, never inside the body */
   {const sk=[];G.traverse(o=>{if(o.isMesh&&o.userData.skirtPiece)sk.push(o);});
-    if(sk.length){const up=new PGrid(0);for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean))){const lr={top:2,mid:3,outer:4}[m.userData.layer];if(lr)up.raster(shTrisOf(m,0),0);}
-      if(up.any){const c=new Float32Array(3),q=new Float32Array(3);for(const o of sk){shBake(o,o.parent||G);const p=o.geometry.attributes.position;let ch=false;
-        for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
+    /* (under the innermost layer that covers it: pressed under the jacket only, a high-waisted skirt lay over the untucked
+       top and showed through the jacket's open front; a top tucked into the skirt is under it) */
+    if(sk.length){const ups=[];for(const nm of ['top','mid','outer']){const L=layers.find(l=>l.name===nm);if(!L||L.tuck==='in')continue;const g=new PGrid(0);
+        for(const m of shells.concat(layers.map(l=>l.curtainMesh).filter(Boolean)))if(m.userData.layer===nm)g.raster(shTrunkTris(m),0);if(g.any)ups.push(g);}
+      if(ups.length){const c=new Float32Array(3),q=new Float32Array(3);for(const o of sk){shBake(o,o.parent||G);const p=o.geometry.attributes.position;let ch=false;
+        for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);let Ru=9;for(const g of ups){const R=g.at(c[0],c[1]);if(R>0&&R<Ru)Ru=R;}if(Ru<9&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
         if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}}}
   /* fabric of a lower layer that ends up under an upper one is never seen: drop it, so nothing can poke through
      (only 2 cm inside the upper layer's edge: the coverage grid is coarse and hole-filled, at an open front it reached past the fabric and cut teeth into the trousers) */
@@ -389,7 +397,7 @@ function shUnderHide(G,layers){const ms=[];G.traverse(o=>{if(o.isMesh&&o.userDat
 function shHoodsOut(G,layers){const hoods=[];G.traverse(o=>{if(o.isMesh&&o.userData.hood)hoods.push(o);});if(!hoods.length)return;G.updateMatrixWorld(true);
   const c=new Float32Array(3),q=new Float32Array(3);
   for(const o of hoods){const L=layers.find(l=>l.name===o.userData.layer),rank=L?L.rank:{bottom:1,top:2,mid:3,outer:4}[o.userData.layer]||0;
-    const U=new PGrid(0);G.traverse(m=>{if(!m.isMesh||m===o||m.userData.hood)return;const lr={bottom:1,top:2,mid:3,outer:4}[m.userData.layer];if(!(lr>rank))return;if(m.geometry.userData.axis&&shRegionOfAxis(m.geometry.userData.axis)!==0)return;U.raster(shTrisOf(m,0),0);});
+    const U=new PGrid(0);G.traverse(m=>{if(!m.isMesh||m===o||m.userData.hood)return;const lr={bottom:1,top:2,mid:3,outer:4}[m.userData.layer];if(!(lr>rank))return;if(m.geometry.userData.axis&&shRegionOfAxis(m.geometry.userData.axis)!==0)return;U.raster(shTrunkTris(m),0);});
     if(!U.any)continue;shBake(o,G);const p=o.geometry.attributes.position;let ch=false;
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=U.at(c[0],c[1]);if(R>0&&c[2]<R+0.005){shPoint(0,c[0],c[1],R+0.005,q);p.setXYZ(i,q[0],q[1],q[2]);ch=true;}}
     if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
@@ -711,13 +719,26 @@ function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,y0
   /* trousers: the front and back of the crotch span flat between the legs (fly, seat seam), down to the crotch seam */
   if(bot){const Y0=cy-0.035,Y1=cy+0.16,ST=0.005,NR=Math.ceil((Y1-Y0)/ST)+1,fr=new Float32Array(NR).fill(-9),bk=new Float32Array(NR).fill(9),xs=0.085;
     for(let v=0;v<n;v++){if(!L.act[v])continue;const x=Math.abs(X[v*3]),y=X[v*3+1],z=X[v*3+2];if(y<Y0||y>Y1||x<xs-0.012||x>xs+0.012)continue;const j=Math.round((y-Y0)/ST);if(z>0)fr[j]=Math.max(fr[j],z);else bk[j]=Math.min(bk[j],z);}
+    /* (not in the fold under an overhanging belly - the skin there faces down or up: moved and smoothed, the fabric folded
+       over itself in teeth below the waistband) */
+    const spn=BC.core.spots||[];let yCr=9;for(let v=0;v<n;v++){if(!L.act[v]||P[v*3+2]<=0.02||Math.abs(P[v*3])>0.1)continue;const y=P[v*3+1];if(y<=cy+0.01||y>=yCr||Nn[v*3+1]<0.5)continue;
+      if(spn.some(q=>Math.hypot(P[v*3]-q[0],y-q[1],P[v*3+2]-q[2])<q[3]*1.6))continue;yCr=y;}
+    const ovh=v=>P[v*3+2]>0?1-smooth((P[v*3+1]-(yCr-0.03))/0.02):1;
     for(let v=0;v<n;v++){if(!L.act[v])continue;const x=Math.abs(X[v*3]),y=X[v*3+1];if(y<Y0||y>Y1||x>xs)continue;const j=Math.round((y-Y0)/ST),w=smooth((y-Y0)/0.03);if(w<=0)continue;
-      const k=1-0.25*(x/xs)*(x/xs);if(X[v*3+2]>0&&fr[j]>-9){const t=fr[j]*lerp(1,1.0,k)+0.002;if(X[v*3+2]<t)X[v*3+2]=lerp(X[v*3+2],t,w);}
+      const k=1-0.25*(x/xs)*(x/xs);if(X[v*3+2]>0&&fr[j]>-9){const t=fr[j]*lerp(1,1.0,k)+0.002;if(X[v*3+2]<t)X[v*3+2]=lerp(X[v*3+2],t,w*ovh(v));}
       else if(X[v*3+2]<=0&&bk[j]<9){const t=bk[j]-0.002;if(X[v*3+2]>t)X[v*3+2]=lerp(X[v*3+2],t,w*0.85);}}
     /* then smooth that whole panel (fly, seat): no creases left from the body under it (not at the waistband: smoothed, the
        edge slid a centimetre down under a belly) */
     const zid=[];for(let v=0;v<n;v++){if(!L.act[v])continue;const x=Math.abs(P[v*3]),y=P[v*3+1];if(y>Y0&&y<Y1&&x<xs+0.02)zid.push(v);}
-    for(let it=0;it<25;it++)for(const v of zid){let sx=0,sy=0,sz=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(!L.act[j])continue;sx+=X[j*3];sy+=X[j*3+1];sz+=X[j*3+2];c++;}if(!c)continue;const ww=0.5*smooth((P[v*3+1]-Y0)/0.03)*smooth(L.f[v]/0.025);X[v*3]+=(sx/c-X[v*3])*ww;X[v*3+1]+=(sy/c-X[v*3+1])*ww;X[v*3+2]+=(sz/c-X[v*3+2])*ww;}}
+    for(let it=0;it<25;it++)for(const v of zid){let sx=0,sy=0,sz=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(!L.act[j])continue;sx+=X[j*3];sy+=X[j*3+1];sz+=X[j*3+2];c++;}if(!c)continue;const ww=0.5*smooth((P[v*3+1]-Y0)/0.03)*smooth(L.f[v]/0.025)*ovh(v);X[v*3]+=(sx/c-X[v*3])*ww;X[v*3+1]+=(sy/c-X[v*3+1])*ww;X[v*3+2]+=(sz/c-X[v*3+2])*ww;}
+    /* under an overhanging belly the front hangs from the waistband: per column, going down, it recedes no faster than
+       0.35 per unit of height (it went into the fold between the belly and the groin: a dark V below the band) */
+    if(yCr<9){const bins=new Map();for(let v=0;v<n;v++){if(!L.act[v]||B.reg[v]!==0||X[v*3+2]<=0.02||X[v*3+1]<cy)continue;const b=Math.round(X[v*3]/0.01);let a=bins.get(b);if(!a)bins.set(b,a=[]);a.push(v);}
+      const lift=new Float32Array(n);for(const a of bins.values()){a.sort((p,q)=>X[q*3+1]-X[p*3+1]);let m=-9,yp=0;for(const v of a){const y=X[v*3+1];if(m>-9)m-=0.35*(yp-y);yp=y;if(X[v*3+2]<m)lift[v]=m-X[v*3+2];else m=X[v*3+2];}}
+      /* (each column on its own left the front faceted: the lift is spread over the neighbours - it only grows, so nothing
+         sinks back into the fold) */
+      for(let it=0;it<8;it++){const l0=lift.slice();for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.02)continue;let s2=0,c=0;for(let q=off[v];q<off[v+1];q++){const j=adj[q];if(!L.act[j])continue;s2+=l0[j];c++;}if(c)lift[v]=Math.max(l0[v],0.9*s2/c);}}
+      for(let v=0;v<n;v++)if(lift[v]>0)X[v*3+2]+=lift[v];}}
   /* never inside the skin: against its own body point everywhere, against any body part where they crowd (crotch, armpits) */
   const sp=BC.core.spots||[],inSp=v=>{for(const q of sp){const dx=P[v*3]-q[0],dy=P[v*3+1]-q[1],dz=P[v*3+2]-q[2];if(dx*dx+dy*dy+dz*dz<q[3]*q[3]*2.2)return true;}return false;};
   for(let v=0;v<n;v++){if(!L.act[v])continue;

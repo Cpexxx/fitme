@@ -226,10 +226,11 @@ function makeWarp(segs){
   const Yf=y=>{const f=clamp((y-lo)/step,0,N-1e-6),i=Math.floor(f);return T[i]+(T[i+1]-T[i])*(f-i)-z0;};
   return{Y:Yf,k:kAt,id:segs.every(s=>Math.abs(s[2]-1)<1e-4)};
 }
-function warpGeo(g,W){
+function warpGeo(g,W,tan){
   if(!W||W.id) return;
+  /* (hair strands carry their direction in the normal: a direction stretches with the height, a normal the other way) */
   const p=g.attributes.position,n=g.attributes.normal;
-  for(let i=0;i<p.count;i++){const y=p.getY(i),k=W.k(y);p.setY(i,W.Y(y));const nx=n.getX(i),ny=n.getY(i)/k,nz=n.getZ(i),l=Math.hypot(nx,ny,nz)||1;n.setXYZ(i,nx/l,ny/l,nz/l);}
+  for(let i=0;i<p.count;i++){const y=p.getY(i),k=W.k(y);p.setY(i,W.Y(y));const nx=n.getX(i),ny=tan?n.getY(i)*k:n.getY(i)/k,nz=n.getZ(i),l=Math.hypot(nx,ny,nz)||1;n.setXYZ(i,nx/l,ny/l,nz/l);}
 }
 function finalize(G,W,free=true){
   G.updateMatrixWorld(true);
@@ -237,9 +238,9 @@ function finalize(G,W,free=true){
   G.traverse(o=>{if(!o.isMesh||!o.visible)return;const g=prepGeo(o.geometry,o.matrixWorld);if(o.userData.ctx==='cloth'&&typeof conformGeo==='function')conformGeo(g,o.geometry.userData.axis,o.userData.stiff||0);let b=buckets.get(o.material);if(!b){b=[];buckets.set(o.material,b);}b.push(g);});
   if(free)G.traverse(o=>{if(o.isMesh&&!o.geometry.userData.keep)o.geometry.dispose();});
   const out=new THREE.Group();
-  for(const[mat,list] of buckets){const g=mergeGeos(list);list.forEach(x=>x.dispose());warpGeo(g,W);g.computeBoundingSphere();
+  for(const[mat,list] of buckets){const g=mergeGeos(list);list.forEach(x=>x.dispose());warpGeo(g,W,!!mat.userData.depthMat);g.computeBoundingSphere();
     if(mat.userData.needAttr)for(const[k,sz] of Object.entries(mat.userData.needAttr))if(!g.attributes[k])g.setAttribute(k,new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*sz),sz));
-    if(mat.side===THREE.DoubleSide&&!mat.transparent)mat.shadowSide=THREE.BackSide;const m=new THREE.Mesh(g,mat);m.castShadow=!mat.userData.noShadow;m.receiveShadow=true;if(mat.transparent)m.renderOrder=2;out.add(m);}
+    if(mat.side===THREE.DoubleSide&&!mat.transparent&&!mat.userData.depthMat)mat.shadowSide=THREE.BackSide;const m=new THREE.Mesh(g,mat);m.castShadow=!mat.userData.noShadow;m.receiveShadow=true;if(mat.userData.depthMat)m.customDepthMaterial=mat.userData.depthMat;if(mat.transparent)m.renderOrder=2;out.add(m);}
   return out;
 }
 
@@ -422,38 +423,59 @@ function hairTex(hex,dir,kind){
     for(let i=0;i<900;i++){const x2=R()*Z,l=R()<.5;ctx.strokeStyle=l?`rgba(255,255,255,${.015+R()*.04})`:`rgba(0,0,0,${.02+R()*.06})`;ctx.lineWidth=.4+R()*.8;ctx.beginPath();ctx.moveTo(x2,-4);ctx.bezierCurveTo(x2+(R()-.5)*5,Z*.33,x2+(R()-.5)*5,Z*.66,x2+(R()-.5)*3,Z+4);ctx.stroke();}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=8;texCache.set(key,t);return t;
 }
-/* hair cards: a strand atlas (4 columns, roots at the top, tips at the bottom) with alpha: many fine strands, denser
-   in the middle of a column, ending at different lengths, each a little lighter or darker than the base colour */
-function hairCardTex(hex,kind){
-  const key='hc|'+hex+kind;if(texCache.has(key))return texCache.get(key);
-  const Z=512,CW=128,[c,ctx]=cnv(Z,Z);if(!ctx){texCache.set(key,null);return null;}
-  ctx.clearRect(0,0,Z,Z);const R=rng(hash(key));ctx.lineCap='round';const rgb=new THREE.Color(hex);
-  const rgba=(sh,a)=>{const k=new THREE.Color(shade(hex,sh));return`rgba(${Math.round(k.r*255)},${Math.round(k.g*255)},${Math.round(k.b*255)},${a})`;};
-  for(let col=0;col<4;col++){const x0=col*CW,n=kind==='coil'?90:kind==='short'?130:150;
-    for(let i=0;i<n;i++){
-      /* across the card: dense in the middle, a few stray strands at the sides */
-      const g=(R()+R()+R()-1.5)/1.5,x=x0+CW/2+g*CW*0.47,y0=R()*Z*0.05,len=Z*(kind==='short'?0.5+0.5*R():0.55+0.45*R());
-      const sh=(R()-0.5)*0.12,a=0.7+0.3*R(),gr=ctx.createLinearGradient(0,y0,0,y0+len);
-      /* each strand fades out over its last third (soft, uneven ends instead of a cut edge) */
-      gr.addColorStop(0,rgba(sh-0.04,0));gr.addColorStop(0.1,rgba(sh-0.04,a));gr.addColorStop(0.62,rgba(sh,a));gr.addColorStop(1,rgba(sh+0.05,0));
-      ctx.strokeStyle=gr;ctx.lineWidth=kind==='coil'?1.6+R()*1.4:1+R()*1.2;ctx.beginPath();
-      if(kind==='coil'){const ph=R()*TAU,amp=3+R()*4,fq=0.09+R()*0.06;ctx.moveTo(x,y0);for(let y=y0;y<y0+len;y+=3)ctx.lineTo(x+Math.sin(y*fq+ph)*amp,y);}
-      else{const bend=(R()-0.5)*12,w1=(R()-0.5)*5;ctx.moveTo(x,y0);ctx.bezierCurveTo(x+w1,y0+len*0.33,x+bend*0.6,y0+len*0.66,x+bend,y0+len);}
-      ctx.stroke();}}
-  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;texCache.set(key,t);return t;
-}
-function hairCardMat(hex,kind='strand'){
-  const k='hcm|'+hex+kind;if(matCache.has(k))return matCache.get(k);
-  const m=new THREE.MeshStandardMaterial({color:0xffffff,map:hairCardTex(hex,kind),alphaTest:0.35,side:THREE.DoubleSide,roughness:0.82,metalness:0,envMapIntensity:0.3,vertexColors:true});
-  m.userData.noShadow=true;matCache.set(k,m);return m;
-}
 function hairMat(hex,dir='v',kind='strand'){
   const k='hm|'+hex+dir+kind;if(matCache.has(k))return matCache.get(k);
   const map=hairTex(hex,dir,kind);
-  const m=new THREE.MeshStandardMaterial({color:map?0xffffff:lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0018:.0015,roughness:.9,metalness:0,envMapIntensity:.28,
+  /* (a little darker than the colour itself: the strands over it are shaded as fibres and read darker than a surface) */
+  const m=new THREE.MeshStandardMaterial({color:map?new THREE.Color(1,1,1):lin(hex),map,bumpMap:map,bumpScale:kind==='braid'?.001:kind==='coil'?.0018:.0015,roughness:.9,metalness:0,envMapIntensity:.28,
     side:THREE.DoubleSide,vertexColors:true,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
   matCache.set(k,m);return m;
 }
+/* hair strands (hair.js strandGeo): every vertex sits on the strand's centre line, its normal is the strand's direction and
+   uv.x its half-width with the side's sign; the vertex shader turns the ribbon to face the camera (or the light, for the
+   shadow) and keeps it at least ~0.7 px wide, so a strand reads as a fibre from any side and at any distance. Shading
+   treats it as a thin cylinder: a wrapped diffuse along the fibre and two Kajiya-Kay highlights - a white one shifted
+   to the tip, a coloured one shifted to the root (light passing through the hair). */
+const STRAND_VS_HEAD='varying vec3 vHairT;varying float vSide;\n';
+const strandExpand=(minK,depth)=>`#include <project_vertex>
+  {vec3 hT=normalize((modelViewMatrix*vec4(normal,0.0)).xyz);vec3 hV=${depth?'vec3(0.0,0.0,1.0)':'normalize(-mvPosition.xyz)'};
+   vec3 hS=cross(hT,hV);float hl=length(hS);hS=hl>1e-5?hS/hl:vec3(1.0,0.0,0.0);
+   float hw=max(abs(uv.x),${depth?minK.toFixed(5):minK.toFixed(5)+'*(-mvPosition.z)'});
+   mvPosition.xyz+=hS*(uv.x<0.0?-hw:hw);gl_Position=projectionMatrix*mvPosition;${depth?'':'vHairT=hT;vSide=uv.x<0.0?-1.0:1.0;'}}`;
+function strandMat(hex){
+  const k='strand|'+hex;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:lin(hex),roughness:0.62,metalness:0,envMapIntensity:0.3,vertexColors:true,side:THREE.DoubleSide});
+  m.onBeforeCompile=sh=>{
+    sh.vertexShader=STRAND_VS_HEAD+sh.vertexShader.replace('#include <project_vertex>',strandExpand(0.00036,false));
+    sh.fragmentShader=STRAND_VS_HEAD+sh.fragmentShader
+      .replace('vec3 geometryNormal = normal;',`{vec3 hT=normalize(vHairT),hV=normalize(vViewPosition),hN=hV-hT*dot(hV,hT);hN=length(hN)>1e-4?normalize(hN):hV;
+         vec3 hB=normalize(cross(hT,hN));float s=clamp(vSide,-1.0,1.0)*0.85;normal=normalize(hN*sqrt(1.0-s*s)+hB*s);}
+       vec3 geometryNormal = normal;`)
+      .replace('#include <lights_physical_pars_fragment>',`#include <lights_physical_pars_fragment>
+void RE_Direct_Hair(const in IncidentLight directLight,const in GeometricContext geometry,const in PhysicalMaterial material,inout ReflectedLight reflectedLight){
+  vec3 T=normalize(vHairT),L=directLight.direction,V=geometry.viewDir,N=geometry.normal;
+  float TL=dot(T,L),sinTL=sqrt(max(0.0,1.0-TL*TL)),wrap=clamp((dot(N,L)+0.5)/1.5,0.0,1.0);
+  /* (calibrated: the hair's average on screen matches the chosen colour as the old surface hair did) */
+  vec3 irr=directLight.color*wrap*(2.1+1.4*sinTL);
+  reflectedLight.directDiffuse+=irr*BRDF_Lambert(material.diffuseColor);
+  vec3 H=normalize(L+V);vec3 T1=normalize(T+N*0.12),T2=normalize(T-N*0.18);
+  float h1=dot(T1,H),h2=dot(T2,H),s1=pow(sqrt(max(0.0,1.0-h1*h1)),16.0),s2=pow(sqrt(max(0.0,1.0-h2*h2)),10.0);
+  vec3 tint=sqrt(max(material.diffuseColor,vec3(0.0)))*1.4;
+  reflectedLight.directSpecular+=directLight.color*wrap*(0.045*s1+0.04*s2*tint);
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Hair`)
+      /* the environment's reflection off a fibre is a faint sheen, not a mirror: with the cylinder's normal turned to the
+         camera it took the full Fresnel rim and frosted short hair white */
+      .replace('#include <lights_fragment_end>','radiance*=0.04;irradiance*=2.3;\n#include <lights_fragment_end>');};
+  m.customProgramCacheKey=()=>'strand3';
+  const d=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
+  d.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <project_vertex>',strandExpand(0.0007,true));};d.customProgramCacheKey=()=>'strandD2';
+  m.userData.depthMat=d;matCache.set(k,m);return m;
+}
+/* the dark inside of a mass of hair (under the strands of a hanging sheet): matte, a third darker than the hair */
+function hairCoreMat(hex){const k='core|'+hex;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:lin(shade(hex,-0.2)),roughness:1,metalness:0,envMapIntensity:0.15,side:THREE.DoubleSide,vertexColors:true});matCache.set(k,m);return m;}
 function stubbleMat(hex){
   const k='stub|'+hex;if(matCache.has(k))return matCache.get(k);
   const [c,ctx]=cnv(128,128);let map=null;

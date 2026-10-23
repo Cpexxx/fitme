@@ -75,8 +75,9 @@ function installQA() {
      through the shirt, skin through the sleeve is */
   window.qaFinalize = function (G, W) {
     G.updateMatrixWorld(true);const buckets = new Map(), Wr = BC.core.W, yNeck = BC.shY + 0.02;
-    /* (a shoe's heel tab stands free behind the ankle: the leg in front of it is not a foot through the shoe) */
-    G.traverse(o => { if (!o.isMesh || !o.visible || o.userData.tab) return; const src = o.geometry, g = prepGeo(src, o.matrixWorld); if (o.userData.ctx === 'cloth' && typeof conformGeo === 'function') conformGeo(g, src.userData.axis, o.userData.stiff || 0);
+    /* (a shoe's heel tab stands free behind the ankle: the leg in front of it is not a foot through the shoe; the band of
+       skin carrying the leg into a closed shoe sits inside its collar by design) */
+    G.traverse(o => { if (!o.isMesh || !o.visible || o.userData.tab || o.userData.innerAnkle) return; const src = o.geometry, g = prepGeo(src, o.matrixWorld); if (o.userData.ctx === 'cloth' && typeof conformGeo === 'function') conformGeo(g, src.userData.axis, o.userData.stiff || 0);
       const tag = qaTag(o), p = g.attributes.position, n = p.count, reg = src.userData.reg, aw = src.userData.armw, ax = src.userData.axis;
       const part = i => { const y = p.getY(i);
         if (tag === 'body') { if (y > yNeck && Math.abs(p.getX(i)) < 0.2) return 'head'; if (aw && aw[i] > 0.5 && y < Wr.y + 0.03) return 'hand'; }
