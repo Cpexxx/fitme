@@ -407,6 +407,291 @@ function sheetStrands(G,cols,nu,nv,o){
        starting as a dark line of roots) */
     const w0=0.00042*(0.8+0.4*R());list.push({P:F2,K:K2,w0,w1:w0*lerp(0.75,0.38,smooth((Ls-0.15)/0.3)),tone,ao:A2,root:crown?0.78:1,wIn:crown?0:0.07});}
   addStrands(G,list);}
+/* ---------- flowing hair: independent guide hairs, simulated; the drawn strands follow them ----------
+   Long hair is not a sheet: each guide is a hair of its own, rooted on the scalp, combed away from the parting, falling
+   under gravity, inextensible, soft to bend (stiffer for the first few cm off the scalp), resting on the head, the face's
+   sides, the shoulders, the back and the arms, and kept apart from the other guides (hair has volume: it stacks in
+   layers instead of passing through itself). The drawn strands are interpolated between neighbouring guides (only where
+   those stay together: no strand cuts across a shoulder between a lock in front and one behind) and gather into the
+   nearest guide towards their ends (locks). */
+/* the head as a radius per direction from its centre (sampled from headPt; the crown and the face included) */
+let HEAD_TAB=null;
+function headTab(){const hc=BC.headC,key=[hc.x,hc.y,hc.z,BC.hd.rx,BC.hd.ry,BC.hd.zf,BC.hd.zb,BC.jaw,BC.neckR].join(',');if(HEAD_TAB&&HEAD_TAB.key===key)return HEAD_TAB;
+  const NT=64,NP=128,R=new Float32Array(NT*NP),tb=(dx,dy,dz,d)=>[clamp(Math.acos(clamp(dy/d,-1,1))/Math.PI*NT,0,NT-1.001),((Math.atan2(dz,dx)/TAU+1)%1)*NP];
+  for(let i=0;i<=256;i++)for(let j=0;j<512;j++){const P=headPt(i/256*Math.PI,j/512*TAU,0),dx=P.x-hc.x,dy=P.y-hc.y,dz=P.z-hc.z,d=Math.hypot(dx,dy,dz);if(d<1e-6)continue;
+    const[a,b]=tb(dx,dy,dz,d),k=Math.floor(a)*NP+Math.floor(b)%NP;if(d>R[k])R[k]=d;}
+  for(let it=0;it<4;it++)for(let a=0;a<NT;a++)for(let b=0;b<NP;b++){const k=a*NP+b;if(R[k]>0)continue;let s=0,c=0;for(const[da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const aa=a+da;if(aa<0||aa>=NT)continue;const v=R[aa*NP+(b+db+NP)%NP];if(v>0){s+=v;c++;}}if(c)R[k]=s/c;}
+  const at=(dx,dy,dz,d)=>{const[a,b]=tb(dx,dy,dz,d),a0=Math.floor(a),b0=Math.floor(b)%NP,ta=a-a0,tb2=b-Math.floor(b),a1=Math.min(NT-1,a0+1),b1=(b0+1)%NP;
+    return lerp(lerp(R[a0*NP+b0],R[a0*NP+b1],tb2),lerp(R[a1*NP+b0],R[a1*NP+b1],tb2),ta);};
+  let mx=0;for(let k=0;k<R.length;k++)mx=Math.max(mx,R[k]);
+  return HEAD_TAB={key,at,max:mx};}
+/* the scalp region a hanging style grows from; o: gap (half-angle of the face), ring (no crown: a band round the back),
+   hat: under a hat only a band just under its edge */
+/* how far from the front (angle) the hairline reaches down to height ny (the forehead and temples are bare above the face) */
+function hairlineAf(ny){if(ny>=HAIRLINE[0][1])return 0;for(let i=1;i<HAIRLINE.length;i++){const[a1,y1]=HAIRLINE[i],[a0,y0]=HAIRLINE[i-1];if(ny>=y1)return lerp(a0,a1,(y0-ny)/((y0-y1)||1));}return Math.PI;}
+function flowRootOK(ny,ph,o){const hl=hairlineNy(ph);if(ny<hl+0.015)return false;const af=angFront(ph);
+  if(o.hatOn){const hl2=hatLineNy(ph);if(hl2!=null&&(ny>hl2-0.05||ny<hl2-0.3))return false;}
+  if(o.ring){if(af<o.gap||ny>o.ringNy+0.06||ny<o.ringNy-0.22)return false;}
+  if(af<o.gap&&ny<0.42)return false;
+  return true;}
+/* comb direction at a root: away from a centre parting (from the front hairline to the crown) and down, a little back
+   at the front (the hair over the forehead is swept to the sides, never forward over the face) */
+function flowComb(P,o){const hc=BC.headC,ry=BC.hd.ry,A=headPt(Math.acos(clamp(hairlineNy(FRONT)+0.02,-0.9,0.95)),FRONT,0),B=headPt(0.42,BACKA,0);
+  const ab=B.clone().sub(A),t=clamp(P.clone().sub(A).dot(ab)/ab.lengthSq(),0,1),Q=A.clone().addScaledVector(ab,t),n=P.clone().sub(hc).normalize();
+  let v=P.clone().sub(Q);if(Math.abs(P.x-hc.x)<1e-4)v.x+=0.001;v.addScaledVector(n,-v.dot(n));const vl=v.length()||1;v.multiplyScalar(1/vl);
+  const down=V3(0,-1,0).addScaledVector(n,n.y);const fz=Math.sin(FRONT)*(P.z-hc.z)>0?smooth((P.z-hc.z)/(BC.hd.zf*0.7)):0;
+  const d=v.multiplyScalar(lerp(1.2,0.5,t)+0.5*fz).add(down.multiplyScalar(0.55*(1-0.5*fz))).add(V3(0,0,-Math.sin(FRONT)*0.12*fz));d.addScaledVector(n,-d.dot(n));return d.normalize();}
+const FLOW_CACHE=new Map(),STRAND_CACHE=new Map();
+/* a light version for the thumbnails (Społeczność, saved fits: a few hundred pixels, many of them in a row - the full
+   simulation took tens of seconds per long-haired fit and froze the page): fewer guides, a shorter settle, fewer strands */
+let HAIR_LOD=0;
+/* (the 'perf' quality - chosen for weak hardware, and by default without a GPU, where every strand is drawn in software
+   and thousands of overlapping ones took tens of seconds a frame: fewer guides, strands and points) */
+function hairFlow(G,o){
+  const hc=BC.headC,ry=BC.hd.ry,T=hairTexP(),hat=capType()!=='none',mode=S.hair.drape||'auto',band=!!(S.acc.headband&&S.acc.headband.type==='forehead');
+  const ro={gap:o.gap,ring:!!o.ring,ringNy:0.5,hatOn:hat};
+  /* guides: a Fibonacci spread over the scalp region */
+  const lod=HAIR_LOD,NGT=lod?120:QUALITY==='perf'?260:(o.guides||420),cand=[];{const M=6000,ga=Math.PI*(3-Math.sqrt(5));for(let i=0;i<M;i++){const ny=1-2*(i+0.5)/M;if(ny<-0.6)break;const ph=wrapA(i*ga);if(flowRootOK(ny,ph,ro))cand.push([ny,ph]);}}
+  const stepC=Math.max(1,cand.length/NGT),gd=[];for(let f=0;f<cand.length;f+=stepC){const[ny,ph]=cand[Math.floor(f)];gd.push({ny,ph});}
+  /* (no scalp left to grow from - a deep hat over a style hanging from a ring: the caller falls back to the sheet) */
+  if(gd.length<12)return false;
+  const ringY=ph=>o.y0(ph),tipY=ph=>o.y1(ph);
+  /* each guide's length: over the scalp to the ring (where the old sheet started) and down to the tip line, uneven */
+  const R0=rng(4711);
+  for(const g of gd){const th=Math.acos(clamp(g.ny,-0.99,0.995));g.P=headPt(th,g.ph,0.0015);g.dir=flowComb(g.P,o);
+    /* the part on the scalp follows the comb (a streamline over the head, held there by the hair around it) down to the
+       ring the style hangs from; from there the hair is free */
+    const HT=headTab(),SP=[g.P.clone()];let P=g.P.clone(),dv=g.dir.clone(),arc=0;
+    for(let it=0;it<90;it++){const ph=Math.atan2(P.z-hc.z,P.x-hc.x);if(it>0&&P.y<ringY(ph))break;
+      const d2=flowComb(P,o);dv.lerp(d2,0.45).normalize();P=P.clone().addScaledVector(dv,0.005);
+      const dx=P.x-hc.x,dy=P.y-hc.y,dz=P.z-hc.z,dd=Math.hypot(dx,dy,dz)||1,Rr=HT.at(dx,dy,dz,dd)+0.0036;P.set(hc.x+dx*Rr/dd,hc.y+dy*Rr/dd,hc.z+dz*Rr/dd);
+      arc+=0.005;SP.push(P.clone());}
+    const phE=Math.atan2(P.z-hc.z,P.x-hc.x),yr=P.y;
+    let y1=tipY(phE);{const ct=0.5+0.5*Math.sin(phE*7+1.6*fbm(phE*2,1.3,2.1));y1-=0.016*ct*smooth((yr-y1-0.06)/0.12);}
+    g.S=SP;g.arc=arc;g.tipY=y1;g.L=Math.max(arc+0.03,arc+Math.max(0,yr-y1)*1.02*(1-0.03*R0()));}
+  const yMin=Math.min(...gd.map(g=>g.P.y-g.L)),field=hairField(hc.y+ry*1.05,yMin-0.2);
+  const key=[NGT,o.gap,o.ring?1:0,hat?1:0,band?1:0,mode,field.sig,ry,BC.hd.rx,hc.y,gd.map(g=>g.L.toFixed(4)).join(',').length,gd.reduce((s,g)=>s+g.L,0).toFixed(5),o.dmin||0,o.tipCurl||0,S.hair.texture||'',(S.acc.scarf&&S.acc.scarf.type)||''].join('|');
+  let sim=FLOW_CACHE.get(key);
+  if(!sim){const so=Object.assign({},o,{field,band,mode,hat},lod?{steps:100}:{});
+    /* two passes: the first tells where each guide's tip comes to rest (hair from the crown leaves the skull above the
+       ring and lies down the back's curve), the guide is then cut so its tip rests on the style's line */
+    const s1=flowSim(gd,Object.assign({},so,{steps:lod?60:120}));
+    /* (a cut to the shoulders: the hair hanging free between them ends level with what rests on them - one line) */
+    const shCut=gd.reduce((a,g)=>a+g.tipY,0)/gd.length>BC.shY-0.09;
+    for(let i=0;i<gd.length;i++){const g=gd[i],P=s1[i].P,K=s1[i].K,ty=shCut?Math.max(gd[i].tipY,BC.shY+0.02):gd[i].tipY;let low=9;for(let k=0;k<K;k++)low=Math.min(low,P[k*3+1]);
+      /* the tip's height against the target; hair resting on the shoulders or the back is measured along its rest */
+      const over=ty-low;if(over>0){let acc=0,cut=g.L;for(let k=1;k<K;k++){acc+=Math.hypot(P[k*3]-P[k*3-3],P[k*3+1]-P[k*3-2],P[k*3+2]-P[k*3-1]);if(P[k*3+1]<ty){cut=acc;break;}}g.L=Math.max(g.arc+0.03,cut);}
+      else{/* a tip short of the line: hanging free the guide is lengthened; in a cut to the shoulders (the style's line on
+           average there), resting on the shoulder, it is cut a few cm past where it lands there instead (lengthened, it slid out along the shoulder: the ends
+           splayed out flat, a ruff); long hair only rests there on its way down the back or the front */
+        let land=-1,acc=0,sA=0;for(let k=1;k<K;k++){const dl=Math.hypot(P[k*3]-P[k*3-3],P[k*3+1]-P[k*3-2],P[k*3+2]-P[k*3-1]);acc+=dl;
+          if(acc>g.arc+0.02&&P[k*3+1]<BC.shY+0.1&&(P[k*3+1]-P[k*3-2])>-0.55*dl){land=k;sA=acc;break;}}
+        g.L=land>0&&shCut?Math.max(g.arc+0.03,Math.min(g.L,sA+0.025)):Math.max(g.arc+0.03,g.L-over*0.9);}}
+    sim=flowSim(gd,so);
+    /* the settled hair hangs lower than after the first, shorter pass: a guide reaching below the style's line is cut
+       there (the free hair between the shoulders hung a tail below the hair resting on them) */
+    for(let i=0;i<gd.length;i++){const g=gd[i],q=sim[i],P=q.P,K=q.K,ty=(shCut?Math.max(g.tipY,BC.shY+0.02):g.tipY)-0.006;let acc=0;
+      for(let k=1;k<K;k++){const dl=Math.hypot(P[k*3]-P[k*3-3],P[k*3+1]-P[k*3-2],P[k*3+2]-P[k*3-1]);if(P[k*3+1]<ty&&acc+dl>g.arc+0.03&&k>=4){
+          const f=clamp((P[k*3-2]-ty)/((P[k*3-2]-P[k*3+1])||1),0,1);for(let c=0;c<3;c++)P[k*3+c]=lerp(P[k*3-3+c],P[k*3+c],f);
+          g.L=acc+dl*f;sim[i]={P:P.slice(0,(k+1)*3),AO:q.AO.slice(0,k+1),K:k+1,L:g.L};break;}acc+=dl;}}
+    FLOW_CACHE.set(key,sim);if(FLOW_CACHE.size>8)FLOW_CACHE.delete(FLOW_CACHE.keys().next().value);}
+  else for(let i=0;i<gd.length;i++)gd[i].L=sim[i].L;
+  /* (QA: window.__guidesOnly draws the guides alone, window.__perGuide sets the strands per guide) */
+  if(window.__guidesOnly){addStrands(G,sim.map(q=>({P:q.P,K:q.K,w0:0.0015,w1:0.0015,tone:1,root:1})));return true;}
+  /* the strands too (a new colour, clothes the hair does not touch: the same hair) */
+  const skey=key+'|'+STRAND_Q+'|'+(window.__perGuide||0)+'|'+lod;let list=STRAND_CACHE.get(skey);
+  if(!list){list=flowStrands(gd,sim,o,ro);STRAND_CACHE.set(skey,list);if(STRAND_CACHE.size>2)STRAND_CACHE.delete(STRAND_CACHE.keys().next().value);}
+  addStrands(G,list);return true;
+}
+/* the simulation of the guides; returns per guide its points (flat xyz) and an occlusion per point */
+function flowSim(gd,o){
+  const hc=BC.headC,ry=BC.hd.ry,F=o.field,HT=headTab(),tmp=[0,0],seg=0.015,n=gd.length,mode=o.mode;
+  const off=new Int32Array(n+1);for(let i=0;i<n;i++){gd[i].K=Math.max(5,Math.ceil(gd[i].L/seg)+1);off[i+1]=off[i]+gd[i].K;}
+  const NP=off[n],X=new Float32Array(NP*3),Q=new Float32Array(NP*3),D=new Float32Array(NP*3),SEGL=new Float32Array(n),GI=new Int32Array(NP),KI=new Int32Array(NP),CT=new Uint8Array(NP),CB=new Uint8Array(NP),AC=new Float32Array(NP*3),XS=X;
+  for(let i=0;i<n;i++){SEGL[i]=gd[i].L/(gd[i].K-1);for(let k=0;k<gd[i].K;k++){GI[off[i]+k]=i;KI[off[i]+k]=k;}}
+  /* clearance: thin at the root (the hair lies on the scalp), the hair's own thickness further on */
+  const clr=(k,y,ph)=>{let c=0.0016+0.0022*smooth(k*seg/0.066);if(o.band){const bk=hairBandK((y-hc.y)/ry,ph);if(bk>0)c=lerp(c,Math.min(c,HB_H-0.003),bk);}return c;};
+  const gapA=o.gap-0.06,yFace0=hc.y-ry*1.05,yFace1=hc.y+ry*(hairlineNy(FRONT)-0.02),yNeck=hc.y-ry*0.55,yS=BC.shY;
+  const arms=[];for(const sd of [-1,1])for(let t=0.02;t<=0.62;t+=0.04){const c=armPt(t,sd),r=Math.max(armAt(t),(typeof sleeveEnv==='function'&&LAYERS?sleeveEnv(t,LAYERS):0))+0.008;arms.push([c.x,c.y,c.z,r]);}
+  /* a scarf's wrap round the neck (two rounded passes, see buildScarf): the hair lies over it, not through it */
+  const scY0=1.485,scf=!!(S.acc.scarf&&S.acc.scarf.type&&S.acc.scarf.type!=='none'),SCR=new Float32Array(48);
+  if(scf)for(let j=0;j<48;j++){const y=scY0-0.004+j*0.002,u=(y-(scY0+0.04))/0.044,nb=bodyEnv(Math.min(y,1.53),LAYERS),nr=Math.max(BC.neckR+0.012,Math.min(nb.rx,BC.neckR+0.035));SCR[j]=Math.abs(u)<1?nr+0.014+0.036*Math.sqrt(1-u*u):0;}
+  /* (the face's open angle per height, tabulated; the arms' nearest reach to the body's axis; the head's largest radius) */
+  const FGA=new Float32Array(64);for(let j=0;j<64;j++){const ny=(yFace0+(yFace1-yFace0)*j/63-hc.y)/ry;FGA[j]=Math.min(gapA,Math.max(0.35,hairlineAf(ny)-0.04));}
+  let armX=9;for(const a of arms)armX=Math.min(armX,Math.abs(a[0])-a[3]-0.06);const HTM2=(HT.max+0.008)**2;
+  const collide=(p,k,X=XS)=>{let hit=0;const x=X[p],y=X[p+1],z=X[p+2];
+    /* head (radius per direction from its centre) */
+    /* (the cheap tests first: below the head, or clear of its largest radius, nothing to look up) */
+    {const dx=x-hc.x,dy=y-hc.y,dz=z-hc.z,d2=dx*dx+dy*dy+dz*dz;if(dy>-ry*0.8&&d2<HTM2){const d=Math.sqrt(d2)||1e-6,R=HT.at(dx,dy,dz,d)+clr(k,y,Math.atan2(dz,dx));if(d<R){const s=R/d;X[p]=hc.x+dx*s;X[p+1]=hc.y+dy*s;X[p+2]=hc.z+dz*s;hit|=1;}}}
+    /* the lower head and the neck (radius per height round the head's axis), the body and clothes round the body's axis */
+    if(X[p+1]<hc.y-ry*0.5&&X[p+1]>hc.y-ry*0.98){const dx=X[p]-hc.x,dz=X[p+2]-hc.z,r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);F.head(X[p+1],ph,tmp);if(tmp[0]>0){const R=tmp[0]+clr(k,X[p+1],ph);if(r<R){const g=tmp[1],d=(R-r)/(1+g*g);X[p]+=dx/r*d;X[p+2]+=dz/r*d;X[p+1]-=g*d;hit|=1;}}}
+    if(X[p+1]<yNeck){const dx=X[p],dz=X[p+2],r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[p+1],ph,tmp);if(tmp[0]>0){const R=tmp[0]+0.006;if(r<R){const g=tmp[1],d=(R-r)/(1+g*g);X[p]+=dx/r*d;X[p+2]+=dz/r*d;X[p+1]-=g*d;hit|=2;}}}
+    if(scf){const j=Math.round((X[p+1]-scY0+0.004)/0.002);if(j>=0&&j<48&&SCR[j]>0){const r=Math.hypot(X[p],X[p+2])||1e-6;if(r<SCR[j]){X[p]*=SCR[j]/r;X[p+2]*=SCR[j]/r;hit|=2;}}}
+    /* the arms */
+    if(X[p+1]<yS+0.05&&Math.abs(X[p])>armX)for(const a of arms){const dx=X[p]-a[0],dy=X[p+1]-a[1],dz=X[p+2]-a[2];if(Math.abs(dy)>0.05)continue;const r=Math.hypot(dx,dz)||1e-6;if(r<a[3]){X[p]+=dx/r*(a[3]-r);X[p+2]+=dz/r*(a[3]-r);hit|=2;}}
+    /* the face stays open: nothing hangs in front of it (between the temples, from the forehead's hairline to the chin) */
+    if(X[p+1]>yFace0&&X[p+1]<yFace1&&k>2&&X[p+2]>hc.z){const dx=X[p]-hc.x,dz=X[p+2]-hc.z,ph=Math.atan2(dz,dx),af=angFront(ph),fj=(X[p+1]-yFace0)/(yFace1-yFace0)*63,j0=Math.min(62,Math.floor(fj)),gA=lerp(FGA[j0],FGA[j0+1],fj-j0);if(af<gA){const r=Math.hypot(dx,dz),s=wrapA(ph-FRONT)>=0?1:-1,np=FRONT+s*gA;X[p]=hc.x+Math.cos(np)*r;X[p+2]=hc.z+Math.sin(np)*r;hit|=4;}}
+    return hit;};
+  /* start: from the root along the comb direction, turning down, kept off the head and body */
+  const KS=new Int32Array(n);
+  for(let i=0;i<n;i++){const g=gd[i],L=SEGL[i],SP=g.S||[g.P];KS[i]=Math.max(2,Math.min(g.K-2,Math.floor((g.arc||0)/L)+1));let dx=g.dir.x,dy=g.dir.y,dz=g.dir.z;
+    for(let k=0;k<g.K;k++){const p=(off[i]+k)*3;
+      if(k<KS[i]){const f=Math.min(SP.length-1.001,k*L/0.005),a=Math.floor(f),u=f-a,A=SP[a],B=SP[Math.min(SP.length-1,a+1)];X[p]=lerp(A.x,B.x,u);X[p+1]=lerp(A.y,B.y,u);X[p+2]=lerp(A.z,B.z,u);
+        if(k>0){const ex=X[p]-X[p-3],ey=X[p+1]-X[p-2],ez=X[p+2]-X[p-1],el=Math.hypot(ex,ey,ez)||1;dx=ex/el;dy=ey/el;dz=ez/el;}}
+      else{if(k>1){dx*=0.82;dy=dy*0.82-0.18;dz*=0.82;const l=Math.hypot(dx,dy,dz)||1;dx/=l;dy/=l;dz/=l;}X[p]=X[p-3]+dx*L;X[p+1]=X[p-2]+dy*L;X[p+2]=X[p-1]+dz*L;
+        for(let r=0;r<3;r++)collide(p,k);const ex=X[p]-X[p-3],ey=X[p+1]-X[p-2],ez=X[p+2]-X[p-1],el=Math.hypot(ex,ey,ez)||1;dx=ex/el;dy=ey/el;dz=ez/el;X[p]=X[p-3]+dx*L;X[p+1]=X[p-2]+dy*L;X[p+2]=X[p-1]+dz*L;}
+      Q[p]=X[p];Q[p+1]=X[p+1];Q[p+2]=X[p+2];}}
+  /* hair-hair: particles of different guides keep dmin apart (spatial hash) */
+  const dmin=(o.dmin||0.0034)*(1+0.25*(hairTexP().wave||0)),cs=dmin,HS=1<<17,head=new Int32Array(HS),next=new Int32Array(NP);
+  const hk=(ix,iy,iz)=>(((ix*73856093)^(iy*19349663)^(iz*83492791))>>>0)&(HS-1);
+  /* (each pair once: the particle's own cell, later particles only, and the 13 cells on one side of it - not all 27 with
+     every pair met twice; a third of the time) */
+  const CI=new Int32Array(NP*3),HOFF=[];for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(let c=-1;c<=1;c++)if(a>0||(a===0&&(b>0||(b===0&&c>0))))HOFF.push(a,b,c);
+  const repel=()=>{head.fill(-1);for(let q=0;q<NP;q++){if(KI[q]<KS[GI[q]])continue;const p=q*3,ix=Math.floor(X[p]/cs),iy=Math.floor(X[p+1]/cs),iz=Math.floor(X[p+2]/cs),h=hk(ix,iy,iz);CI[p]=ix;CI[p+1]=iy;CI[p+2]=iz;next[q]=head[h];head[h]=q;}
+    AC.fill(0);const d2m=dmin*dmin;
+    const pair=(q,r)=>{const p=q*3,s=r*3,dx=X[s]-X[p],dy=X[s+1]-X[p+1],dz=X[s+2]-X[p+2],d2=dx*dx+dy*dy+dz*dz;
+      if(d2<d2m&&d2>1e-12){const d=Math.sqrt(d2),f=(dmin-d)/d*0.25;AC[p]-=dx*f;AC[p+1]-=dy*f;AC[p+2]-=dz*f;AC[s]+=dx*f;AC[s+1]+=dy*f;AC[s+2]+=dz*f;}};
+    for(let q=0;q<NP;q++){if(KI[q]<KS[GI[q]])continue;const p=q*3,ix=CI[p],iy=CI[p+1],iz=CI[p+2],gq=GI[q];
+      let r=head[hk(ix,iy,iz)];while(r>=0){if(r>q&&GI[r]!==gq)pair(q,r);r=next[r];}
+      for(let o=0;o<39;o+=3){r=head[hk(ix+HOFF[o],iy+HOFF[o+1],iz+HOFF[o+2])];while(r>=0){if(GI[r]!==gq)pair(q,r);r=next[r];}}}
+    for(let q=0;q<NP;q++){const p=q*3;X[p]+=AC[p];X[p+1]+=AC[p+1];X[p+2]+=AC[p+2];}};
+  /* waves / curls: amplitude, wavelength, helix or not; waves take their phase from a smooth field over the scalp
+     (neighbouring locks wave together, a few centimetres apart no longer: one phase over the whole head
+     drew level stripes, a washboard), curls each their own (ringlets are not in step), of uneven size and either hand */
+  /* (straight hair too: a slow, gentle S along each lock - no hair hangs like a plumb line) */
+  const TX=hairTexP(),R1=rng(77+n),WA=[0.009,0.009,0.0075,0.0068][TX.wave||0],WH=TX.wave>=2,
+    WLg=gd.map(()=>TX.wave?[1,0.095,0.042,0.026][TX.wave]*(WH?0.82+0.4*R1():0.94+0.12*R1()):0.26+0.16*R1()),
+    WP=gd.map(g=>WH?R1()*TAU:5*fbm(g.P.x*4.5+3,g.P.y*4.5,g.P.z*4.5)+0.4*R1()),
+    WAg=gd.map(g=>WA*(WH?0.65+0.7*R1():TX.wave?0.7+0.6*clamp(0.5+fbm(g.P.x*6+11,g.P.y*6,g.P.z*6),0,1)+0.1*R1():0.5+R1())),
+    HAND=gd.map(()=>R1()<0.5?-1:1),
+    /* a wave is flat: a zigzag in a plane tilted out of the hair's surface (the light catches its crests - in the surface
+       alone the waves did not show in thick hair; side to side and in and out a quarter apart it was a twist, not a wave) */
+    WPL=gd.map(g=>{const a=(TX.wave?0.32:0.25)+0.25*fbm(g.P.x*3.1+7,g.P.y*3.1,g.P.z*3.1)+0.15*(R1()-0.5);return[Math.cos(a),Math.sin(a)];});
+  const dt=1/50,Gv=9.8*dt*dt,steps=o.steps||260,side=new Float32Array(n),xt=new Float32Array(n),rmin=o.rmin||0.022;let sideSet=false;
+  for(let st=0;st<steps;st++){
+    const damp=st<steps*0.6?0.94:0.82;
+    /* which way each guide falls over the shoulders, once the hair has settled on the head */
+    if(st===70&&!sideSet){sideSet=true;for(let i=0;i<n;i++){let best=-1,bd=9;for(let k=0;k<gd[i].K;k++){const p=(off[i]+k)*3,d=Math.abs(X[p+1]-(yS+0.12));if(d<bd){bd=d;best=p;}}
+      if(bd<0.03&&gd[i].P.y-gd[i].L<yS-0.02){const D2=drapeSide(Math.atan2(X[best+2]-hc.z,X[best]),mode);side[i]=D2.side;xt[i]=D2.xt;}}}
+    for(let q=0;q<NP;q++){if(KI[q]<KS[GI[q]])continue;const p=q*3,i=GI[q],vx=(X[p]-Q[p])*damp,vy=(X[p+1]-Q[p+1])*damp,vz=(X[p+2]-Q[p+2])*damp;Q[p]=X[p];Q[p+1]=X[p+1];Q[p+2]=X[p+2];
+      let fx=0,fz=0;if(side[i]){const w=gauss(X[p+1]-(yS+0.03),0.07);fx=(xt[i]-X[p])*8*w*dt*dt;if(CT[q]||X[p+1]>yS+0.06)fz=side[i]*16*w*dt*dt;}
+      X[p]+=vx+fx;X[p+1]+=vy-Gv;X[p+2]+=vz+fz;}
+    if(st%2===0||st>steps-40)repel();
+    /* follow the leader from the root: inextensible, a little stiff (more so near the root), never folding tighter than rmin */
+    for(let i=0;i<n;i++){const L=SEGL[i],aMax=Math.min(0.9,L/rmin),cM=Math.cos(aMax),sM=Math.sin(aMax),o0=off[i];
+      for(let k=KS[i];k<gd[i].K;k++){const q=o0+k,p=q*3,a=p-3,b=p-6;D[p]=X[p];D[p+1]=X[p+1];D[p+2]=X[p+2];
+        let dx=X[p]-X[a],dy=X[p+1]-X[a+1],dz=X[p+2]-X[a+2],d=Math.hypot(dx,dy,dz)||1e-9;dx/=d;dy/=d;dz/=d;
+        const pd=Math.hypot(X[a]-X[b],X[a+1]-X[b+1],X[a+2]-X[b+2])||1e-9,px=(X[a]-X[b])/pd,py=(X[a+1]-X[b+1])/pd,pz=(X[a+2]-X[b+2])/pd,s=k*L,stf=lerp(0.3,0.015,smooth((s-(gd[i].arc||0))/0.07));
+        dx+=(px-dx)*stf;dy+=(py-dy)*stf;dz+=(pz-dz)*stf;d=Math.hypot(dx,dy,dz)||1e-9;dx/=d;dy/=d;dz/=d;
+        /* bob ends turn under (towards the neck); the waves and curls are laid on afterwards (see below) */
+        {const hd=X[a+1]>hc.y-ry*0.6,ox0=X[a]-(hd?hc.x:0),oz0=X[a+2]-(hd?hc.z:0),ol=Math.hypot(ox0,oz0)||1,ox=ox0/ol,oz=oz0/ol;
+          if(o.tipCurl){const u=s/gd[i].L,cu=o.tipCurl*smooth((u-0.6)/0.4);dx-=ox*cu;dz-=oz*cu;}
+          d=Math.hypot(dx,dy,dz)||1e-9;dx/=d;dy/=d;dz/=d;}
+        const c=dx*px+dy*py+dz*pz;if(c<cM){let qx=dx-px*c,qy=dy-py*c,qz=dz-pz*c;const ql=Math.hypot(qx,qy,qz)||1e-9;qx/=ql;qy/=ql;qz/=ql;dx=px*cM+qx*sM;dy=py*cM+qy*sM;dz=pz*cM+qz*sM;}
+        X[p]=X[a]+dx*L;X[p+1]=X[a+1]+dy*L;X[p+2]=X[a+2]+dz*L;
+        let hit=0;for(let r=0;r<2;r++){const h=collide(p,k);if(!h)break;hit|=h;const ex=X[p]-X[a],ey=X[p+1]-X[a+1],ez=X[p+2]-X[a+2],ed=Math.hypot(ex,ey,ez)||1e-9;X[p]=X[a]+ex/ed*L;X[p+1]=X[a+1]+ey/ed*L;X[p+2]=X[a+2]+ez/ed*L;}
+        CT[q]=hit?1:0;CB[q]=hit&2?1:0;if(hit){Q[p]=lerp(Q[p],X[p],0.5);Q[p+1]=lerp(Q[p+1],X[p+1],0.5);Q[p+2]=lerp(Q[p+2],X[p+2],0.5);}
+        D[p]=X[p]-D[p];D[p+1]=X[p+1]-D[p+1];D[p+2]=X[p+2]-D[p+2];}
+      for(let k=KS[i];k+1<gd[i].K;k++){const p=(o0+k)*3;Q[p]+=0.9*D[p+3];Q[p+1]+=0.9*D[p+4];Q[p+2]+=0.9*D[p+5];}}}
+  /* occlusion: how much hair lies further out from each point (density sampled outward over 3 cm) */
+  const AO=new Float32Array(NP);{const c2=0.008,M=new Map(),kk=(a,b,c)=>a+','+b+','+c;
+    for(let q=0;q<NP;q++){const p=q*3,k=kk(Math.floor(X[p]/c2),Math.floor(X[p+1]/c2),Math.floor(X[p+2]/c2));M.set(k,(M.get(k)||0)+1);}
+    for(let q=0;q<NP;q++){const p=q*3,y=X[p+1],cx=y>hc.y-ry*0.6?hc.x:0,cy=y>hc.y-ry*0.6?hc.y:y,cz=y>hc.y-ry*0.6?hc.z:0;let ox=X[p]-cx,oy=X[p+1]-cy,oz=X[p+2]-cz;const ol=Math.hypot(ox,oy,oz)||1;ox/=ol;oy/=ol;oz/=ol;
+      let s=0;for(let j=1;j<=4;j++){const t=j*0.0075;s+=M.get(kk(Math.floor((X[p]+ox*t)/c2),Math.floor((X[p+1]+oy*t)/c2),Math.floor((X[p+2]+oz*t)/c2)))||0;}AO[q]=Math.exp(-s*0.045*seg/0.011);}
+    /* (smoothed along each guide: no blotches) */
+    for(let it=0;it<4;it++)for(let i=0;i<n;i++){const a=off[i],b=off[i+1];let pv=AO[a];for(let q=a+1;q<b-1;q++){const c=AO[q];AO[q]=(pv+c*2+AO[q+1])/4;pv=c;}}}
+  /* the hair's set: waves and curls laid on the settled guides as an offset in each guide's frame - a shape the hair holds,
+     not a force (pushed into every step, the waves fought gravity, grew and crossed their neighbours: a net of locks).
+     Each guide is resampled along a smooth curve through its points, finer for curls (11 mm points drew a curl as a
+     zigzag); its length is that of the path the lock takes, the curl coils round it (curly hair is shorter than straight) */
+  const fine=WH?0.003:TX.wave?0.005:seg,T3=[0,0,0],tmpP=new Float32Array(3);
+  const out=[];for(let i=0;i<n;i++){const K0=gd[i].K,o0=off[i],L=SEGL[i],arc=gd[i].arc||0,K=Math.max(K0,Math.round((K0-1)*L/fine)+1),P=new Float32Array(K*3),AOg=new Float32Array(K),ds=L*(K0-1)/(K-1);
+    /* vertex tangents of the settled guide */
+    const TV=new Float32Array(K0*3);for(let k=0;k<K0;k++){const a=(o0+Math.max(0,k-1))*3,b=(o0+Math.min(K0-1,k+1))*3;let tx=X[b]-X[a],ty=X[b+1]-X[a+1],tz=X[b+2]-X[a+2];const tl=Math.hypot(tx,ty,tz)||1;TV[k*3]=tx/tl;TV[k*3+1]=ty/tl;TV[k*3+2]=tz/tl;}
+    let ph=WP[i],yPrev=0,ph0g=0;
+    for(let k=0;k<K;k++){const f=k*ds/L,a=Math.min(K0-2,Math.floor(f)),u=f-a,s=f*L,ia=Math.max(0,a-1),ib=Math.min(K0-1,a+2),u2=u*u,u3=u2*u;
+      /* the base: a Catmull-Rom curve through the guide's points */
+      for(let c=0;c<3;c++){const p0=X[(o0+ia)*3+c],p1=X[(o0+a)*3+c],p2=X[(o0+a+1)*3+c],p3=X[(o0+ib)*3+c];tmpP[c]=0.5*(2*p1+(p2-p0)*u+(2*p0-5*p1+4*p2-p3)*u2+(3*p1-p0-3*p2+p3)*u3);
+        T3[c]=lerp(TV[a*3+c],TV[a*3+3+c],u);}
+      let tl=Math.hypot(T3[0],T3[1],T3[2])||1;const tx=T3[0]/tl,ty=T3[1]/tl,tz=T3[2]/tl,x=tmpP[0],y=tmpP[1],z=tmpP[2];
+      /* the frame: N out of the head (higher up) or the body (lower down), B across the hair's surface */
+      const w=smooth((y-(hc.y-ry*0.95))/(ry*0.35));let nx=x-hc.x*w,ny=0,nz=z-hc.z*w;{const dd=nx*tx+ny*ty+nz*tz;nx-=tx*dd;ny-=ty*dd;nz-=tz*dd;const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;}
+      const bx=ty*nz-tz*ny,by=tz*nx-tx*nz,bz=tx*ny-ty*nx;
+      /* (waves go by height: two locks side by side, one lying deeper in the hair, wave together at the same height - by
+         length along each they drifted apart and the strands blended between them crossed) */
+      const us=s-arc;if(us>0){if(WH)ph+=TAU*ds/(WLg[i]*(1+0.16*Math.sin(us*11+WP[i]*3)));else ph+=TAU*Math.max(Math.abs(y-yPrev),0.35*ds)/WLg[i];}
+      else if(!WH)ph=WP[i]+TAU*(hc.y-y)/WLg[i];yPrev=y;
+      const ramp=smooth((us+0.005)/(WH?0.04:0.07)),Am=WAg[i]*ramp*(1+(WH?0.25:0.3)*smooth((us-0.05)/0.3));
+      let ob,on;if(WH){ob=Math.cos(ph)*HAND[i]-Math.cos(WP[i])*HAND[i]*ramp;on=Math.sin(ph)*(TX.wave===2?0.6:1);}
+      else{if(us<=0)ph0g=ph;const sw=Math.sin(ph)-Math.sin(ph0g)*ramp;ob=sw*WPL[i][0];on=sw*WPL[i][1];}
+      const q=k*3;P[q]=x+(bx*ob+nx*on)*Am;P[q+1]=y+(by*ob+ny*on)*Am;P[q+2]=z+(bz*ob+nz*on)*Am;
+      /* (kept off the head, the body and the arms) */
+      if(a+1>=KS[i])for(let r=0;r<2;r++)if(!collide(q,a+1,P))break;
+      AOg[k]=lerp(AO[o0+a],AO[o0+a+1],u);}
+    out.push({P,AO:AOg,K,L:gd[i].L});}
+  return out;}
+/* the drawn strands: roots spread over the same region, each following its nearest guides */
+function flowStrands(gd,sim,o,ro){
+  const hc=BC.headC,ry=BC.hd.ry,T=hairTexP(),HT=headTab(),R=rng(9091+gd.length),n=gd.length;
+  /* per guide: unit tangents and a transported frame (N: out of the scalp at the root) */
+  const FR=sim.map((s,i)=>{const K=s.K,P=s.P,Tg=new Float32Array(K*3),N=new Float32Array(K*3);let nx=gd[i].P.x-hc.x,ny=gd[i].P.y-hc.y,nz=gd[i].P.z-hc.z;
+    for(let k=0;k<K;k++){const a=Math.max(0,k-1)*3,b=Math.min(K-1,k+1)*3;let tx=P[b]-P[a],ty=P[b+1]-P[a+1],tz=P[b+2]-P[a+2];const tl=Math.hypot(tx,ty,tz)||1;tx/=tl;ty/=tl;tz/=tl;
+      const dd=nx*tx+ny*ty+nz*tz;nx-=tx*dd;ny-=ty*dd;nz-=tz*dd;const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;Tg.set([tx,ty,tz],k*3);N.set([nx,ny,nz],k*3);}
+    return{Tg,N};});
+  /* a guide's point at fraction t of its length (linear between its points) */
+  const gAt=(i,t,out,o3)=>{const s=sim[i],f=clamp(t,0,1)*(s.K-1),k=Math.min(s.K-2,Math.floor(f)),u=f-k,P=s.P;for(let c=0;c<3;c++)out[o3+c]=lerp(P[k*3+c],P[k*3+3+c],u);return k;};
+  /* (curly hair: fewer strands - each is three times as long in points, and the curls fill the volume anyway; a strand's
+     points every 15 mm in straight hair (the guides are smooth curves), 7.5 mm in waves, 4.8 mm in curls) */
+  const per=window.__perGuide||Math.round((o.perGuide||70)*STRAND_Q/0.62*(T.wave>=2?0.4:1)*(HAIR_LOD||QUALITY==='perf'?0.6:1)),NS=n*per,list=[];
+  const gp=gd.map(g=>g.P),ph0=gd.map(()=>R()*TAU),cTip=gd.map(()=>0.25+0.35*R());
+  const A=new Float32Array(3),B3=new Float32Array(3);
+  let made=0,tries=0;
+  while(made<NS&&tries<NS*6){tries++;
+    const ny=1-2*R(),ph=wrapA(R()*TAU);if(ny<-0.6||!flowRootOK(ny,ph,ro))continue;made++;
+    const P0=headPt(Math.acos(clamp(ny,-0.99,0.995)),ph,0.0012);
+    /* the three nearest guide roots, inverse-distance weights */
+    let nb=[[-1,9],[-1,9],[-1,9]];for(let i=0;i<n;i++){const d=gp[i].distanceToSquared(P0);if(d<nb[2][1]){nb[2]=[i,d];nb.sort((a,b)=>a[1]-b[1]);}}
+    nb=nb.filter(q=>q[0]>=0);const w0=nb.map(q=>1/(Math.sqrt(q[1])+0.002)),i0=nb[0][0];
+    /* uneven ends: each strand a little shorter or longer than its guides */
+    const tEnd=lerp(0.86,1,Math.pow(R(),0.6)),fly=R()<0.02,dep=R(),tone=(1.02+0.16*R());
+    const Lm=nb.reduce((s,q,j)=>s+gd[q[0]].L*w0[j],0)/w0.reduce((a,b)=>a+b,0),sp=(T.wave>=2?0.0048:T.wave?0.0075:0.015)*(HAIR_LOD?1.6:QUALITY==='perf'?1.3:1),K=Math.max(4,Math.round(tEnd*Lm/sp)+1);
+    const Fp=new Float32Array(K*3),AO=new Float32Array(K);
+    /* the offset from each guide's root to this strand's root, in that guide's frame at the root */
+    const offs=nb.map(([i])=>{const Tg=FR[i].Tg,N=FR[i].N,ox=P0.x-gp[i].x,oy=P0.y-gp[i].y,oz=P0.z-gp[i].z,bx=Tg[1]*N[2]-Tg[2]*N[1],by=Tg[2]*N[0]-Tg[0]*N[2],bz=Tg[0]*N[1]-Tg[1]*N[0];return[ox*N[0]+oy*N[1]+oz*N[2],ox*bx+oy*by+oz*bz,ox*Tg[0]+oy*Tg[1]+oz*Tg[2]];});
+    /* (over the scalp the strands blend their guides and lie flat; they gather into locks only once off the head) */
+    const Lg=gd[i0].L,arcG=gd[i0].arc||0,wph=ph0[i0]+(R()-0.5)*0.5,curlR=0.0035+0.002*R(),sCl=0.6+0.8*R();
+    /* the strand's place along a neighbouring guide: over the scalp in proportion, from where the hair leaves the scalp
+       on by the same distance (the same fraction of two guides of different lengths put a strand's points on different
+       heights: it cut across the hair, and blended out of step its waves cancelled out) */
+    const fG=gd[i0].L-arcG,tOf=(i,s)=>{const g=gd[i],a=g.arc||0;return Math.min(1,s<arcG?(arcG>1e-4?s/arcG*a:s)/g.L:(a+s-arcG)/g.L);};
+    /* the lock gathers its strands only towards its end (gathered all the way down, each lock read as a feather) */
+    const clEnd=smooth((fG-0.04)/0.2);
+    const WF=[1,1,1],dsP=Lg*tEnd/(K-1);
+    for(let k=0;k<K;k++){const t=k/(K-1)*tEnd,sP=t*Lg,uF=fG>1e-3?(sP-arcG)/fG:0,cr=smooth((uF-0.4)/0.6)*clEnd;let sx=0,sy=0,sz=0,sw=0;gAt(i0,t,B3,0);
+      for(let j=0;j<nb.length;j++){const i=nb[j][0],kk=gAt(i,j?tOf(i,sP):t,A,0);const dv=Math.hypot(A[0]-B3[0],A[1]-B3[1],A[2]-B3[2]);
+        /* (the strand blends its neighbouring guides all the way down while they stay together - an even fall of hair;
+           where they part (over a shoulder, one in front and one behind) it keeps to its own; towards the end it belongs
+           to its own lock) */
+        /* (a neighbour once parted stays parted, and is let go of gradually: the waves move the guides to and fro and a
+           weight following their distance point by point threw the strand from one to the other, across the hair) */
+        if(j){WF[j]=Math.min(WF[j],Math.max(1-smooth((dv-0.014)/0.014),WF[j]-dsP/0.05));}
+        let w=w0[j]*(j===0?1:(1-0.9*cr)*WF[j]);if(w<=0)continue;
+        const Tg=FR[i].Tg,N=FR[i].N,t3=kk*3,bx=Tg[t3+1]*N[t3+2]-Tg[t3+2]*N[t3+1],by=Tg[t3+2]*N[t3]-Tg[t3]*N[t3+2],bz=Tg[t3]*N[t3+1]-Tg[t3+1]*N[t3],cl=lerp(1,cTip[i]*sCl,cr),[on,ob,ot]=offs[j];
+        const px=A[0]+(N[t3]*on+bx*ob)*cl+Tg[t3]*ot*(1-smooth(t/0.05)),py=A[1]+(N[t3+1]*on+by*ob)*cl+Tg[t3+1]*ot*(1-smooth(t/0.05)),pz=A[2]+(N[t3+2]*on+bz*ob)*cl+Tg[t3+2]*ot*(1-smooth(t/0.05));
+        sx+=px*w;sy+=py*w;sz+=pz*w;sw+=w;}
+      let x=sx/sw,y=sy/sw,z=sz/sw;
+      /* waves (a lock's strands wave together) and curls; frizz; a rare stray lifting off */
+      const kn=Math.min(sim[i0].K-1,Math.round(t*(sim[i0].K-1)))*3,Tg=FR[i0].Tg,N=FR[i0].N,bx=Tg[kn+1]*N[kn+2]-Tg[kn+2]*N[kn+1],by=Tg[kn+2]*N[kn]-Tg[kn]*N[kn+2],bz=Tg[kn]*N[kn+1]-Tg[kn+1]*N[kn],s=t*gd[i0].L,ramp=smooth((s-0.04)/0.08);
+      /* (the waves and curls are in the guides; each curly strand also coils a little round its lock) */
+      if(T.wave>=2){const a=wph*3+s*TAU/(0.011+0.004*T.wave),Aw=0.0009*T.wave*ramp;const c1=Math.cos(a),s1=Math.sin(a);x+=bx*Aw*c1+N[kn]*Aw*s1;y+=by*Aw*c1+N[kn+1]*Aw*s1;z+=bz*Aw*c1+N[kn+2]*Aw*s1;}
+      {const fr=0.0007*ramp*Math.sin(wph*3+s*70);x+=bx*fr;y+=by*fr;z+=bz*fr;}
+      if(fly){const f=0.012*smooth((t-0.3)/0.7);x+=N[kn]*f+bx*f*0.5*Math.sin(wph);y+=N[kn+1]*f;z+=N[kn+2]*f;}
+      /* never inside the head (nor the dark scalp under the hair); layered over it by depth */
+      {const dx=x-hc.x,dy=y-hc.y,dz=z-hc.z,d=Math.hypot(dx,dy,dz)||1e-6;if(dy>-ry*0.8){const Rr=HT.at(dx,dy,dz,d)+0.0026+0.0022*dep*(1-smooth((t*Lg-arcG)/0.05));if(d<Rr){x=hc.x+dx*Rr/d;y=hc.y+dy*Rr/d;z=hc.z+dz*Rr/d;}}}
+      Fp[k*3]=x;Fp[k*3+1]=y;Fp[k*3+2]=z;
+      const ao=sim[i0].AO[Math.min(sim[i0].K-1,Math.round(t*(sim[i0].K-1)))];AO[k]=lerp(0.72,1,ao)*lerp(0.86,1,dep);}
+    list.push({P:Fp,K,w0:0.00042*(0.8+0.4*R()),w1:0.00011,tone,ao:AO,root:0.82});}
+  return list;}
 function tubeAlong(curve,n,rf,o={}){
   const fr=curve.computeFrenetFrames(n,false),out=[];
   for(let i=0;i<=n;i++){const t=i/n,r=rf(t);out.push({c:curve.getPointAt(t),rx:r,rz:r,u:fr.normals[i],v:fr.binormals[i],t});}
@@ -490,9 +775,13 @@ function buildHair(G){
   const front=d=>smooth((0.9-d)/0.9);
   const hat=capType()!=='none';
   const sheetTo={bob:hairLen(hc.y-0.06,hc.y-0.13),lob:hairLen(1.5,1.38),long:hairLen(1.32,1.02),mullet:hairLen(1.52,1.38),wolf:hairLen(1.53,1.4),curtains:hairLen(hc.y-0.04,hc.y-0.11)};
-  const sheet=(gap,to,thick,o={})=>hairSheet(G,mat,Object.assign({ph0:FRONT+gap,ph1:FRONT-gap+TAU,y0:ph=>{const hl=hat?hatLineNy(ph):null;return hc.y+ry*(hl!=null?Math.min(0.5,hl-0.05):0.5);},y1:ph=>to+(o.choppy?0.025*nz3(ph*6,1,2):0)+(o.longBack?-0.03*smooth((angFront(ph)-1.6)/1.2):0),thick,
+  /* hanging hair: independent simulated hairs (hairFlow); the old sheet only for a fringe */
+  const sheet=(gap,to,thick,o={})=>{if(!hairFlow(G,Object.assign({gap,ring:!!o.noCrown,y0:ph=>{const hl=hat?hatLineNy(ph):null;return hc.y+ry*(hl!=null?Math.min(0.5,hl-0.05):0.5);},y1:ph=>to+(o.choppy?0.025*nz3(ph*6,1,2):0)+(o.longBack?-0.03*smooth((angFront(ph)-1.6)/1.2):0)},o)))sheetOld(gap,to,thick,o);};
+  const sheetOld=(gap,to,thick,o={})=>hairSheet(G,mat,Object.assign({ph0:FRONT+gap,ph1:FRONT-gap+TAU,y0:ph=>{const hl=hat?hatLineNy(ph):null;return hc.y+ry*(hl!=null?Math.min(0.5,hl-0.05):0.5);},y1:ph=>to+(o.choppy?0.025*nz3(ph*6,1,2):0)+(o.longBack?-0.03*smooth((angFront(ph)-1.6)/1.2):0),thick,
     /* the sheet leaves the scalp shell tangentially (as thick as the shell where it starts): a thin start grew out of the shell as a ledge */
     thin:thick*0.85,crown:!hat&&!o.noCrown},o));
+  /* under flowing hair: a thin dark scalp (the strands themselves cover the head, from the parting and the crown down) */
+  const flowShell=()=>hairShell(G,hairCoreMat(H.color),()=>0.0012,{noise:0,edge:.6});
   let fr=H.fringe&&H.fringe!=='none'?H.fringe:null;
   /* strand cards per style: length, width, count; dir -1 = combed from the hairline back (pulled back / slicked) */
   const C=(len,count,o={})=>Object.assign({len:len*2.4,count:Math.round(count*1.6),w:0.02,lift:0.0018,fan:0.0025},o,o.w?{w:o.w*1.4}:{});
@@ -504,7 +793,7 @@ function buildHair(G){
     case 'quiff':hairShell(G,mat,(ny,d)=>0.002+smooth((ny-0.42)/0.3)*(0.014+0.032*gauss(d,0.75)*(1-0.55*smooth((ny-0.78)/0.2))),{edge:.6,noise:.5,clump:.4,cards:C(0.05,320,{dir:-1,minNy:0.45,fan:0.005})});break;
     case 'slick':hairShell(G,mat,ny=>0.005+0.013*smooth((ny-0.15)/0.6),{edge:.4,noise:.2,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.0015,lift:0.0012,w:0.016,drift:0.02})});break;
     case 'sidepart':hairShell(G,mat,(ny,d,ph,dir)=>{let h=0.004+0.017*smooth((ny-0.2)/0.55)*(1+0.3*smooth((dir.x+0.2)/0.6));h-=0.007*gauss(dir.x+0.33,0.035)*smooth((ny-0.45)/0.2)*smooth((dir.z+0.2)/0.4);return h;},{edge:.4,noise:.4,clump:.4,cards:C(0.06,340,{fan:0.003,minNy:0.1})});break;
-    case 'curtains':hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.008+0.01*smooth((ny-0.2)/0.6),{under:hat?null:1.0,edge:.5,clump:.4,cards:hat?C(0.06,260,{endRand:0.55}):C(0.08,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});sheet(1.05,sheetTo.curtains,0.011,{flare:-0.006,cards:C(0.1,160,{w:0.018,v0:0.02,v1:1})});fr=fr||'curtain';break;
+    case 'curtains':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.008+0.01*smooth((ny-0.2)/0.6),{under:hat?null:1.0,edge:.5,clump:.4,cards:hat?C(0.06,260,{endRand:0.55}):C(0.08,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});else flowShell();sheet(1.05,sheetTo.curtains,0.011,{flare:-0.006,cards:C(0.1,160,{w:0.018,v0:0.02,v1:1})});fr=fr||'curtain';break;
     case 'curlytop':hairShell(G,mat,(ny,d)=>0.002+0.038*smooth((ny-0.42)/0.3)*(1+0.15*front(d)),{edge:.5,noise:1.2,clump:.4,cards:C(0.035,420,{kind:'coil',minNy:0.45,fan:0.007,drift:0.3})});break;
     case 'afro':{const base=afroH(hat?0.13:hairLen(0.14,0.19),hat?0:0.03);hairShell(G,mat,(ny,d,ph,dir)=>base(ny,d,ph,dir)*(1+0.07*fbm(dir.x*4,dir.y*4,dir.z*4)),{edge:.04,noise:1.2,band:.38,cards:C(0.03,520,{kind:'coil',w:0.016,fan:0.006,drift:0.5,lift:0.002})});break;}
     case 'twists':hairShell(G,mat,()=>0.01,{edge:.5,noise:.5});if(!hat)hairLocks(G,bmat,{n:70,len:hairLen(0.06,0.14),r:0.0072,stand:0.02,short:true});break;
@@ -512,11 +801,11 @@ function buildHair(G){
     case 'dreads':hairShell(G,bmat,()=>0.011,{edge:.5,noise:.3});hairLocks(G,bmat,{n:hat?40:80,len:hairLen(0.22,0.55),r:0.0078,stand:0.014});break;
     case 'braids':hairShell(G,bmat,(ny,d,ph,dir)=>0.006+0.003*Math.abs(Math.sin(dir.x*30)),{edge:.5,noise:0});hairLocks(G,bmat,{n:hat?60:115,len:hairLen(0.3,0.66),r:0.0055,stand:0.01});break;
     case 'mullet':hairShell(G,mat,ny=>0.008+0.016*smooth((ny-0.3)/0.5),{edge:.5,noise:1,clump:.4,messy:.004,cards:C(0.05,300,{endRand:0.55,kind:ck,fan:0.006})});sheet(1.75,sheetTo.mullet,0.016,{noCrown:1,choppy:1,flare:0.008,cards:C(0.09,160,{kind:ck,w:0.018,v0:0.02,v1:1,fan:0.006})});break;
-    case 'wolf':hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.012+0.022*smooth((ny-0.2)/0.6),{under:hat?null:0.93,edge:.5,noise:1.2,clump:.4,messy:.008,cards:hat?C(0.06,340,{endRand:0.55,kind:ck,fan:0.008,drift:0.12}):C(0.08,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.003,lift:0.0012})});sheet(0.98,sheetTo.wolf,0.022,{choppy:1,flare:0.012,cards:C(0.1,240,{kind:ck,w:0.02,v0:0.02,v1:1,fan:0.008,drift:0.1})});fr=fr||'curtain';break;
+    case 'wolf':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.012+0.022*smooth((ny-0.2)/0.6),{under:hat?null:0.93,edge:.5,noise:1.2,clump:.4,messy:.008,cards:hat?C(0.06,340,{endRand:0.55,kind:ck,fan:0.008,drift:0.12}):C(0.08,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.003,lift:0.0012})});else flowShell();sheet(0.98,sheetTo.wolf,0.022,{choppy:1,flare:0.012,cards:C(0.1,240,{kind:ck,w:0.02,v0:0.02,v1:1,fan:0.008,drift:0.1})});fr=fr||'curtain';break;
     case 'pixie':hairShell(G,mat,(ny,d)=>0.008+0.018*smooth((ny-0.1)/0.6)*(1+0.3*front(d)),{edge:.45,noise:.8,clump:.4,messy:.004,cards:C(0.045,340,{kind:ck,fan:0.005,drift:0.1})});fr=fr||'side';break;
-    case 'bob':hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.01+0.012*smooth((ny-0.2)/0.6),{under:hat?null:0.8099999999999999,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});sheet(0.86,sheetTo.bob,0.017,{flare:-0.004,cards:C(0.1,260,{kind:ck,w:0.02,v0:0.02,v1:1})});break;
-    case 'lob':hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.01+0.012*smooth((ny-0.2)/0.6),{under:hat?null:0.87,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});sheet(0.92,sheetTo.lob,0.017,{flare:0.01,longBack:1,cards:C(0.13,320,{kind:ck,w:0.022,v0:0.02,v1:1})});break;
-    case 'long':hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.007+0.009*smooth((ny-0.2)/0.6),{under:hat?null:0.87,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});sheet(0.92,sheetTo.long,0.017,{flare:0.01,nv:64,cards:C(0.18,380,{kind:ck,w:0.024,v0:0.02,v1:1})});break;
+    case 'bob':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.01+0.012*smooth((ny-0.2)/0.6),{under:hat?null:0.8099999999999999,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});else flowShell();sheet(0.86,sheetTo.bob,0.017,{tipCurl:0.12,flare:-0.004,cards:C(0.1,260,{kind:ck,w:0.02,v0:0.02,v1:1})});break;
+    case 'lob':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.01+0.012*smooth((ny-0.2)/0.6),{under:hat?null:0.87,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});else flowShell();sheet(0.92,sheetTo.lob,0.017,{tipCurl:0.05,flare:0.01,longBack:1,cards:C(0.13,320,{kind:ck,w:0.022,v0:0.02,v1:1})});break;
+    case 'long':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.007+0.009*smooth((ny-0.2)/0.6),{under:hat?null:0.87,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});else flowShell();sheet(0.92,sheetTo.long,0.017,{flare:0.01,nv:64,cards:C(0.18,380,{kind:ck,w:0.024,v0:0.02,v1:1})});break;
     case 'ponytail':hairShell(G,mat,ny=>0.005+0.006*smooth((ny-0.2)/0.6),{edge:.4,noise:.3,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.0015,lift:0.0012,drift:0.02})});if(!hat||capType()==='baseball'||capType()==='trucker'||capType()==='kerchief')hairTail(G,mat,0.3,hairLen(0.2,0.45),0.024);break;
     case 'bun':hairShell(G,mat,ny=>0.005+0.006*smooth((ny-0.2)/0.6),{edge:.4,noise:.3,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.0015,lift:0.0012,drift:0.02})});if(!hat)hairBun(G,mat,0.62,BACKA,0.046);break;
     case 'manbun':hairShell(G,mat,ny=>0.006+0.008*smooth((ny-0.2)/0.6),{edge:.4,noise:.4,clump:.3,cards:C(0.07,300,{dir:-1,fan:0.002,lift:0.0012,drift:0.02})});if(!hat)hairBun(G,mat,0.78,BACKA,0.034);break;

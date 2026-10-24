@@ -460,8 +460,8 @@ void RE_Direct_Hair(const in IncidentLight directLight,const in GeometricContext
   reflectedLight.directDiffuse+=irr*BRDF_Lambert(material.diffuseColor);
   vec3 H=normalize(L+V);vec3 T1=normalize(T+N*0.12),T2=normalize(T-N*0.18);
   float h1=dot(T1,H),h2=dot(T2,H),s1=pow(sqrt(max(0.0,1.0-h1*h1)),16.0),s2=pow(sqrt(max(0.0,1.0-h2*h2)),10.0);
-  vec3 tint=sqrt(max(material.diffuseColor,vec3(0.0)))*1.4;
-  reflectedLight.directSpecular+=directLight.color*wrap*(0.045*s1+0.04*s2*tint);
+  vec3 tint=mix(vec3(dot(material.diffuseColor,vec3(0.33))),material.diffuseColor,0.6)*2.0;
+  reflectedLight.directSpecular+=directLight.color*wrap*(0.05*s1+0.035*s2*tint);
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Hair`)

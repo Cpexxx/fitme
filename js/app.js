@@ -250,7 +250,7 @@ function initThumbs(){
 }
 function renderState(state){
   if(!initThumbs())return '';
-  try{buildInto(tRoot,state,false);const k=state.height/177;tCam.position.set(0.75,1.2*k,4.6*k);tCam.lookAt(0,0.88*k,0);tR.render(tScene,tCam);
+  try{HAIR_LOD=1;try{buildInto(tRoot,state,false);}finally{HAIR_LOD=0;}const k=state.height/177;tCam.position.set(0.75,1.2*k,4.6*k);tCam.lookAt(0,0.88*k,0);tR.render(tScene,tCam);
     let u=tR.domElement.toDataURL('image/webp',0.86);if(!u.startsWith('data:image/webp'))u=tR.domElement.toDataURL('image/png');return u;}catch(e){console.error(e);return '';}
 }
 const FOCUS={full:{y:0.8,d:5.2},upper:{y:1.4,d:1.7},head:{y:1.66,d:0.95},feet:{y:0.08,d:1.2}};

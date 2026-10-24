@@ -415,3 +415,45 @@ Kolejne rundy:
     kierunek pasma inaczej niż normalną.
   - Koszt (perf / high, długie włosy): +0,85 s / +2 s budowy; ~0,66 / ~1,3 mln wierzchołków pasm.
 - Detektor `clip.js` nie widzi pasm włosów jako powierzchni (bez rozszerzania w shaderze), więc obrazy włosów trzeba oglądać.
+
+## Runda 15 (2026-10-24): włosy, które płyną (prowadnice symulowane jak osobne włosy)
+Prośba: „cały czas te włosy stoją sztywno zamiast naturalnie płynąć. Popraw to raz a porządnie, nie przejmuj się na razie
+czasem renderu". Długie fryzury (bob, lob, long, curtains, wolf) nie są już arkuszem (`hairDrape` → `sheetStrands`).
+Stary arkusz został jako `sheetOld` (zapas, gdy pod czapką nie ma skóry na prowadnice).
+- **`hairFlow`** (hair.js): ~420 prowadnic (rozkład Fibonacciego na skórze głowy, `flowRootOK`: linia włosów, czapka,
+  pierścień). Każda biegnie po głowie wzdłuż linii czesania (`flowComb`: od przedziałka, w dół, z przodu na boki), 3,6 mm
+  nad nią (`headTab`: promień głowy na kierunek), do pierścienia stylu (`o.y0`). Dalej jest wolna.
+  - Dwa przebiegi: krótki (120 kroków) mówi, gdzie spoczywa koniec. Prowadnica jest wtedy przycinana lub wydłużana do linii
+    stylu (`o.y1`). W fryzurach do ramion (`shCut`: średnia linia przy barkach) kosmyk oparty na barku jest cięty 2,5 cm za
+    punktem oparcia: wydłużany, rozjeżdżał się po barku w kryzę. Po pełnym przebiegu końce poniżej linii są docinane.
+  - Wynik w `FLOW_CACHE` (klucz: prowadnice, ciało i ubrania przez `field.sig`, czapka, opaska, ułożenie, szal, tekstura).
+- **`flowSim`**: segmenty 15 mm, Verlet z dynamicznym follow-the-leader (nierozciągliwe, sztywniejsze 7 cm od skóry,
+  zgięcie nie ciaśniej niż `rmin`), grawitacja. Kolizje: głowa (`headTab`), dolna głowa i szyja, ciało z ubraniami
+  (`hairField`), ręce (kapsuły), szal (pierścień wokół szyi z `buildScarf`), twarz zostaje odsłonięta do linii włosów.
+  Włos-włos: odpychanie na siatce haszowanej (każda para raz: własna komórka + 13 sąsiednich). Ułożenie na ramiona
+  (`drapeSide`) wybierane w 70. kroku. Okluzja z gęstości na zewnątrz, wygładzona wzdłuż prowadnicy.
+- **Fale i loki to kształt, nie siła.** Po symulacji prowadnica jest próbkowana gęściej (Catmull-Rom; 5 mm fale, 3 mm
+  loki) i dostaje przesunięcie w swojej ramce (N od głowy lub ciała, B w poprzek powierzchni). Wcześniej rotacja dodawana
+  w każdym kroku walczyła z grawitacją i rosła w sieć krzyżujących się kosmyków.
+  - fale: płaski zygzak w płaszczyźnie odchylonej od powierzchni (`WPL`, światło łapie grzbiety). Faza idzie z wysokością
+    (sąsiednie kosmyki falują razem) plus pole szumu po głowie (kilka cm dalej już nie, inaczej poziome pasy jak tara);
+  - loki: spirala o nierównym skoku i promieniu, w obie strony (`HAND`), faza własna dla każdego kosmyka;
+  - proste: wolne, łagodne S (żaden włos nie wisi jak pion).
+- **`flowStrands`** (pasma): ~70 na prowadnicę przy std (`STRAND_Q`; loki ×0,4), punkty co 15 mm (proste), 7,5 mm (fale),
+  4,8 mm (loki). Pasmo uśrednia 3 najbliższe prowadnice na całej
+  długości, wyrównane do miejsca, gdzie włosy schodzą ze skóry (ten sam ułamek długości dawał różne wysokości i fale się
+  znosiły). Sąsiad raz rozdzielony zostaje puszczony stopniowo (`WF`), bo inaczej fale przerzucały pasmo ukośnie między
+  prowadnicami. Zbijanie w kosmyk tylko pod koniec (cały czas dawało „pióra”). Wynik w `STRAND_CACHE`, więc zmiana koloru
+  albo ubrania, którego włosy nie dotykają, nie liczy pasm od nowa.
+- `HAIR_LOD` (miniatury `renderState`: Społeczność, zapisane fity): 120 prowadnic, krótsze przebiegi, mniej pasm i punktów.
+  Bez tego każda miniatura z długimi włosami liczyła się kilkadziesiąt sekund i zamrażała stronę (ui.js padał).
+- QA: `window.__guidesOnly=1` rysuje same prowadnice, `window.__perGuide=N` ustala liczbę pasm na prowadnicę.
+- Koszt (w kontenerze bez GPU): pierwsza budowa długich włosów +~8 s (sama symulacja ~7,5 s; było 17,7 s przed
+  optymalizacją), przebudowa z cache +0,6 s. Wierzchołków pasm (perf / std / high): long 0,42 / 2,4 / 3,2 mln, loki
+  0,5 / 2,9 / 3,9 mln, bob 0,13 / 0,71 / 0,98 mln (runda 14: long 0,66 mln perf, 1,3 mln high). Aplikacja desktopowa
+  domyślnie działa w high.
+- Tryb „perf” (słaby sprzęt i domyślnie bez GPU) ma własne, lżejsze ustawienia: 260 prowadnic, 0,6× pasm, punkty ×1,3
+  rzadziej. Bez GPU każde pasmo rysuje się programowo i tysiące nakładających się pasm dawały kilkadziesiąt sekund na
+  klatkę (ui.js: timeout zrzutu ekranu).
+- Znane: końce lob/wolf opierające się na barkach są jaśniejsze (poziome pasma oświetlone z góry); przy „Na lewe ramię”
+  włosy przechodzące przez bark są widoczne od tyłu jako poziomy pas (fizycznie poprawne).
