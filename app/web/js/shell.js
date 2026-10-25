@@ -185,7 +185,9 @@ function buildShells(G,GS){
     const lin=linings.find(o=>o.userData.layer===name);
     const L={name,grids:[null,null,null,null,null],mats:[],meshes:ms,lowerCut:null,lining:lin?lin.material:null};
     shLayerFit(L);
-    for(const o of ms){const r=shRegionOfAxis(o.geometry.userData.axis);if(!L.grids[r])L.grids[r]=new PGrid(r);let mi=L.mats.indexOf(o.material);if(mi<0){mi=L.mats.length;L.mats.push(o.material);}L.grids[r].raster(shTrisOf(o,r),mi);}
+    for(const o of ms){const r=shRegionOfAxis(o.geometry.userData.axis);if(!L.grids[r])L.grids[r]=new PGrid(r);let mi=L.mats.indexOf(o.material);if(mi<0){mi=L.mats.length;L.mats.push(o.material);}L.grids[r].raster(shTrisOf(o,r),mi);
+      /* bands of another colour across the trunk (heights y0..y1): cut exactly in shEmit */
+      if(r===0&&o.geometry.userData.matBands)for(const b of o.geometry.userData.matBands){let bi=L.mats.indexOf(b.mat);if(bi<0){bi=L.mats.length;L.mats.push(b.mat);}(L.bands=L.bands||[]).push({y0:b.y0,y1:b.y1,mi:bi});}}
     for(const g of L.grids)if(g){g.close();g.sdf();}
     /* a torso garment that goes below the crotch with no trouser legs (long coats): the skirt part stays a tube */
     const lowOf=g=>{for(let j=0;j<g.N;j++)for(let i=0;i<SH_NA;i++)if(g.R[j*SH_NA+i]>=0)return g.x0+j*g.st;return 9;};
@@ -267,8 +269,11 @@ function buildShells(G,GS){
   if(hiQ)for(const L of layers)shUpsample(B,B2,L);
   /* folds, then cut along the hems / necklines / openings and emit the meshes */
   const shells=[];
-  for(const L of layers){shHull(B2,L);shLoose(B2,L);}
+  for(const L of layers){shHull(B2,L);shFrontBridge(B2,L);shLoose(B2,L);}
   for(const L of layers){shFolds(B2,L);shMidline(B2,L);shBodyClear(B2,L);shUntangle(B2,L);}
+  /* the drape, the hull and the folds only know the body: trousers over boots settled back into the shaft and its top
+     showed round the shin - over the boots once more */
+  if(OB)shObstacles(B2,layers,OB);
   /* the crotch / inseam corrections moved some fabric: stack the layers once more */
   shOrder(B2,layers);
   for(const L of layers){const ms=shEmit(B2,L);for(const m of ms){m.userData.layer=L.name;shells.push(m);}}
@@ -281,7 +286,8 @@ function buildShells(G,GS){
   /* parts of the pattern that stay (coat skirts, shirt tails over the hips, trouser hems) count as new fabric too */
   const kept=[];for(const L of layers)for(const o of L.meshes){const ra=shRegionOfAxis(o.geometry.userData.axis),cut=ra===0?L.lowerCut:ra>=3?L.legCut:null;
     if(cut!=null&&ra===0){if(!L.curtain){L.curtain=1;const tails=others.filter(t=>t.userData.tail&&t.userData.layer===L.name);const cm=shCurtain(L,cut,shells,B2,tails,layers);for(const t of tails){if(t.parent)t.parent.remove(t);others.splice(others.indexOf(t),1);}if(cm){G.add(cm);L.curtainMesh=cm;const T3=shTrisOf(cm,0);newU[0].raster(T3,0);L.newG[0].raster(T3,0);}}continue;}
-    if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3)shKeptOverShoes(o,OB);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+    if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3){shKeptOverShoes(o,OB);/* (pushed over the shoes after the blend: a ledge where the shell ends; blended again, then
+      clear of the shoe once more - a boot's collar in the blend zone was pulled under) */shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
@@ -657,6 +663,24 @@ function shHull(B,L){const F=BC.core.fit;if(!F)return;const stiff=L.rank>=3?1:cl
     const th=Math.atan2(z,x),rr=Math.hypot(x,z),need=F.T.at(th,y)+0.003+0.002*(L.rank-2);const w=stiff*smooth((y-1.0)/0.08);if(need>rr){push[v]=(need-rr)*w;ids.push(v);}}
   for(let it=0;it<6;it++){const p0=push.slice();for(let v=0;v<n;v++){if(!L.act[v])continue;let s2=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(L.act[j]){s2+=p0[j];c++;}}if(c)push[v]=Math.max(p0[v],s2/c*0.9);}}
   for(let v=0;v<n;v++){const p=push[v];if(!(p>0))continue;const x=X[v*3],z=X[v*3+2],rr=Math.hypot(x,z)||1;X[v*3]+=x/rr*p;X[v*3+2]+=z/rr*p;}}
+/* the front of trousers (and of anything hanging over the crotch) spans across from thigh to thigh: in each level slice
+   from the crotch up the front of the fabric is lifted to its convex outline (fitted to the body the fabric sank between
+   the thighs and round the bulge, the front of the trousers read as a seat); below the crotch, between the thighs, a soft
+   V that eases off over 10 cm */
+function shFrontBridge(B,L){const n=B.n,X=L.X,act=L.act,cy=B.cy,y0=cy-0.12,y1=cy+0.16,st=0.006,NB=Math.ceil((y1-y0)/st),off=B.off,adj=B.adj;
+  const bins=Array.from({length:NB},()=>[]);
+  for(let v=0;v<n;v++){if(!act[v])continue;const y=X[v*3+1],z=X[v*3+2];if(y<y0||y>=y1||z<-0.01||Math.abs(X[v*3])>0.2)continue;bins[Math.floor((y-y0)/st)].push(v);}
+  const push=new Float32Array(n);let any=false;
+  for(let b=0;b<NB;b++){const ids=bins[b];if(ids.length<6)continue;const yb=y0+(b+0.5)*st,w=(yb>=cy-0.02?1:0.85*(1-smooth((cy-0.02-yb)/0.1)))*(1-smooth((yb-(y1-0.04))/0.04));if(w<=0)continue;
+    /* upper hull in (x, z) */
+    const pts=ids.map(v=>[X[v*3],X[v*3+2]]).sort((a,c)=>a[0]-c[0]),H=[];
+    for(const q of pts){while(H.length>=2){const a=H[H.length-2],c=H[H.length-1];if((c[0]-a[0])*(q[1]-a[1])-(c[1]-a[1])*(q[0]-a[0])>=0)H.pop();else break;}H.push(q);}
+    for(const v of ids){const x=X[v*3];let k=0;while(k<H.length-2&&H[k+1][0]<x)k++;const a=H[k],c=H[Math.min(k+1,H.length-1)],t=c[0]>a[0]?clamp((x-a[0])/(c[0]-a[0]),0,1):0,zh=lerp(a[1],c[1],t);
+      const d=Math.min(0.045,zh-X[v*3+2]);if(d>0.0003){push[v]=d*w;any=true;}}}
+  if(!any)return;
+  /* smooth between the slices (each lifted on its own the front was striped) */
+  for(let it=0;it<4;it++){const p0=push.slice();for(let v=0;v<n;v++){if(!act[v])continue;let s=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(act[j]){s+=p0[j];c++;}}if(c)push[v]=Math.max(p0[v]*0.6,0.5*p0[v]+0.5*s/c);}}
+  for(let v=0;v<n;v++)if(push[v]>0)X[v*3+2]+=push[v];}
 function shDist(B,L,v){const P=B.P,Nn=B.N,X=L.X;return(X[v*3]-P[v*3])*Nn[v*3]+(X[v*3+1]-P[v*3+1])*Nn[v*3+1]+(X[v*3+2]-P[v*3+2])*Nn[v*3+2];}
 function shOrder(B,layers){
   const n=B.n,Nn=B.N,off=B.off,adj=B.adj;
@@ -686,12 +710,13 @@ function shObstacleGrids(G,GS){
   if(!any)return null;for(const r of [3,4])grids[r].close();return{grids,top};
 }
 /* trouser pattern parts kept as tubes (hems): rest on the shoe instead of passing through it */
-function shKeptOverShoes(o,OB){
+function shKeptOverShoes(o,OB,spread=true){
   const g=o.geometry,p=g.attributes.position,c=new Float32Array(3),q=new Float32Array(3),rr=o.geometry.userData.axis==='legR'?4:3,G2=OB.grids[rr];
   const N=G2.N,NA=SH_NA,push=new Float32Array(N*NA),cur=new PGrid(rr);cur.raster(shTrisOf(o,rr),0);
   for(let k=0;k<N*NA;k++)if(G2.R[k]>=0&&cur.R[k]>=0){const d=G2.R[k]+0.004-cur.R[k];push[k]=d>0&&d<0.03?d:0;}
-  /* spread upwards (the fabric drapes off the shoe) and around */
-  for(let it=0;it<14;it++){const c0=push.slice();for(let j=0;j<N;j++)for(let i=0;i<NA;i++){const k=j*NA+i;let m=c0[k];if(j>0)m=Math.max(m,c0[k-NA]*0.93);m=Math.max(m,c0[j*NA+(i+1)%NA]*0.9,c0[j*NA+(i+NA-1)%NA]*0.9);push[k]=m;}}
+  /* spread upwards (the fabric drapes off the shoe) and around; it eases off within a few cm (spread further the hem
+     stood out round the ankle in a bell) */
+  for(let it=0;it<(spread?14:2);it++){const c0=push.slice();for(let j=0;j<N;j++)for(let i=0;i<NA;i++){const k=j*NA+i;let m=c0[k];if(j>0)m=Math.max(m,c0[k-NA]*0.82);m=Math.max(m,c0[j*NA+(i+1)%NA]*0.9,c0[j*NA+(i+NA-1)%NA]*0.9);push[k]=m;}}
   const at=(th,x)=>{const gi=((th/TAU*NA-0.5)%NA+NA)%NA,i=Math.floor(gi),u=gi-i,f=(x-G2.x0)/G2.st;if(f<0||f>N-1)return 0;const j=Math.min(N-2,Math.floor(f)),v=f-j,i2=(i+1)%NA;
     return(push[j*NA+i]*(1-u)+push[j*NA+i2]*u)*(1-v)+(push[(j+1)*NA+i]*(1-u)+push[(j+1)*NA+i2]*u)*v;};
   for(let i=0;i<p.count;i++){shCoord(rr,p.getX(i),p.getY(i),p.getZ(i),c,0);const d=at(c[0],c[1]);if(d<=0)continue;shPoint(rr,c[0],c[1],c[2]+d,q);p.setXYZ(i,q[0],q[1],q[2]);}
@@ -702,7 +727,10 @@ function shObstacles(B,layers,OB){
   const n=B.n,reg=B.reg,P=B.P,off=B.off,adj=B.adj,c=new Float32Array(3),q=new Float32Array(3);
   for(const L of layers){let hem=9;for(let v=0;v<n;v++)if(L.act[v]&&reg[v]>=3&&L.f[v]>0)hem=Math.min(hem,P[v*3+1]);if(hem>top-0.005)continue;
     const over=hem<top-0.03,push=new Float32Array(n);let any=false;
-    for(let v=0;v<n;v++){if(!L.act[v]||reg[v]<3)continue;const r=reg[v],X=L.X;shCoord(r,X[v*3],X[v*3+1],X[v*3+2],c,0);const R=grids[r].at(c[0],c[1]);if(R<0)continue;
+    /* over the boots the obstacle is taken over +-8 mm of height: a fabric vertex just above the shaft's top was not pushed
+       and the triangle down to the next one cut through the collar (a dark slot round the shin) */
+    const Rat=(r,th,y)=>{let R=grids[r].at(th,y);if(over)for(const dy of [-0.008,-0.004,0.004,0.008])R=Math.max(R,grids[r].at(th,y+dy));return R;};
+    for(let v=0;v<n;v++){if(!L.act[v]||reg[v]<3)continue;const r=reg[v],X=L.X;shCoord(r,X[v*3],X[v*3+1],X[v*3+2],c,0);const R=Rat(r,c[0],c[1]);if(R<0)continue;
       if(over){const need=R+0.0045-c[2];if(need>0){push[v]=need;any=true;}}else{const need=c[2]-(R-0.004);if(need>0){push[v]=-need;any=true;}}}
     if(!any)continue;
     /* spread so the fabric eases over the boot top instead of stepping */
@@ -753,6 +781,14 @@ function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,y0
     const crotch=y>y0&&y<y1&&Math.abs(x)<0.09,pit=y>ay&&y<BC.shY&&Math.abs(Math.abs(x)-BC.shX*0.8)<0.07;if(!crotch&&!pit)continue;
     const[j]=H.near2(x,y,z);if(j<0)continue;const d=(x-P[j*3])*Nn[j*3]+(y-P[j*3+1])*Nn[j*3+1]+(z-P[j*3+2])*Nn[j*3+2];
     if(d<0.0025){const q=0.0025-d;X[v*3]+=Nn[j*3]*q;X[v*3+1]+=Nn[j*3+1]*q;X[v*3+2]+=Nn[j*3+2]*q;}}
+  /* trousers: the front hangs from the fly down to the crotch seam - per column, going down, it recedes no faster than 0.45
+     per unit of height (pushed out of the body along the normals under the bulge it tucked in there: a dark hollow, with
+     the thighs either side the front of the trousers read as a seat) */
+  if(bot){const bins=new Map(),yl=cy-0.1;for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;const x=X[v*3],y=X[v*3+1];if(Math.abs(x)>0.07||y<yl||y>cy+0.12)continue;const b=Math.round(x/0.01);let a=bins.get(b);if(!a)bins.set(b,a=[]);a.push(v);}
+    const lift=new Float32Array(n);let any=false;
+    for(const a of bins.values()){a.sort((p,q)=>X[q*3+1]-X[p*3+1]);let m=-9,yp=0;for(const v of a){const y=X[v*3+1];if(m>-9)m-=0.45*(yp-y);yp=y;if(X[v*3+2]<m){lift[v]=(m-X[v*3+2])*smooth((y-yl)/0.04)*(1-smooth((Math.abs(X[v*3])-0.04)/0.03));any=true;}else m=X[v*3+2];}}
+    if(any){for(let it=0;it<6;it++){const l0=lift.slice();for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;let s2=0,c=0;for(let q=off[v];q<off[v+1];q++){const j=adj[q];if(!L.act[j])continue;s2+=l0[j];c++;}if(c)lift[v]=Math.max(l0[v],0.85*s2/c);}}
+      for(let v=0;v<n;v++)if(lift[v]>0)X[v*3+2]+=Math.min(lift[v],0.05);}}
 }
 /* trouser legs meet at the inseam instead of passing through each other */
 function shMidline(B,L){const n=B.n,reg=B.reg,X=L.X,P=B.P,Nn=B.N,E=L.E;
@@ -813,17 +849,19 @@ function shFolds(B,L){
     else{const y=xx,sn=Math.sin(th);
       /* trouser legs hang: long vertical folds from the seat and the knee to the hem, wider and deeper the looser the cut
          (horizontal ring folds round the knee and the hem - the old model - read as bands round the legs, an accordion) */
-      d+=(0.0015+0.0045*loose)*smooth((0.82-y)/0.3)*foldP(th*4+1.3*Math.sin(y*3.1+th*2.2)+0.6*Math.sin(y*7+th));
+      d+=(0.0012+0.0032*loose)*smooth((0.82-y)/0.3)*foldP(th*4+1.3*Math.sin(y*3.1+th*2.2)+0.6*Math.sin(y*7+th));
       /* a fitted leg creases a little behind the knee (soft diagonal wrinkles, not rings) */
       d+=0.0018*(1-loose)*gauss(y-0.47,0.045)*Math.max(0,-sn)*foldP(y*70+th*4);
       /* whiskers at the front of the crotch */
-      d+=(0.001+0.0022*loose)*gauss(y-0.78,0.045)*Math.max(0,sn)*foldP((y-0.78)*110+Math.cos(th)*9);
+      /* (fanning out from the crotch, shallow: level ones read as the fold under a seat) */
+      d+=(0.0004+0.0009*loose)*gauss(y-0.8,0.04)*Math.max(0,sn)*foldP((y-0.8)*70+Math.cos(th)*14);
       /* the break: where the leg meets the shoe the fabric folds once, at the front, slanting */
-      d+=(0.0012+0.0025*loose)*gauss(y-0.1,0.05)*edgeK*Math.max(0,sn)*foldP(y*60+th*5);
+      d+=(0.0008+0.0014*loose)*gauss(y-0.1,0.05)*edgeK*Math.max(0,sn)*foldP(y*60+th*5);
       d+=0.0008*fbm(Math.cos(th)*1.5,y*5,sn*1.5)*(0.4+loose);}
     /* where the drape bunched the fabric the folds are deeper; where it hangs taut they almost vanish */
     if(L.comp)d*=0.6+0.8*smooth(L.comp[v]/0.05)*smooth((L.fe||L.f)[v]/0.04);
-    d*=heavy;
+    /* all folds a little softer (they read as crumpled fabric) */
+    d*=heavy*0.8;
     /* puffer: full baffles between stitch lines (8.5 cm apart on the body, 12 on the sleeves), the stitches pulled in */
     if(L.quilt){d*=0.35;const ph=r===0?xx*Math.PI/0.085:r<=2?xx*Math.PI/0.12:0;if(ph)d+=0.0085*(Math.pow(Math.abs(Math.sin(ph)),0.3)-0.72)*edgeK;}
     /* near a sleeve end the fold depth is capped so the cuff stays a clean ring */
@@ -857,7 +895,7 @@ function shEmit(B,L){
   const ix=B.ix,f=L.f,X=L.X,act=L.act,P=B.P;let C=B.C,reg=B.reg;
   if(L.rv){const rv=L.rv,n=B.n;let diff=false;for(let v=0;v<n;v++)if(act[v]&&rv[v]!==reg[v]){diff=true;break;}
     if(diff){const C2=C.slice(),r2=reg.slice();for(let v=0;v<n;v++)if(act[v]&&rv[v]!==reg[v]){r2[v]=rv[v];shCoord(rv[v],P[v*3],P[v*3+1],P[v*3+2],C2,v*3);}C=C2;reg=r2;}}
-  const verts=new Map(),pos=[],uv=[],rg=[],src=[];
+  const verts=new Map(),pos=[],uv=[],rg=[],src=[],xs=[];
   const uvOf=(r,th,xx)=>r===0?[th*0.15/TILE,xx/TILE]:r<=2?[th*0.05/TILE,xx*0.55/TILE]:[th*0.07/TILE,xx/TILE];
   const NB=B.n,key=(a,b)=>a<b?a*NB+b:b*NB+a;
   const vert=(a,b,t,thRef)=>{/* point on vertex a (t=0) or on edge a-b */const k=b<0?a*4:(NB+key(a,b))*4;
@@ -867,7 +905,7 @@ function shEmit(B,L){
     const seamK=k+(th>Math.PI?1:th<-Math.PI?2:0);let id=verts.get(seamK);if(id!=null)return id;
     id=pos.length/3;verts.set(seamK,id);
     if(b<0)pos.push(X[a*3],X[a*3+1],X[a*3+2]);else pos.push(lerp(X[a*3],X[b*3],t),lerp(X[a*3+1],X[b*3+1],t),lerp(X[a*3+2],X[b*3+2],t));
-    const[u,w]=uvOf(r,th,xx);uv.push(u,w);rg.push(r);src.push(a);return id;};
+    const[u,w]=uvOf(r,th,xx);uv.push(u,w);rg.push(r);src.push(a);xs.push(xx);return id;};
   /* a triangle across two parts of the pattern (seat / leg, chest / sleeve): all its corners in one part's coordinates.
      With each corner in its own part the texture was squeezed across it (the wales of corduroy zigzagged over the seat);
      now the boundary is a clean seam (same positions, so the shading stays continuous) */
@@ -878,7 +916,14 @@ function shEmit(B,L){
     th=thRef+wrapA(th-thRef);const seamK=k*3+(th>Math.PI?1:th<-Math.PI?2:0);let id=vertsR.get(seamK);if(id!=null)return id;
     id=pos.length/3;vertsR.set(seamK,id);
     if(b<0)pos.push(X[a*3],X[a*3+1],X[a*3+2]);else pos.push(lerp(X[a*3],X[b*3],t),lerp(X[a*3+1],X[b*3+1],t),lerp(X[a*3+2],X[b*3+2],t));
-    const[u,w]=uvOf(rt,th,xx);uv.push(u,w);rg.push(rt);src.push(a);return id;};
+    const[u,w]=uvOf(rt,th,xx);uv.push(u,w);rg.push(rt);src.push(a);xs.push(xx);return id;};
+  /* colour bands: a polygon cut along xx = yt (a new vertex on each crossing edge, shared by both sides) */
+  const bandV=new Map(),bandEdge=new Set();
+  const cutV=(p,q,yt)=>{const k=(p<q?p*1e7+q:q*1e7+p)+'_'+yt;let id=bandV.get(k);if(id!=null)return id;const t=(yt-xs[p])/(xs[q]-xs[p]);id=pos.length/3;bandV.set(k,id);
+    for(let c=0;c<3;c++)pos.push(lerp(pos[p*3+c],pos[q*3+c],t));uv.push(lerp(uv[p*2],uv[q*2],t),lerp(uv[p*2+1],uv[q*2+1],t));rg.push(rg[p]);src.push(t<0.5?src[p]:src[q]);xs.push(yt);bandEdge.add(id);return id;};
+  const slab=(poly,lo,hi)=>{let cur=poly;for(const[yt,keepAbove] of [[lo,true],[hi,false]]){if(yt==null||cur.length<3)continue;const nx=[];
+      for(let k=0;k<cur.length;k++){const a=cur[k],b=cur[(k+1)%cur.length],ia=keepAbove?xs[a]>=yt:xs[a]<=yt,ib=keepAbove?xs[b]>=yt:xs[b]<=yt;if(ia)nx.push(a);if(ia!==ib)nx.push(cutV(a,b,yt));}cur=nx;}
+    return cur;};
   const tris=[[],[],[],[],[],[],[],[]];
   const matOf=(a)=>{const r=reg[a],g=L.grids[r]||L.grids[0];if(!g)return 0;const m=g.matAt(C[a*3],C[a*3+1]);return m<0?0:m;};
   for(let t=0;t<ix.length;t+=3){const I=[ix[t],ix[t+1],ix[t+2]];if(!act[I[0]]||!act[I[1]]||!act[I[2]])continue;
@@ -887,11 +932,20 @@ function shEmit(B,L){
     let rt=-1,thR=0;if(!same){rt=reg[I[1]]===reg[I[2]]?reg[I[1]]:reg[I[0]];shCoord(rt,P[I[0]*3],P[I[0]*3+1],P[I[0]*3+2],cA,0);thR=cA[0];}
     const V=(a,b,t)=>same?vert(a,b,t,thRef):vertR(a,b,t,rt,thR);
     const poly=[];for(let k=0;k<3;k++){const a=I[k],b=I[(k+1)%3],fa=F[k],fb=F[(k+1)%3];if(fa>0)poly.push(V(a,-1,0));if((fa>0)!==(fb>0)){const s=fa/(fa-fb);poly.push(V(a,b,s));}}
-    const mi=Math.min(7,matOf(I[0]));for(let k=1;k+1<poly.length;k++)tris[mi].push(poly[0],poly[k],poly[k+1]);}
+    const mi=Math.min(7,matOf(I[0]));
+    if(L.bands&&(same?reg[I[0]]===0:rt===0)&&poly.length>=3){let lo=-9,mn=9,mx=-9;for(const id of poly){mn=Math.min(mn,xs[id]);mx=Math.max(mx,xs[id]);}
+      const cuts=[];for(const b of L.bands){if(b.y1>mn&&b.y0<mx)cuts.push(b);}
+      if(cuts.length){const ed=[];for(const b of cuts)ed.push([b.y0,null],[b.y1,b]);ed.sort((a,b)=>a[0]-b[0]);
+        /* slabs between consecutive band edges: inside a band its material, else the garment's */
+        const ys=[null,...ed.map(e=>e[0]),null];
+        for(let q=0;q+1<ys.length;q++){const sp=slab(poly,ys[q],ys[q+1]);if(sp.length<3)continue;const ym=(q===0?mn:ys[q])+0.5*(((q+1===ys.length-1)?mx:ys[q+1])-(q===0?mn:ys[q]));
+          const bb=L.bands.find(b=>ym>b.y0&&ym<b.y1),m2=bb?Math.min(7,bb.mi):mi;for(let k=1;k+1<sp.length;k++)tris[m2].push(sp[0],sp[k],sp[k+1]);}
+        continue;}}
+    for(let k=1;k+1<poly.length;k++)tris[mi].push(poly[0],poly[k],poly[k+1]);}
   const out=[];
   for(let mi=0;mi<L.mats.length&&mi<8;mi++){const T=tris[mi];if(!T.length)continue;
     /* compact the vertex set used by this material */
-    const remap=new Map(),P2=[],U2=[],R2=[],S2=[],I2=[];for(const id of T){let j=remap.get(id);if(j==null){j=P2.length/3;remap.set(id,j);P2.push(pos[id*3],pos[id*3+1],pos[id*3+2]);U2.push(uv[id*2],uv[id*2+1]);R2.push(rg[id]);S2.push(src[id]);}I2.push(j);}
+    const remap=new Map(),P2=[],U2=[],R2=[],S2=[],I2=[],BE=[];for(const id of T){let j=remap.get(id);if(j==null){j=P2.length/3;remap.set(id,j);P2.push(pos[id*3],pos[id*3+1],pos[id*3+2]);U2.push(uv[id*2],uv[id*2+1]);R2.push(rg[id]);S2.push(src[id]);BE.push(bandEdge.has(id)?1:0);}I2.push(j);}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P2,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U2,2));g.setIndex(I2);g.computeVertexNormals();
     shWeldNormals(g,S2,P2);g.userData.reg=R2;g.userData.src=S2;
     /* the fabric copies the body's collapsed pole faces at the nipples / navel: shade it with the surrounding normal */
@@ -900,7 +954,7 @@ function shEmit(B,L){
     /* turned edge: the fabric folds back at hems, cuffs and necklines so it reads as cloth with thickness */
     /* (no turned edge along the lower cut where the curtain or kept skirt continues the fabric: it drew a hem line across the hips;
        nor along the trouser legs' cut above the kept hems: a line round the shin) */
-    shTurnEdge(g,L.lowerCut!=null?L.lowerCut+0.06:L.legCut!=null?L.legCut+0.04:null);
+    shTurnEdge(g,L.lowerCut!=null?L.lowerCut+0.06:L.legCut!=null?L.legCut+0.04:null,bandEdge.size?(a,b)=>BE[a]&&BE[b]:null);
     const nv=g.attributes.position.count,col=new Float32Array(nv*3);for(let i=0;i<nv;i++){const y=g.attributes.position.getY(i);col[i*3]=col[i*3+1]=col[i*3+2]=1;}
     g.setAttribute('color',new THREE.BufferAttribute(col,3));
     const m=mk(g,L.mats[mi]);m.userData.ctx='none';out.push(m);

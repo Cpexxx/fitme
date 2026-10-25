@@ -561,3 +561,32 @@ skolioza szyi; oversize zbyt kanciaste; dziwny pasek z guzikami w koszulach.
   układały się w ramiona spirali: kosmyki w „płatkach” z łysą skórą między nimi (najgorzej w crew).
 - **Uwaga do pracy w kopiach roboczych:** nie łączyć `cd` z `&&` po poleceniu, które może zawieść (np. brak `rsync`):
   dalsze polecenia wykonają się w głównym repo. Zawsze ścieżki bezwzględne.
+
+## Runda 19 (2026-10-25): głowa, wiatrówka, spodnie przy kostkach, kieszenie, przód spodni, buty, czapki
+Prośba: głowa „wyciągnięta do przodu”, spodnie mocno poszerzają się przy kostkach, lekko wygładzić wszystkie pogniecenia
+(szczególnie spodnie), subtelniejsze kieszenie spodni, naprawić zdjęcie (czerwona wiatrówka z granatowym pasem
+z poszarpaną krawędzią), lepsze czapki i czapki z daszkiem.
+- **Głowa (`headPt`, body.js):** dolna połowa „jajka” była ścinana do przodu o 0,3·zf (broda ~3 cm przed czołem, długa
+  oś głowy pochylona: głowa wysunięta na szyi). Teraz 0,14. Żuchwa czytelna, broda nad szyją.
+- **Bloki koloru (wiatrówka, `colorblock`):** jedna rura korpusu z `geometry.userData.matBands=[{y0,y1,mat}]`. Powłoka
+  (`buildShells` → `L.bands`, `shEmit`) tnie trójkąty dokładnie po wysokościach pasa (nowe wierzchołki na krawędziach,
+  wspólne dla obu stron) i nie zawija tam brzegu (`shTurnEdge` z `skip`). Wcześniej trzy rury i materiał trójkąta z siatki
+  pomocniczej: schodkowa krawędź.
+- **Dół nogawek:** `legWrinkles` (fala nad dołem 0,35→0,1, szum, kolano, krok mniej), `shKeptOverShoes` rozchodzi się w górę
+  z zanikiem 0,82 (było 0,93: dzwon wokół kostki). Wszystkie fałdy `shFolds` ×0,8, nogawki płycej.
+- **Spodnie na butach z cholewką:** `PANTS.hem` zapamiętany; sznurówki, haczyki, zamek, przeszycia, uchwyty i krążek
+  cholewki zasłonięte nogawką nie są budowane (shoes.js, `shown(y)`). `shObstacles` bierze przeszkodę z okna ±8 mm
+  w pionie (kołnierz cholewki przecinał trójkąt nad nią) i jest wołany drugi raz po fałdach (drape/hull/fałdy znają tylko
+  ciało). Zachowany dół: `shKeptOverShoes` → `shBlendKept` → `shKeptOverShoes(…,false)` (bez progu na granicy powłoki).
+- **Przód spodni (krocze):** `shFrontBridge` (wypukła otoczka przodu w przekrojach od 12 cm pod `cy` do 16 cm nad)
+  i na końcu `shBodyClear` reguła zwisania z rozporka (kolumny |x|<7 cm, cofanie ≤0,45 na jednostkę wysokości): tkanina
+  nie podwija się pod wybrzuszenie (z przodu spodnie wyglądały jak pośladki). „Wąsy” przy kroczu ukośne i płytsze.
+- **Kieszenie:** przeszycia tonalne poza denimem (−0,14 zamiast −0,28), kieszenie wpuszczane z tyłu jako dwie wypustki
+  z cienką szczeliną (było: ciemny blok jak dziura), kieszeń cargo płaska (4 mm) w kolorze spodni.
+- **Czapki (acc.js):** `crownPt` / `crownShell`: główka jako superelipsoida od linii czapki do własnego wierzchu (nigdy
+  w głowie). Baseball/trucker: okrągła główka z podniesionym przodem, szwy, wywietrzniki, guzik, pasek z tyłu, daszek
+  dłuższy, wygięty, z przeszyciami (opadanie skaluje się z wysięgiem: końce nie wchodzą w skronie). Beanie/fisherman:
+  zaokrąglona, gruby zamknięty mankiet, metka. Bucket: niska główka z płaskim wierzchem, miękkie opadające rondo.
+  `hatLineNy` uśredniona w oknie ±0,3 rad (bez „V” z tyłu). Kaszkiet, beret, fedora, kufi bez zmian.
+- **Znane, nie ruszane:** zarost (`beard`) to płaskie ciemne płaty; dłoń opierająca się o biodro może przeciąć detal
+  spodni (nit/szlufka).

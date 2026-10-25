@@ -34,10 +34,11 @@ function pantsLegR(y,fit,T){
   return Math.max(s*Math.pow(BC.b,0.8)*(1+(BC.F.hips-1)*0.4*(1-t)),body+0.008);
 }
 function legWrinkles(hem,amp=1){return(a,tt,s)=>{const y=s.y,r=s.rx,e=Math.max(0,r-legAt(y));let d=0;
-  d+=gauss(y-0.5,0.05)*0.12*e*Math.sin(y*120+Math.sin(a*2)*2.2+a*1.5)*(0.5+0.5*Math.max(0,-Math.sin(a)));
-  if(y<hem+0.14)d+=(1-(y-hem)/0.14)*0.35*Math.min(e,0.022)*Math.sin(y*115+a*3);
-  d+=gauss(y-0.77,0.05)*0.18*(e+0.01)*Math.sin(a*6+y*25)*Math.max(0,Math.sin(a));
-  d+=0.14*Math.min(e,0.04)*fbm(Math.cos(a)*2.2,y*6,Math.sin(a)*2.2);
+  d+=gauss(y-0.5,0.05)*0.08*e*Math.sin(y*120+Math.sin(a*2)*2.2+a*1.5)*(0.5+0.5*Math.max(0,-Math.sin(a)));
+  /* (a gentle ripple over the shoe: 0.35 rippled the hem 8 mm in and out, a bell round the ankle) */
+  if(y<hem+0.1)d+=(1-(y-hem)/0.1)*0.1*Math.min(e,0.02)*Math.sin(y*115+a*3);
+  d+=gauss(y-0.77,0.05)*0.12*(e+0.01)*Math.sin(a*6+y*25)*Math.max(0,Math.sin(a));
+  d+=0.09*Math.min(e,0.04)*fbm(Math.cos(a)*2.2,y*6,Math.sin(a)*2.2);
   return 1+amp*d/r;};}
 function pantsSize(P,waistY){
   const m=BC.meas,o={d:0,leg:0,hem:null,stack:0};if(!m)return o;
@@ -85,7 +86,8 @@ function buildPants(G,P,T){
   const mat=P.mat||T.mat,pat=P.pattern||'solid',c2=P.color2||'#f4f1ea';
   MK_STIFF=(STIFF[mat]||0.3)*(T.tight||fit.e<0.008?0.15:0.8);
   const m=fabric(mat,P.color,pat,c2),mb=fabric(mat,shade(P.color,-0.08),pat,shade(c2,-0.08));
-  const thread=mat==='denim'?'#c98a3a':shade(P.color,lumHex(P.color)<0.25?0.12:-0.28);
+  /* (tonal stitching on everything but denim: contrast thread drew dotted outlines round every pocket) */
+  const thread=mat==='denim'?'#c98a3a':shade(P.color,lumHex(P.color)<0.25?0.08:-0.14);
   let hem=PW.hem!=null&&['full','stacked','cuffed','jogger'].includes(P.length)?PW.hem:len.hem;
   /* the legs slide down with the waist: long trousers bunch over the shoes */
   if(sagD&&hem<0.2)hem=Math.max(0.02,hem-sagD*0.5);const SH=SHOES[S.shoes.type]||{};
@@ -118,10 +120,12 @@ function buildPants(G,P,T){
     if(stripes)for(const o of [-0.1,0.07]){const a0=out+o*(side>0?1:-1);G.add(mk(patch(lr,Math.min(a0,a0+0.035*(side>0?1:-1)),Math.max(a0,a0+0.035*(side>0?1:-1)),hem+0.02,0.9,0.0016,{x,nv:60,seg:2,mod}),fabric(mat,c2)));}
     if(T.cargo&&hem<0.5){
       const pf=y=>addE(lr(y),0.008),a0=out-0.6,a1=out+0.6;
-      G.add(mk(patch(lr,a0,a1,0.5,0.655,0.008,{x,nv:8,seg:14}),mb));
-      G.add(mk(patch(lr,a0-0.04,a1+0.04,0.632,0.67,0.013,{x,nv:3,seg:14}),mb));
-      const sp=[];for(let k=0;k<=14;k++){const a=lerp(a0,a1,k/14);sp.push(ringPt(addE(lr(0.505),0.0095),a,0.505,1,x));}stitchPts(G,sp,thread);
-      const btn=ringPt(addE(lr(0.645),0.015),out,0.645,1,x);buttonAt(G,btn,V3(btn.x-x,0,btn.z),0.0055,plain(shade(P.color,-0.35),.4));
+      /* (a flat patch of the same cloth: a thick, darker block read as stuck on) */
+      const mc=fabric(mat,shade(P.color,-0.03),pat,shade(c2,-0.03));
+      G.add(mk(patch(lr,a0,a1,0.5,0.655,0.0042,{x,nv:8,seg:14}),mc));
+      G.add(mk(patch(lr,a0-0.03,a1+0.03,0.632,0.668,0.0075,{x,nv:3,seg:14}),mc));
+      const sp=[];for(let k=0;k<=14;k++){const a=lerp(a0,a1,k/14);sp.push(ringPt(addE(lr(0.505),0.0055),a,0.505,1,x));}stitchPts(G,sp,thread);
+      const btn=ringPt(addE(lr(0.645),0.0095),out,0.645,1,x);buttonAt(G,btn,V3(btn.x-x,0,btn.z),0.0048,plain(shade(P.color,-0.18),.4));
     }
     if(T.carpenter){
       if(hem<0.36){G.add(mk(patch(lr,FRONT-0.85,FRONT+0.85,0.36,0.63,0.0035,{x,nv:16,seg:18,mod}),m));
@@ -151,8 +155,11 @@ function buildPants(G,P,T){
     const btn=onFront(wbF,0.0,waistY-0.017,0.004);buttonAt(G,btn,V3(0,0,1),0.0085,metalMat(mat==='denim'?'gold':'silver'),0.004);
   }else if(T.slant||T.welt){
     if(T.slant)for(const sx of sides){const pts=[];for(let k=0;k<=8;k++){const t=k/8;pts.push(onFront(tRf,sx*lerp(0.09,0.97*tRf(waistY-0.13).rx,t),waistY-0.006-0.125*t));}stitchPts(G,pts,thread);}
-    if(T.welt)for(const c of [BACKA-0.55,BACKA+0.55]){G.add(mk(patch(tRf,c-0.24,c+0.24,waistY-0.085,waistY-0.074,0.002,{nv:2,seg:6}),plain(shade(P.color,-0.45),.9)));
-      const b=envPt(tRf(waistY-0.068),c,waistY-0.068,0.003);buttonAt(G,b,radialN(b),0.0045,plain(shade(P.color,-0.3),.5));}
+    /* back welt pockets: two narrow lips of the cloth with the slit between them (a dark block read as a hole) */
+    if(T.welt)for(const c of [BACKA-0.55,BACKA+0.55]){const yS=waistY-0.08;
+      G.add(mk(patch(tRf,c-0.22,c+0.22,yS-0.0055,yS+0.0055,0.0018,{nv:2,seg:6}),fabric(mat,shade(P.color,-0.05),pat,c2)));
+      G.add(mk(patch(tRf,c-0.21,c+0.21,yS-0.0007,yS+0.0007,0.0024,{nv:1,seg:6}),plain(shade(P.color,-0.32),.9)));
+      const b=envPt(tRf(yS+0.011),c,yS+0.011,0.0028);buttonAt(G,b,radialN(b),0.0036,plain(shade(P.color,-0.12),.5));}
     if(!T.elastic){const fb=Math.max(0.915,waistY-0.15),fly=[[0.03,waistY-0.04],[0.03,fb+0.016],[0.006,fb]].map(([x,y])=>onFront(tRf,x,y));stitchPts(G,fly,thread);
       const btn=onFront(wbF,0.012,waistY-0.017,0.004);buttonAt(G,btn,V3(0,0,1),0.0062,plain(shade(P.color,-0.3),.4));}
   }
@@ -161,7 +168,7 @@ function buildPants(G,P,T){
   if(T.belt){loops=beltLoops(G,waistY,hipE,mb,wbH,!!P.belt);if(P.belt)belt(G,waistY,hipE,P);}
   if(T.strings)drawstrings(G,waistY-0.008,0.13,[-0.024,0.024],y=>addE(pantsSeat(Math.max(y,waistY-0.2)),hipE+0.006));
   if(stripes){for(const a of [0,Math.PI])for(const o of [-0.06,0.06])G.add(mk(patch(tRf,a+o-0.018,a+o+0.018,0.88,waistY-wbH,0.0016,{nv:14,seg:2}),fabric(mat,c2)));}
-  PANTS={waistY,hipE,rf:tRf,loops};
+  PANTS={waistY,hipE,rf:tRf,loops,hem};
   /* the layer must enclose belt loops, buttons, rivets and patch pockets, or tops laid over it show them through */
   const lay=P.belt?0.016:T.belt||T.jeans||T.jeansFront||T.cargo?0.012:0.007;
   LAYERS.push({torso:y=>(y>=0.74&&y<=waistY+0.004)?addE(tRf(y),lay):(y>waistY&&y<=waistY+0.05)?addE(tRf(y),lay-(hipE+lay)*smooth((y-waistY-0.004)/0.046)):null,

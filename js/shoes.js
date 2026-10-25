@@ -167,19 +167,22 @@ function buildShoe(GS,G,side,P,T,footM,bare){
   /* ---- shaft (boots, in body space) ---- */
   if(boot){
     const y0=H0*0.55,y1=T.shaft,x=side*BC.legX,E=T.western?0.018:SHAFT_E;
+    /* trousers worn over the boot hide the shaft above their hem: its laces, hooks, zip, tabs and stitching are not built
+       there (thin, they slipped through the trousers' fit and showed on top of the leg) */
+    const cov=PANTS&&PANTS.hem!=null&&PANTS.hem<y1-0.03?PANTS.hem:null,shown=y=>cov==null||y<cov-0.006;
     const rf=y=>{const r=legAt(y)+E+(T.western?0.02*smooth((y-0.18)/0.12):0);return{rx:r*1.02,rz:r*1.05,rzb:r*1.12,n:2.1};};
     {const s1=mk(tube(vSamples(y0,y1,24,rf,x,-0.004),{seg:44,mod:T.elastic?null:(a,t,s)=>1+0.012*Math.sin(s.y*60+a)*smooth((s.y-y0)/0.06)}),up);s1.userData.obst=true;G.add(s1);}
     {const s2=mk(tube(vSamples(y1-0.016,y1+0.002,4,y=>addE(rf(y),0.002+roundE(y,y1-0.016,y1+0.002,0.003)),x,-0.004),{seg:44}),T.ankleDisc?acc:dark);s2.userData.obst=true;G.add(s2);}
     if(T.elastic)for(const c of [0,Math.PI])G.add(mk(tube(vSamples(y0+0.03,y1-0.02,6,y=>addE(rf(y),0.0012),x,-0.004),{a0:c-0.45,a1:c+0.45,seg:8}),plain('#141312',0.9,0,'gore')));
-    if(T.pull)for(const c of [FRONT,BACKA]){const p=envPt(rf(y1),c,y1,0.002,x,-0.004),t=mk(new THREE.TorusGeometry(0.011,0.0028,6,14,Math.PI),dark);t.position.copy(p);t.rotation.y=c===FRONT?0:Math.PI;G.add(t);}
-    if(T.western)for(const sd of [-1,1]){const pts=[];for(let k=0;k<=16;k++){const t=k/16,y=lerp(y0+0.04,y1-0.03,t);pts.push(envPt(addE(rf(y),0.0016),(sd>0?0:Math.PI)+0.25*Math.sin(t*Math.PI*3),y,0,x,-0.004));}G.add(mk(stitchGeo(pts),stitchMat('#e6dcc6')));}
-    if(T.zipBoot){const pts=[];for(let k=0;k<=12;k++){const y=lerp(y0+0.01,y1-0.01,k/12);pts.push(envPt(addE(rf(y),0.002),side>0?Math.PI:0,y,0,x,-0.004));}G.add(mk(cordGeo(pts,0.0022,false,5,40),metalMat('silver')));}
+    if(T.pull&&shown(y1))for(const c of [FRONT,BACKA]){const p=envPt(rf(y1),c,y1,0.002,x,-0.004),t=mk(new THREE.TorusGeometry(0.011,0.0028,6,14,Math.PI),dark);t.position.copy(p);t.rotation.y=c===FRONT?0:Math.PI;G.add(t);}
+    if(T.western&&shown(y0+0.06))for(const sd of [-1,1]){const pts=[];for(let k=0;k<=16;k++){const t=k/16,y=lerp(y0+0.04,y1-0.03,t);if(!shown(y))break;pts.push(envPt(addE(rf(y),0.0016),(sd>0?0:Math.PI)+0.25*Math.sin(t*Math.PI*3),y,0,x,-0.004));}if(pts.length>1)G.add(mk(stitchGeo(pts),stitchMat('#e6dcc6')));}
+    if(T.zipBoot){const pts=[];for(let k=0;k<=12;k++){const y=lerp(y0+0.01,y1-0.01,k/12);if(!shown(y))break;pts.push(envPt(addE(rf(y),0.002),side>0?Math.PI:0,y,0,x,-0.004));}if(pts.length>1)G.add(mk(cordGeo(pts,0.0022,false,5,40),metalMat('silver')));}
     if(laced){const n=T.laces,rowsV=[],rowsS=[];
       for(let i=0;i<3;i++){const s=lerp(0.6,0.34,i/2);rowsV.push([Lr.pt(s,Math.PI/2-0.42,0.0015),Lr.pt(s,Math.PI/2+0.42,0.0015)]);}
       laceRow(GS,Lr,rowsV,laceM,eyelet);
-      for(let i=0;i<n-3;i++){const y=lerp(y0+0.01,y1-0.025,i/Math.max(1,n-4));rowsS.push([envPt(addE(rf(y),0.002),FRONT-0.5,y,0,x,-0.004),envPt(addE(rf(y),0.002),FRONT+0.5,y,0,x,-0.004)]);}
+      for(let i=0;i<n-3;i++){const y=lerp(y0+0.01,y1-0.025,i/Math.max(1,n-4));if(!shown(y))continue;rowsS.push([envPt(addE(rf(y),0.002),FRONT-0.5,y,0,x,-0.004),envPt(addE(rf(y),0.002),FRONT+0.5,y,0,x,-0.004)]);}
       if(rowsS.length>1){const gS=new THREE.Group();laceRow(gS,Lr,rowsS,laceM,eyelet);G.add(gS);}
-      if(T.ankleDisc){const p=envPt(addE(rf(y0+0.05),0.003),side>0?Math.PI:0,y0+0.05,0,x,-0.004),d=mk(new THREE.CylinderGeometry(0.018,0.018,0.003,24),acc);d.position.copy(p);d.quaternion.copy(qFromTo(VY,V3(p.x-x,0,p.z)));G.add(d);}}
+      if(T.ankleDisc&&shown(y0+0.06)){const p=envPt(addE(rf(y0+0.05),0.003),side>0?Math.PI:0,y0+0.05,0,x,-0.004),d=mk(new THREE.CylinderGeometry(0.018,0.018,0.003,24),acc);d.position.copy(p);d.quaternion.copy(qFromTo(VY,V3(p.x-x,0,p.z)));G.add(d);}}
   }
 }
 function openShoe(GS,Lr,P,T,up,acc){

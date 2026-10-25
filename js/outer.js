@@ -46,8 +46,9 @@ function buildOuter(G,P=S.outer){
   const thread=shade(P.color,lumHex(P.color)<0.3?0.12:-0.22);
   /* body */
   const nB=T.quilt?130:96;
-  if(T.colorblock){G.add(mkMain(tube(vSamples(hem,1.17,50,y=>ringF(y)),{seg:84,mod}),m));G.add(mkMain(tube(vSamples(1.17,1.35,24,y=>ringF(y)),{seg:84,mod}),fabric(mat,c2)));G.add(mkMain(tube(vSamples(1.35,top,24,y=>ringF(y)),{seg:84,mod}),m));}
-  else G.add(mkMain(tube(vSamples(hem,top,nB,y=>ringF(y)),{seg:84,mod}),m));
+  /* colour block: one body, the chest band a second material cut along its heights on the fitted shell (three stacked
+     tubes were fitted apart: the shell took each triangle's colour from a coarse grid, a stepped edge round the chest) */
+  {const bm=mkMain(tube(vSamples(hem,top,nB,y=>ringF(y)),{seg:84,mod}),m);if(T.colorblock)bm.geometry.userData.matBands=[{y0:1.17,y1:1.35,mat:fabric(mat,c2)}];G.add(bm);}
   let anyGap=false;for(let i=0;i<24;i++)if(gapX(lerp(hem,top,i/23))>0.01)anyGap=true;
   if(anyGap){const lm=mk(tube(vSamples(hem+0.004,top-0.004,60,y=>ringF(y,-0.0035)),{seg:84,mod}),liningMat(T,P));lm.userData.lining=true;G.add(lm);}
   /* front edges */

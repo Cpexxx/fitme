@@ -107,8 +107,9 @@ function headPt(th,ph,h=0){
   let x=wx*sr*c,z=(s>=0?zf:zb)*sr*s,y=D.ry*ny;
   /* a jaw, not an egg: the chin comes forward a little */
   if(s>0)z+=0.006*s*smooth((-ny-0.5)/0.32)*gauss(c,0.55);
-  /* the lowest point is the chin at the front, not the middle of an egg: the lower half leans forward */
-  if(ny<0)z+=D.zf*0.3*Math.pow(-ny,1.7);
+  /* the lowest point is the chin at the front, not the middle of an egg: the lower half leans forward a little
+     (0.3 sheared the jaw 3 cm forward: the egg's long axis tipped, a head stretched forward on its neck) */
+  if(ny<0)z+=D.zf*0.14*Math.pow(-ny,1.7);
   /* behind the jaw and at the back the skull runs smoothly into the neck (no round bottom with the neck stuck under it) */
   /* under the jawline the head tucks in towards the neck (all round except the chin): the jaw reads as an edge, not a bowl;
      the chin is spared over a wide, smooth span (a narrow one cut a hooked groove at each corner of the chin) */

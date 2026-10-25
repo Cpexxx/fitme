@@ -6,32 +6,71 @@ function hatShell(G,mat,h,o={}){
     return headPt(th,ph,h*(o.tuck?1-o.tuck*smooth((v-0.8)/0.2):1)+(o.dome?o.dome*Math.pow(1-v,1.5):0)+(o.front?o.front*smooth(Math.sin(ph))*(1-v)*v*4:0),false);},{wrapU:!o.span,uRep:o.uRep||16,vRep:3,noAO:true}),mat));
 }
 function hatEdge(ph,h){return headPt(Math.acos(clamp(hatLineNy(ph),-0.98,0.98)),ph,h,false);}
+/* a hat's crown: its own rounded dome from the hat line up (a superellipse, n > 2 fuller at the shoulders), never inside the
+   head (following the egg head the crowns came to a point like a helmet); v = 0 at the hat line, 1 at the top.
+   o: h (clearance at the hat line), top (over the head's top), n, front (front panels standing forward), fwd */
+function crownPt(ph,v,o){const hc=BC.headC,ry=BC.hd.ry,h=o.h,E=hatEdge(ph,h),dx=E.x-hc.x,dz=E.z-hc.z,Rr=Math.hypot(dx,dz)||1e-6,yT=hc.y+ry+h+(o.top!=null?o.top:0.01);
+  const s=clamp(v,0,1)*Math.PI/2,n=o.n||2.4,y=E.y+(yT-E.y)*Math.pow(Math.sin(s),2/n);let R=Rr*Math.pow(Math.cos(s),2/n)*(1-(o.taper||0)*Math.sin(s));
+  if(o.front){const f=Math.max(0,Math.cos(ph-(o.fwd!=null?o.fwd:FRONT)));R+=o.front*f*f*Math.sin(Math.PI*Math.min(1,v*1.25));}
+  const hr=headHorizR(y,ph);if(hr!=null)R=Math.max(R,hr+h*0.85);
+  return V3(hc.x+dx/Rr*R,y,hc.z+dz/Rr*R);}
+function crownShell(G,mat,o){G.add(mk(surf(96,26,(u,v)=>crownPt((o.ph0||0)+u*(o.span||TAU),v,o),{wrapU:!o.span,uRep:o.uRep||16,vRep:3,noAO:true}),mat));}
 function buildHat(G){
   const A=S.acc.cap,t=A.type;if(!t||t==='none')return;
   const c=A.color||'#1e1e1f',c2=A.color2||'#f4f1ea',hc=BC.headC,ry=BC.hd.ry,back=A.back&&(t==='baseball'||t==='trucker'),fwd=back?BACKA:FRONT;
   const H0=0.0085;
   switch(t){
     case 'baseball':case 'trucker':{
-      const m=fabric('twill',c),mesh=fabric('mesh',t==='trucker'?c2:c);
-      if(t==='trucker'){hatShell(G,m,H0,{dome:0.012,ph0:fwd-1.2,span:2.4});hatShell(G,mesh,H0-0.0005,{dome:0.012,ph0:fwd+1.2,span:TAU-2.4});}
-      else hatShell(G,m,H0,{dome:0.01});
-      for(let k=0;k<6;k++){const ph=fwd+k*Math.PI/3+Math.PI/6,pts=[];for(let i=0;i<=12;i++){const ny0=hatLineNy(ph),th=i/12*Math.acos(ny0);pts.push(headPt(th,ph,H0+0.01*Math.pow(1-i/12,1.5)+0.0012,false));}G.add(mk(stitchGeo(pts),stitchMat(shade(c,0.25))));}
-      const top=headPt(0,0,H0+0.012,false),bt=mk(new THREE.SphereGeometry(0.008,14,10),m);bt.scale.y=0.45;bt.position.copy(top);G.add(bt);
-      const brim=(off,mat)=>G.add(mk(surf(30,8,(u,v)=>{const ph=fwd+(u*2-1)*0.95,E=hatEdge(ph,H0+0.001),d=Math.abs(ph-fwd)/0.95,w=0.078*Math.pow(Math.max(0,Math.cos(Math.min(d,1)*Math.PI/2)),0.55)+0.004;
-        const dir=V3(Math.cos(ph),0,Math.sin(ph)).lerp(V3(Math.cos(fwd),0,Math.sin(fwd)),0.55).normalize();return E.clone().addScaledVector(dir,w*v).add(V3(0,-0.012*v-0.016*d*d*v+off,0));},{noAO:true}),mat));
-      brim(0.0015,m);brim(-0.0015,fabric('twill',shade(c,-0.15)));
-      const ep=[];for(let i=0;i<=30;i++){const ph=fwd+(i/15-1)*0.95,E=hatEdge(ph,H0+0.001),d=Math.abs(ph-fwd)/0.95,w=0.078*Math.pow(Math.max(0,Math.cos(Math.min(d,1)*Math.PI/2)),0.55)+0.004,dir=V3(Math.cos(ph),0,Math.sin(ph)).lerp(V3(Math.cos(fwd),0,Math.sin(fwd)),0.55).normalize();ep.push(E.clone().addScaledVector(dir,w).add(V3(0,-0.012-0.016*d*d,0)));}
-      G.add(mk(cordGeo(ep,0.0018,false,6,60),m));break;}
+      /* a six-panel cap: a round crown with the front panels standing up, seams and an eyelet on each panel, a button on top,
+         a strap at the back and a pre-curved brim (the dad-cap shape; a flat narrow plate read as a visor stuck on) */
+      const m=fabric('twill',c),mesh=fabric('mesh',t==='trucker'?c2:c),o={h:H0,top:0.016,n:2.6,front:0.012,fwd};
+      if(t==='trucker'){crownShell(G,m,Object.assign({},o,{ph0:fwd-1.2,span:2.4}));crownShell(G,mesh,Object.assign({},o,{h:H0-0.0005,ph0:fwd+1.2,span:TAU-2.4}));}
+      else crownShell(G,m,o);
+      const so=Object.assign({},o,{h:H0+0.0011});
+      for(let k=0;k<6;k++){const ph=fwd+k*Math.PI/3+Math.PI/6,pts=[];for(let i=0;i<=14;i++)pts.push(crownPt(ph,i/14*0.97,so));G.add(mk(stitchGeo(pts),stitchMat(shade(c,0.25))));}
+      const eo=Object.assign({},o,{h:H0+0.0006}),em=plain(shade(c,-0.35),.8);
+      for(let k=0;k<6;k++){const ph=fwd+k*Math.PI/3,p=crownPt(ph,0.74,eo),nrm=p.clone().sub(BC.headC).normalize();const e=mk(new THREE.TorusGeometry(0.0022,0.0008,6,12),em);e.position.copy(p);e.quaternion.copy(qFromTo(VZ,nrm));G.add(e);}
+      const top=crownPt(0,1,o).add(V3(0,0.0012,0)),bt=mk(new THREE.SphereGeometry(0.0075,14,10),m);bt.scale.y=0.42;bt.position.copy(top);G.add(bt);
+      /* the strap at the back: a band over the opening, a small metal slider */
+      {const bk=fwd+Math.PI,sm=fabric('twill',shade(c,-0.12));G.add(mk(surf(14,3,(u,v)=>crownPt(bk+(u*2-1)*0.36,v*0.09,Object.assign({},o,{h:H0+0.0016})),{noAO:true}),sm));
+        const sl=mk(new THREE.BoxGeometry(0.014,0.008,0.003),metalMat('silver'));const sp=crownPt(bk+0.12,0.045,Object.assign({},o,{h:H0+0.0032}));sl.position.copy(sp);sl.lookAt(sp.clone().add(sp.clone().sub(BC.headC).setY(0)));G.add(sl);}
+      const BW=1.0,BL=0.076,brimPt=(u,v,off)=>{const ph=fwd+(u*2-1)*BW,E=hatEdge(ph,H0+0.001),d=Math.abs(ph-fwd)/BW,w=BL*Math.pow(Math.max(0,Math.cos(Math.min(d,1)*Math.PI/2)),0.5)+0.004;
+        const dir=V3(Math.cos(ph),0,Math.sin(ph)).lerp(V3(Math.cos(fwd),0,Math.sin(fwd)),0.6).normalize();
+        /* curved across its width (the sides bend down), a little down towards the tip */
+        /* (the drop scales with how far out the brim reaches: at its narrow ends it went down into the temples) */
+        const r=w*v/BL;return E.clone().addScaledVector(dir,w*v).add(V3(0,-(0.011+0.02*d*d)*r+off,0));};
+      const brim=(off,mat)=>G.add(mk(surf(36,8,(u,v)=>brimPt(u,v,off),{noAO:true}),mat));
+      brim(0.0016,m);brim(-0.0016,fabric('twill',shade(c,-0.18)));
+      const ep=[];for(let i=0;i<=36;i++)ep.push(brimPt(i/36,1,0));G.add(mk(cordGeo(ep,0.0019,false,6,72),m));
+      /* stitched rows along the brim */
+      for(const k of [0.35,0.62,0.86]){const sp=[];for(let i=0;i<=30;i++)sp.push(brimPt(0.04+0.92*i/30,k,0.0024));G.add(mk(stitchGeo(sp),stitchMat(shade(c,0.25))));}
+      break;}
     case 'beanie':case 'fisherman':{
-      const m=fabric(t==='beanie'?'knit':'rib',c);hatShell(G,m,H0+0.002,{dome:t==='beanie'?0.014:0.004,uRep:22});
-      G.add(mk(surf(96,6,(u,v)=>{const ph=u*TAU,ny0=hatLineNy(ph),th0=Math.acos(ny0),th=th0-v*(t==='beanie'?0.36:0.3);return headPt(th,ph,0.016+0.003*Math.sin(Math.PI*v),false);},{wrapU:true,uRep:22,vRep:1,noAO:true}),fabric('rib',shade(c,-0.04))));break;}
+      /* a knit cap: a round, slightly slouched crown (not the egg head's point), a thick turned-up cuff closed top and bottom,
+         a small woven label at the front of the cuff */
+      const fm=t==='fisherman',m=fabric(fm?'rib':'knit',c),cm=fabric('rib',shade(c,-0.04)),o={h:H0+0.002,top:fm?0.004:0.024,n:fm?2.9:2.2,uRep:22};
+      crownShell(G,m,o);
+      const vc=fm?0.42:0.34,ch=0.0075;
+      const cp=(ph,v,extra)=>crownPt(ph,v,Object.assign({},o,{h:o.h+extra}));
+      G.add(mk(surf(96,6,(u,v)=>cp(u*TAU,v*vc,ch+0.0025*Math.sin(Math.PI*v)),{wrapU:true,uRep:22,vRep:1,noAO:true}),cm));
+      G.add(mk(surf(96,2,(u,v)=>cp(u*TAU,0,v*ch),{wrapU:true,uRep:22,vRep:1,noAO:true}),cm));
+      G.add(mk(surf(96,2,(u,v)=>cp(u*TAU,vc,(1-v)*ch),{wrapU:true,uRep:22,vRep:1,noAO:true}),cm));
+      {const lc=lumHex(c)<0.35?'#e9e2d2':'#2b2a28',lm=plain(lc,.8);G.add(mk(surf(4,3,(u,v)=>cp(fwd+(u*2-1)*0.075,vc*(0.3+0.4*v),ch+0.0032),{noAO:true}),lm));}
+      break;}
     case 'kufi':{/* a brimless round cap, its edge drawn in close to the head (no bowl-like lip), with embroidered bands */
       const m=fabric('knit',c,'dots',shade(c,lumHex(c)<0.3?0.35:-0.25));hatShell(G,m,0.0062,{dome:0.003,uRep:26,tuck:0.25});
       for(const k of [0.25,0.6]){const pts=[];for(let i=0;i<=72;i++){const ph=i/72*TAU,ny0=hatLineNy(ph),th=Math.acos(ny0)*(1-k*0.45);pts.push(headPt(th,ph,0.0062+0.003*Math.pow(k*0.45,1.5)+0.0012,false));}G.add(mk(cordGeo(pts,0.0016,true,6,144),plain(c2,.5)));}
       {const pts=[];for(let i=0;i<=96;i++){const ph=i/96*TAU;pts.push(headPt(Math.acos(hatLineNy(ph))-0.004,ph,0.0062*0.75+0.0016,false));}G.add(mk(cordGeo(pts,0.002,true,8,192),fabric('rib',shade(c,-0.06))));}break;}
-    case 'bucket':{const m=fabric('canvas',c);hatShell(G,m,H0+0.004,{dome:0.016});
-      G.add(mk(surf(96,6,(u,v)=>{const ph=u*TAU,E=hatEdge(ph,H0+0.004);const r=V3(Math.cos(ph),0,Math.sin(ph));return E.clone().addScaledVector(r,0.058*v).add(V3(0,-0.032*v-0.004*Math.sin(ph*3)*v,0));},{wrapU:true,uRep:30,noAO:true}),m));
-      for(const k of [0.35,0.7]){const pts=[];for(let i=0;i<=60;i++){const ph=i/60*TAU,E=hatEdge(ph,H0+0.004),r=V3(Math.cos(ph),0,Math.sin(ph));pts.push(E.clone().addScaledVector(r,0.058*k).add(V3(0,-0.032*k+0.0015,0)));}G.add(mk(stitchGeo(pts,true),stitchMat(shade(c,0.3))));}break;}
+    case 'bucket':{/* a low crown with a flat top and a soft brim sloping down all round (tall and stiff it read as a hard hat) */
+      const m=fabric('canvas',c),o={h:H0+0.004,top:0.006,n:3.2,taper:0.1};crownShell(G,m,o);
+      /* (outwards from the head's axis at the edge point: along the parameter angle the egg's superellipse turned the
+         directions unevenly and the brim folded at the back corners) */
+      const BL=0.05,hcB=BC.headC,bp=(ph,v,off)=>{const E=hatEdge(ph,H0+0.004),r=V3(E.x-hcB.x,0,E.z-hcB.z).normalize();return E.clone().addScaledVector(r,BL*v).add(V3(0,-0.026*v-0.01*v*v-0.0012*Math.sin(ph*3+0.6)*v*v+off,0));};
+      G.add(mk(surf(96,6,(u,v)=>bp(u*TAU,v,0.0012),{wrapU:true,uRep:30,noAO:true}),m));G.add(mk(surf(96,6,(u,v)=>bp(u*TAU,v,-0.0012),{wrapU:true,uRep:30,noAO:true}),fabric('canvas',shade(c,-0.1))));
+      {const ep=[];for(let i=0;i<=96;i++)ep.push(bp(i/96*TAU,1,0));G.add(mk(cordGeo(ep,0.0016,true,6,192),m));}
+      for(const k of [0.3,0.55,0.8]){const pts=[];for(let i=0;i<=72;i++)pts.push(bp(i/72*TAU,k,0.0022));G.add(mk(stitchGeo(pts,true),stitchMat(shade(c,lumHex(c)<0.3?0.18:-0.12))));}
+      {const pts=[];for(let i=0;i<=72;i++)pts.push(crownPt(i/72*TAU,0.18,Object.assign({},o,{h:o.h+0.0012})));G.add(mk(stitchGeo(pts,true),stitchMat(shade(c,lumHex(c)<0.3?0.18:-0.12))));}
+      break;}
     case 'flat':{const m=fabric('wool',c,'houndstooth',shade(c,-0.3));hatShell(G,m,H0+0.002,{dome:0.004,front:0.02});
       G.add(mk(surf(24,5,(u,v)=>{const ph=FRONT+(u*2-1)*0.85,E=hatEdge(ph,H0+0.002),d=Math.abs(ph-FRONT)/0.85;return E.clone().add(V3(0,-0.006*v,(0.04*Math.cos(d*Math.PI/2)+0.003)*v));},{noAO:true}),m));break;}
     case 'beret':{const m=fabric('wool',c);hatShell(G,m,H0,{dome:0.004});const b=mk(new THREE.SphereGeometry(1,40,20),m);b.scale.set(0.125,0.038,0.118);b.position.copy(hc).add(V3(0.018,ry*0.8,-0.008));b.rotation.z=-0.22;G.add(b);

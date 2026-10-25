@@ -12,7 +12,10 @@ const angFront=ph=>Math.abs(wrapA(ph-FRONT));
 function hairlineNy(ph){return interp1(HAIRLINE,angFront(ph));}
 function hatLineNy(ph){const t=capType(),tab=HAT_LINES[t];if(!tab)return null;let d=angFront(ph);const back=S.acc.cap.back&&(t==='baseball'||t==='trucker');if(back)d=Math.PI-d;
   /* with glasses on, a cap with a brim sits higher at the front: the brim clears the frame (it cut through it) */
-  return interp1(tab,d)+(back?0:hatLiftNy(t)*smooth((1.6-d)/0.9));}
+  /* (averaged over +-0.3 rad, mirrored at the front and the back: linear between the table's points the line had a V at
+     the back centre and corners on the way round - a brim following it folded there) */
+  let a=0;for(let k=-3;k<=3;k++){let x=d+k*0.1;if(x<0)x=-x;if(x>Math.PI)x=2*Math.PI-x;a+=interp1(tab,x);}
+  return a/7+(back?0:hatLiftNy(t)*smooth((1.6-d)/0.9));}
 const BRIM_DROP={baseball:0.014,trucker:0.014,flat:0.008,fedora:0.004,bucket:0.03};
 function hatLiftNy(t){if(!BRIM_DROP[t]||typeof glassesTopY!=='function')return 0;const yT=glassesTopY();if(yT==null)return 0;
   const hc=BC.headC,ry=BC.hd.ry,tab=HAT_LINES[t],edge=hc.y+ry*interp1(tab,0);return Math.max(0,(yT+0.004-(edge-BRIM_DROP[t]))/ry);}
