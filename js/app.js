@@ -112,7 +112,8 @@ let LAYERS_TOP=null;
 function runBuilders(G,GS){
   LAYERS_TOP=null;safe('body',()=>buildBody(G));safe('under',()=>buildUnder(G));MK_CTX='cloth';MK_STIFF=0;MK_LAYER='bottom';safe('bottom',()=>buildBottom(G));MK_LAYER='top';safe('top',()=>buildTop(G));LAYERS_TOP=LAYERS.slice();MK_LAYER='mid';safe('mid',()=>buildMid(G));MK_LAYER='outer';safe('outer',()=>buildOuter(G));MK_CTX='none';MK_STIFF=0;MK_LAYER='none';
   MK_CTX='hair';safe('hair',()=>buildHair(G));G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')o.userData.isHair=1;});MK_CTX='none';safe('acc',()=>buildAcc(G));safe('shoes',()=>buildShoes(GS,G));}
-function matSeq(G,GS){const m=[],c=[];for(const g of [G,GS])g.traverse(o=>{if(o.isMesh){m.push(o.material);c.push(o.geometry.attributes.position.count);}});return{m,c};}
+/* (the flowing hair's mesh is built after the clothes are fitted: a placeholder at this point - not compared by size) */
+function matSeq(G,GS){const m=[],c=[];for(const g of [G,GS])g.traverse(o=>{if(o.isMesh){m.push(o.material);c.push(o.userData.flowLock?-1:o.geometry.attributes.position.count);}});return{m,c};}
 function buildInto(group,state,cache=true){
   const saved=S;S=state;
   try{
@@ -134,6 +135,8 @@ function buildInto(group,state,cache=true){
       G=new THREE.Group();GS=new THREE.Group();
       runBuilders(G,GS);const seq=matSeq(G,GS);
       safe('shells',()=>buildShells(G,GS));
+      /* long hair falls on the fitted clothes */
+      safe('hair flow',()=>hairFlowFinish(G));
       if(cache){if(BUILT)BUILT.dispose();BUILT={key,skey,seq,G,GS,state:clone(state),weighted:false,dispose(){for(const g of [this.G,this.GS])g.traverse(o=>{if(o.isMesh&&!o.geometry.userData.keep)o.geometry.dispose();});}};}
     }
     const posed=S.pose&&S.pose!=='stand'&&POSES[S.pose];

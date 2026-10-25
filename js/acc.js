@@ -177,7 +177,7 @@ function buildShield(G,SP,yc,hw,face,fm,lm,tr,paths,hinge,thAt){const hc=BC.head
   const nb=[at(-0.09,bot(-0.09)+0.004),at(0,bot(0)+0.006).add(V3(0,0,0.002)),at(0.09,bot(0.09)+0.004)];G.add(mk(cordGeo(nb,0.0018,false,6,16),fm));
   for(const sd of [-1,1]){const e=at(sd,top(sd)-0.004);paths.push(glTemple(G,e,sd,yc,tr*1.3,thAt,fm));}
   hairOverTemples(G,paths,tr*1.3);}
-function hairOverTemples(G,paths,tr){const hair=[];G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')hair.push(o);});if(!hair.length)return;
+function hairOverTemples(G,paths,tr){if(typeof FLOW_PENDING!=='undefined'&&FLOW_PENDING)HAIR_TEMPLES={paths,tr};const hair=[];G.traverse(o=>{if(o.isMesh&&o.userData.ctx==='hair')hair.push(o);});if(!hair.length)return;
   const hc=BC.headC,Q=[];for(const pts of paths){const c=new THREE.CatmullRomCurve3(pts);for(const p of c.getSpacedPoints(80))Q.push(p);}
   let y0=9,y1=-9;for(const q of Q){y0=Math.min(y0,q.y);y1=Math.max(y1,q.y);}
   const R=0.014,v=new THREE.Vector3(),inv=new THREE.Matrix4();G.updateMatrixWorld(true);

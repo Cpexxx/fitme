@@ -486,3 +486,44 @@ jak niektóre gry (Wiedźmin 2), żeby nie było zbyt obciążające, ale wyglą
     kolce wyrzucające punkt na bok.
 - Znane: krótkie fryzury, grzywki, kucyk i koki nadal są z pasm (`hairCards`, `tailStrands`); wyglądają inaczej niż
   kosmyki długich fryzur. Przy pozie „idzie” ręka w polarze oversized wysuwa się do przodu, a włosy na barku zostają.
+
+## Runda 17 (2026-10-25): fizyka na prawdziwych ubraniach, styl malarski (matowy), kosmyki we wszystkich fryzurach
+Prośby: 1) „nic się nie zmieniło, długie włosy stoją sztywno w powietrzu”; 2) bardziej matowe; 3) kucyk z pasemkami
+z przodu; 4) curtains jak „słoma na chochole”; 5) wzorować się na dobrych fryzurach; 6) objętość i tekstura, nie
+kanciaste i płaskie; 7) styl renderu jak w Arcane (LoL); 8) włosy mają opadać na ubrania.
+- **Dlaczego wcześniej „nic się nie zmieniło”:** symulacja szła w `runBuilders`, PRZED `buildShells`. Ubrania miały wtedy
+  luźny, pierwszy obrys (szerszy o kilka cm), a ostateczne, dopasowane ubrania powstawały dopiero potem. Włosy leżały na
+  niewidocznym obrysie, w powietrzu.
+  - Teraz `hairFlow` dodaje tylko zastępczą siatkę (`userData.flowLock`, ten sam materiał: zamiana kolorów działa).
+    `hairFlowFinish(G)` (app.js, zaraz po `buildShells`) liczy symulację na gotowych siatkach i podmienia geometrię.
+    `matSeq` nie porównuje rozmiaru tej siatki.
+  - Kolizja z ciałem i ubraniami: **pole odległości** `bodySDF` (hair.js) z końcowych siatek (`sdfMeshes`: skóra
+    `bodySkin`, szyja `bodyNeck`, warstwy ubrań, szal, kaptur). Trójkąty wstemplowane w siatkę 6 mm, domknięte dylatacją
+    o 2,2 komórki, każdy poziomy przekrój zalany od brzegu (wnętrze tułowia i szczeliny między warstwami to bryła),
+    potem dokładna transformata odległości (`edt3`, Felzenszwalb; sprawdzona testem z brute force). Punkt włosa jest
+    wypychany wzdłuż gradientu na 4,5 mm. Koszt 0,3–0,7 s. Klucz cache: `sdfSig` siatek.
+  - Siła rozkładania na ramiona działa tylko na wierzchu barku (gradient pola skierowany w górę) i tuż nad barkami, bez
+    przyciągania w bok (z nim włosy z przodu były dwoma wąskimi sznurami). Fryzury do ramion (`shCut`) nie są
+    przepychane wcale, bo ich końce sterczały za krawędzią barku.
+  - Okulary: `hairOverTemples` zapamiętuje zauszniki i `hairFlowFinish` stosuje je do gotowych włosów.
+- **Materiał `lockMat` (styl malarski):** matowy (bez odbić otoczenia, `radiance*=0`), miękki terminator, jeden szeroki
+  refleks w kolorze włosów (bez białych błysków), malowane pasemka wzdłuż kosmyka (dwie warstwy linii, przerywane
+  szumem wzdłuż `uv.y` w metrach), miękka jaśniejsza krawędź sylwetki (objętość). Ciemne kolory mają minimalny refleks,
+  żeby nie były czarną plamą.
+- **`lockArrays(locks)`:** wspólny budowniczy kosmyków (12 boków, przekrój elipsa podwinięta do głowy, opcjonalna
+  normalna `O` na punkt, np. dla kucyka). `flowLocks`: długie włosy, kosmyki skupione w około 45 grup (przyciągnięte do
+  lidera tylko gdy idzie w tę samą stronę), szersze fale (`WLg` 0,15 m).
+- **Objętość:** `flowLift(ny)` (4,5–12 mm nad skórą, × `vol` tekstury) dla linii na głowie, prześwitu i powłoki pod
+  spodem.
+- **Kosmyki po skórze głowy (`scalpLocks`)** dla krótkich fryzur, grzywek i kucyka: korzenie Fibonacciego, kierunek z
+  pola czesania (`COMB.part/back/crop/side`, `combTo`), cięcie na linii (`cutStop`, z szumem na kosmyk). Warstwy: kosmyk
+  leży tym wyżej, im bliżej źródła (przedziałka) jest jego korzeń (`layer`, ślad wstecz po polu), więc nasady chowają się
+  pod sąsiadami. Twarz zostaje odsłonięta (`faceAf`).
+  - curtains (`hairCurtains`, według przewodników: przód do kości policzkowych, boki do płatków uszu): przedziałek na
+    środku, przód najpierw do przodu, potem łukiem na boki.
+  - quiff (boki jak fade, góra zaczesana do tyłu, uniesiona z przodu), slick, sidepart, pixie, grzywki (`fringeLocks`),
+    koki (`pulledLocks` + `hairBunLocks`: kosmyki nawinięte spiralą na kulę).
+  - Kucyk (`hairPonytail`): skóra zaczesana do gumki, ogon z 15 skręconych kosmyków wokół linii, po dwa pasemka z każdej
+    strony twarzy (od skroni przed uchem, falujące, do linii żuchwy).
+- Bez zmian (krótkie i teksturowane): buzz, crew, fade, curlytop, afro, twists, cornrows, dreads, braids, mullet (góra).
+- Stare `hairSheet`/`hairFringe`/`hairTail` zostały w kodzie jako zapas (pod czapką, gdy brak korzeni).

@@ -478,38 +478,49 @@ void RE_Direct_Hair(const in IncidentLight directLight,const in GeometricContext
 /* the dark inside of a mass of hair (under the strands of a hanging sheet): matte, a third darker than the hair */
 function hairCoreMat(hex,d=-0.2){const k='core|'+hex+'|'+d;if(matCache.has(k))return matCache.get(k);
   const m=new THREE.MeshStandardMaterial({color:lin(shade(hex,d)),roughness:1,metalness:0,envMapIntensity:0.15,side:THREE.DoubleSide,vertexColors:true});matCache.set(k,m);return m;}
-/* hair locks (hair.js lockGeo): closed, flattened tubes, each standing for a lock of many hairs - a sculpted, game-like
-   look instead of single strands. The lock's direction comes in the 'hairT' attribute; the surface gets soft grooves
-   across it (a few bundles per lock, uv.x round its section) and the highlight of hair: Kajiya-Kay bands along the lock */
+/* hair locks (hair.js lockGeo): closed, rounded tubes, each standing for a lock of many hairs - a sculpted, painterly look
+   (as in stylised 3D animation: matte, soft-edged shading, painted strands) instead of single hairs. The lock's direction
+   comes in the 'hairT' attribute; uv.x runs round its section, uv.y along it (in metres, offset per lock). The surface:
+   - painted strands: thin darker lines along the lock, broken and wavering along it, over a few broader bundles;
+   - matte: soft wrapped diffuse, one broad highlight band in the hair's own colour (no white glints, no reflections);
+   - a soft lighter rim at the silhouette (the painted backlight that gives a mass of hair its volume). */
 function lockMat(hex){
   const k='lock|'+hex;if(matCache.has(k))return matCache.get(k);
-  const m=new THREE.MeshStandardMaterial({color:lin(hex),roughness:0.6,metalness:0,envMapIntensity:0.35,vertexColors:true});
+  const m=new THREE.MeshStandardMaterial({color:lin(hex),roughness:0.9,metalness:0,envMapIntensity:0,vertexColors:true});
+  const NOISE=`float lkH(float n){return fract(sin(n)*43758.5453);}
+float lkN(float x){float i=floor(x),f=fract(x);f=f*f*(3.0-2.0*f);return mix(lkH(i),lkH(i+1.0),f);}
+`;
   m.onBeforeCompile=sh=>{
     sh.vertexShader='attribute vec3 hairT;varying vec3 vHT;varying vec2 vLU;\n'+sh.vertexShader.replace('#include <project_vertex>',
       '#include <project_vertex>\nvHT=normalize((modelViewMatrix*vec4(hairT,0.0)).xyz);vLU=uv;');
-    sh.fragmentShader='varying vec3 vHT;varying vec2 vLU;\n'+sh.fragmentShader
-      /* the grooves: the normal tilts across the lock and the colour darkens a little in the furrows */
+    sh.fragmentShader='varying vec3 vHT;varying vec2 vLU;\n'+NOISE+sh.fragmentShader
+      /* bundles: the normal tilts across the lock in 3 soft ridges; strands: fine ripples */
       .replace('#include <normal_fragment_begin>',`#include <normal_fragment_begin>
-  {vec3 hT=normalize(vHT),hB=normalize(cross(hT,normal));float a=vLU.x*6.2832*3.0;
-   normal=normalize(normal+hB*(0.22*cos(a)+0.08*cos(a*2.3+1.1)));}`)
+  {vec3 hT=normalize(vHT),hB=normalize(cross(hT,normal));float w=lkN(vLU.y*9.0)*1.3,a=vLU.x*6.2832*3.0+w;
+   float b=vLU.x*6.2832*11.0+lkN(vLU.y*14.0+vLU.x*5.0)*4.0;
+   normal=normalize(normal+hB*(0.16*cos(a)+0.07*cos(b)));}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
-  {float a=vLU.x*6.2832*3.0;diffuseColor.rgb*=0.9+0.1*sin(a)+0.04*sin(a*2.3+1.1);}`)
+  {float w=lkN(vLU.y*9.0)*1.3,a=vLU.x*6.2832*3.0+w;
+   float b=vLU.x*11.0+lkN(vLU.y*14.0+vLU.x*5.0)*0.7,ln=smoothstep(0.80,0.97,abs(fract(b)-0.5)*2.0)*(0.55+0.45*lkN(vLU.y*25.0+floor(b)*7.3));
+   float c=vLU.x*23.0+lkN(vLU.y*30.0+vLU.x*9.0)*1.1,ln2=smoothstep(0.86,0.98,abs(fract(c)-0.5)*2.0)*lkN(vLU.y*40.0+floor(c)*3.1);
+   diffuseColor.rgb*=(0.93+0.07*sin(a))*(1.0-0.2*ln-0.1*ln2)*(1.0+0.06*lkN(vLU.y*6.0+3.0));}`)
       .replace('#include <lights_physical_pars_fragment>',`#include <lights_physical_pars_fragment>
 void RE_Direct_Lock(const in IncidentLight directLight,const in GeometricContext geometry,const in PhysicalMaterial material,inout ReflectedLight reflectedLight){
   vec3 T=normalize(vHT),L=directLight.direction,V=geometry.viewDir,N=geometry.normal;
-  /* soft, wrapped diffuse (clay, not plastic) */
-  float wrap=clamp((dot(N,L)+0.4)/1.4,0.0,1.0);
-  reflectedLight.directDiffuse+=directLight.color*wrap*0.75*BRDF_Lambert(material.diffuseColor);
-  /* two highlights along the lock: a white one shifted towards the tip, a coloured one towards the root */
-  vec3 H=normalize(L+V);vec3 T1=normalize(T+N*0.15),T2=normalize(T-N*0.2);
-  float h1=dot(T1,H),h2=dot(T2,H),s1=pow(sqrt(max(0.0,1.0-h1*h1)),48.0),s2=pow(sqrt(max(0.0,1.0-h2*h2)),18.0);
-  vec3 tint=mix(vec3(dot(material.diffuseColor,vec3(0.33))),material.diffuseColor,0.6)*2.0;
-  reflectedLight.directSpecular+=directLight.color*clamp(dot(N,L)+0.2,0.0,1.0)*(0.03*s1+0.03*s2*tint);
+  /* soft, wrapped diffuse with a smooth terminator */
+  float nl=dot(N,L),wrap=smoothstep(-0.45,0.85,nl);
+  reflectedLight.directDiffuse+=directLight.color*wrap*0.8*BRDF_Lambert(material.diffuseColor);
+  /* one broad, soft highlight band along the lock, in the hair's colour */
+  vec3 H=normalize(L+V),T1=normalize(T+N*0.1);float h1=dot(T1,H),s1=pow(sqrt(max(0.0,1.0-h1*h1)),10.0);
+  vec3 tint=max(mix(vec3(dot(material.diffuseColor,vec3(0.33))),material.diffuseColor,0.75)*1.6,vec3(0.1,0.095,0.09));
+  reflectedLight.directSpecular+=directLight.color*smoothstep(-0.1,0.6,nl)*0.05*s1*tint;
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Lock`)
-      .replace('#include <lights_fragment_end>','radiance*=0.06;irradiance*=0.75;\n#include <lights_fragment_end>');};
-  m.customProgramCacheKey=()=>'lock5';m.userData.needAttr={hairT:3};matCache.set(k,m);return m;
+      .replace('#include <lights_fragment_end>',`radiance*=0.0;irradiance*=0.8;
+  {float rim=pow(1.0-clamp(abs(dot(geometry.normal,geometry.viewDir)),0.0,1.0),3.0);totalEmissiveRadiance+=max(diffuseColor.rgb,vec3(0.012,0.011,0.01))*0.22*rim;}
+#include <lights_fragment_end>`);};
+  m.customProgramCacheKey=()=>'lock8';m.userData.needAttr={hairT:3};matCache.set(k,m);return m;
 }
 function stubbleMat(hex){
   const k='stub|'+hex;if(matCache.has(k))return matCache.get(k);
