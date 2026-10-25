@@ -287,7 +287,8 @@ function buildShells(G,GS){
   const kept=[];for(const L of layers)for(const o of L.meshes){const ra=shRegionOfAxis(o.geometry.userData.axis),cut=ra===0?L.lowerCut:ra>=3?L.legCut:null;
     if(cut!=null&&ra===0){if(!L.curtain){L.curtain=1;const tails=others.filter(t=>t.userData.tail&&t.userData.layer===L.name);const cm=shCurtain(L,cut,shells,B2,tails,layers);for(const t of tails){if(t.parent)t.parent.remove(t);others.splice(others.indexOf(t),1);}if(cm){G.add(cm);L.curtainMesh=cm;const T3=shTrisOf(cm,0);newU[0].raster(T3,0);L.newG[0].raster(T3,0);}}continue;}
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3){shKeptOverShoes(o,OB);/* (pushed over the shoes after the blend: a ledge where the shell ends; blended again, then
-      clear of the shoe once more - a boot's collar in the blend zone was pulled under) */shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+      clear of the shoe once more - a boot's collar in the blend zone was pulled under; only for shafts reaching the cut:
+      at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
@@ -766,11 +767,12 @@ function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,y0
   /* trousers: the front hangs from the fly down to the crotch seam - per column, going down, it recedes no faster than 0.45
      per unit of height (pushed out of the body along the normals under the bulge it tucked in there: a dark hollow, with
      the thighs either side the front of the trousers read as a seat) */
-  if(bot){const bins=new Map(),yl=cy-0.1;for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;const x=X[v*3],y=X[v*3+1];if(Math.abs(x)>0.07||y<yl||y>cy+0.12)continue;const b=Math.round(x/0.01);let a=bins.get(b);if(!a)bins.set(b,a=[]);a.push(v);}
+  /* (men only: with nothing to hang from it only lifted the fabric into a ledge at the crotch) */
+  if(bot&&BC.g==='m'){const bins=new Map(),yl=cy-0.1;for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;const x=X[v*3],y=X[v*3+1];if(Math.abs(x)>0.07||y<yl||y>cy+0.12)continue;const b=Math.round(x/0.01);let a=bins.get(b);if(!a)bins.set(b,a=[]);a.push(v);}
     const lift=new Float32Array(n);let any=false;
     for(const a of bins.values()){a.sort((p,q)=>X[q*3+1]-X[p*3+1]);let m=-9,yp=0;for(const v of a){const y=X[v*3+1];if(m>-9)m-=0.45*(yp-y);yp=y;if(X[v*3+2]<m){lift[v]=(m-X[v*3+2])*smooth((y-yl)/0.04)*(1-smooth((Math.abs(X[v*3])-0.04)/0.03));any=true;}else m=X[v*3+2];}}
-    if(any){for(let it=0;it<6;it++){const l0=lift.slice();for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;let s2=0,c=0;for(let q=off[v];q<off[v+1];q++){const j=adj[q];if(!L.act[j])continue;s2+=l0[j];c++;}if(c)lift[v]=Math.max(l0[v],0.85*s2/c);}}
-      for(let v=0;v<n;v++)if(lift[v]>0)X[v*3+2]+=Math.min(lift[v],0.05);}}
+    if(any){for(let it=0;it<10;it++){const l0=lift.slice();for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.01)continue;let s2=0,c=0;for(let q=off[v];q<off[v+1];q++){const j=adj[q];if(!L.act[j])continue;s2+=l0[j];c++;}if(c)lift[v]=Math.max(l0[v],0.85*s2/c);}}
+      for(let v=0;v<n;v++)if(lift[v]>0)X[v*3+2]+=Math.min(lift[v],0.03);}}
 }
 /* trouser legs meet at the inseam instead of passing through each other */
 function shMidline(B,L){const n=B.n,reg=B.reg,X=L.X,P=B.P,Nn=B.N,E=L.E;

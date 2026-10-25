@@ -577,9 +577,10 @@ z poszarpaną krawędzią), lepsze czapki i czapki z daszkiem.
 - **Spodnie na butach z cholewką:** `PANTS.hem` zapamiętany; sznurówki, haczyki, zamek, przeszycia, uchwyty i krążek
   cholewki zasłonięte nogawką nie są budowane (shoes.js, `shown(y)`). `shObstacles` bierze przeszkodę z okna ±8 mm
   w pionie (kołnierz cholewki przecinał trójkąt nad nią) i jest wołany drugi raz po fałdach (drape/hull/fałdy znają tylko
-  ciało). Zachowany dół: `shKeptOverShoes` → `shBlendKept` → `shKeptOverShoes(…,false)` (bez progu na granicy powłoki).
-- **Przód spodni (krocze):** na końcu `shBodyClear` reguła zwisania z rozporka (kolumny |x|<7 cm, cofanie ≤0,45 na
-  jednostkę wysokości): tkanina nie podwija się pod wybrzuszenie (z przodu spodnie wyglądały jak pośladki). „Wąsy” przy
+  ciało). Zachowany dół: `shKeptOverShoes`, a przy cholewce sięgającej powyżej cięcia (`OB.top>legCut`) jeszcze `shBlendKept` →
+  `shKeptOverShoes(…,false)` (przy niskich butach drugie wypchnięcie robiło ostre garby).
+- **Przód spodni (krocze):** na końcu `shBodyClear` reguła zwisania z rozporka, tylko u mężczyzn (u kobiet robiła próg),
+  kolumny |x|<7 cm, cofanie ≤0,45 na jednostkę wysokości: tkanina nie podwija się pod wybrzuszenie (z przodu spodnie wyglądały jak pośladki). „Wąsy” przy
   kroczu ukośne i płytsze. (Próbowana wypukła otoczka przodu w przekrojach dawała ostre załamania w clip: usunięta.)
 - **Fałdy ×0,75 w zagłębieniach, ×0,9 na wypukłościach** (równe ×0,8 zbliżało tkaninę do skóry: prześwit na biodrach
   przy sylwetce heavy). `tools/qa/clip.js`: `QA_FLAGS=a,b` ustawia `window.a=window.b=1` (porównania z wyłączonym krokiem).
