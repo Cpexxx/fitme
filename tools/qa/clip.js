@@ -21,6 +21,8 @@ const ROOT = path.resolve(__dirname, '../..');
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   await page.addInitScript(() => { try { localStorage.setItem('fitme.consent', JSON.stringify({ v: 1, prefs: false, at: new Date().toISOString() })); localStorage.setItem('fitme.welcomed', '1'); } catch (e) {} });
   const errs = [];
+  /* QA_FLAGS=a,b: window.a = window.b = 1 in the page (switch a step off to compare) */
+  if (process.env.QA_FLAGS) await page.addInitScript(f => { for (const k of f.split(',')) window[k] = 1; }, process.env.QA_FLAGS);
   if (process.env.QA_DEBUG) { page.on('console', m => console.log('  [page] ' + m.text())); await page.addInitScript(() => { window.QA_DEBUG = 1; }); }
   page.on('pageerror', e => errs.push('pageerror: ' + e.message));
   await page.route('**/*', async route => {

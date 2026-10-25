@@ -269,7 +269,7 @@ function buildShells(G,GS){
   if(hiQ)for(const L of layers)shUpsample(B,B2,L);
   /* folds, then cut along the hems / necklines / openings and emit the meshes */
   const shells=[];
-  for(const L of layers){shHull(B2,L);shFrontBridge(B2,L);shLoose(B2,L);}
+  for(const L of layers){shHull(B2,L);shLoose(B2,L);}
   for(const L of layers){shFolds(B2,L);shMidline(B2,L);shBodyClear(B2,L);shUntangle(B2,L);}
   /* the drape, the hull and the folds only know the body: trousers over boots settled back into the shaft and its top
      showed round the shin - over the boots once more */
@@ -663,24 +663,6 @@ function shHull(B,L){const F=BC.core.fit;if(!F)return;const stiff=L.rank>=3?1:cl
     const th=Math.atan2(z,x),rr=Math.hypot(x,z),need=F.T.at(th,y)+0.003+0.002*(L.rank-2);const w=stiff*smooth((y-1.0)/0.08);if(need>rr){push[v]=(need-rr)*w;ids.push(v);}}
   for(let it=0;it<6;it++){const p0=push.slice();for(let v=0;v<n;v++){if(!L.act[v])continue;let s2=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(L.act[j]){s2+=p0[j];c++;}}if(c)push[v]=Math.max(p0[v],s2/c*0.9);}}
   for(let v=0;v<n;v++){const p=push[v];if(!(p>0))continue;const x=X[v*3],z=X[v*3+2],rr=Math.hypot(x,z)||1;X[v*3]+=x/rr*p;X[v*3+2]+=z/rr*p;}}
-/* the front of trousers (and of anything hanging over the crotch) spans across from thigh to thigh: in each level slice
-   from the crotch up the front of the fabric is lifted to its convex outline (fitted to the body the fabric sank between
-   the thighs and round the bulge, the front of the trousers read as a seat); below the crotch, between the thighs, a soft
-   V that eases off over 10 cm */
-function shFrontBridge(B,L){const n=B.n,X=L.X,act=L.act,cy=B.cy,y0=cy-0.12,y1=cy+0.16,st=0.006,NB=Math.ceil((y1-y0)/st),off=B.off,adj=B.adj;
-  const bins=Array.from({length:NB},()=>[]);
-  for(let v=0;v<n;v++){if(!act[v])continue;const y=X[v*3+1],z=X[v*3+2];if(y<y0||y>=y1||z<-0.01||Math.abs(X[v*3])>0.2)continue;bins[Math.floor((y-y0)/st)].push(v);}
-  const push=new Float32Array(n);let any=false;
-  for(let b=0;b<NB;b++){const ids=bins[b];if(ids.length<6)continue;const yb=y0+(b+0.5)*st,w=(yb>=cy-0.02?1:0.85*(1-smooth((cy-0.02-yb)/0.1)))*(1-smooth((yb-(y1-0.04))/0.04));if(w<=0)continue;
-    /* upper hull in (x, z) */
-    const pts=ids.map(v=>[X[v*3],X[v*3+2]]).sort((a,c)=>a[0]-c[0]),H=[];
-    for(const q of pts){while(H.length>=2){const a=H[H.length-2],c=H[H.length-1];if((c[0]-a[0])*(q[1]-a[1])-(c[1]-a[1])*(q[0]-a[0])>=0)H.pop();else break;}H.push(q);}
-    for(const v of ids){const x=X[v*3];let k=0;while(k<H.length-2&&H[k+1][0]<x)k++;const a=H[k],c=H[Math.min(k+1,H.length-1)],t=c[0]>a[0]?clamp((x-a[0])/(c[0]-a[0]),0,1):0,zh=lerp(a[1],c[1],t);
-      const d=Math.min(0.045,zh-X[v*3+2]);if(d>0.0003){push[v]=d*w;any=true;}}}
-  if(!any)return;
-  /* smooth between the slices (each lifted on its own the front was striped) */
-  for(let it=0;it<4;it++){const p0=push.slice();for(let v=0;v<n;v++){if(!act[v])continue;let s=0,c=0;for(let k=off[v];k<off[v+1];k++){const j=adj[k];if(act[j]){s+=p0[j];c++;}}if(c)push[v]=Math.max(p0[v]*0.6,0.5*p0[v]+0.5*s/c);}}
-  for(let v=0;v<n;v++)if(push[v]>0)X[v*3+2]+=push[v];}
 function shDist(B,L,v){const P=B.P,Nn=B.N,X=L.X;return(X[v*3]-P[v*3])*Nn[v*3]+(X[v*3+1]-P[v*3+1])*Nn[v*3+1]+(X[v*3+2]-P[v*3+2])*Nn[v*3+2];}
 function shOrder(B,layers){
   const n=B.n,Nn=B.N,off=B.off,adj=B.adj;
@@ -861,7 +843,8 @@ function shFolds(B,L){
     /* where the drape bunched the fabric the folds are deeper; where it hangs taut they almost vanish */
     if(L.comp)d*=0.6+0.8*smooth(L.comp[v]/0.05)*smooth((L.fe||L.f)[v]/0.04);
     /* all folds a little softer (they read as crumpled fabric) */
-    d*=heavy*0.8;
+    /* (hollows a little shallower than ridges: scaled alike the fabric came closer to the skin, which showed through) */
+    d*=heavy*(d<0?0.75:0.9);
     /* puffer: full baffles between stitch lines (8.5 cm apart on the body, 12 on the sleeves), the stitches pulled in */
     if(L.quilt){d*=0.35;const ph=r===0?xx*Math.PI/0.085:r<=2?xx*Math.PI/0.12:0;if(ph)d+=0.0085*(Math.pow(Math.abs(Math.sin(ph)),0.3)-0.72)*edgeK;}
     /* near a sleeve end the fold depth is capped so the cuff stays a clean ring */
