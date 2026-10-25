@@ -139,7 +139,7 @@ function poseBoneDQ(J,def,lift){
   return out;}
 function poseSkinGeo(g,DQ){
   const p=g.attributes.position,nr=g.attributes.normal,SI=g.attributes.skinI,SW=g.attributes.skinW;if(!SI||!SW)return;
-  const n=p.count,P=p.array,N=nr?nr.array:null,I=SI.array,W=SW.array;
+  const n=p.count,P=p.array,N=nr?nr.array:null,I=SI.array,W=SW.array,HT=g.attributes.hairT?g.attributes.hairT.array:null;
   for(let i=0;i<n;i++){let a0=0,a1=0,a2=0,a3=0,b0=0,b1=0,b2=0,b3=0,r0=0,r1=0,r2=0,r3=0,first=true;
     for(let k=0;k<4;k++){const w=W[i*4+k];if(w<=0)continue;const o=I[i*4+k]*8;let s=w;
       if(first){r0=DQ[o];r1=DQ[o+1];r2=DQ[o+2];r3=DQ[o+3];first=false;}else if(DQ[o]*r0+DQ[o+1]*r1+DQ[o+2]*r2+DQ[o+3]*r3<0)s=-w;
@@ -149,8 +149,9 @@ function poseSkinGeo(g,DQ){
     const tx=2*(-b3*a0+b0*a3-b1*a2+b2*a1),ty=2*(-b3*a1+b0*a2+b1*a3-b2*a0),tz=2*(-b3*a2-b0*a1+b1*a0+b2*a3);
     const rot=(x,y,z)=>{const ix=a3*x+a1*z-a2*y,iy=a3*y+a2*x-a0*z,iz=a3*z+a0*y-a1*x,iw=-a0*x-a1*y-a2*z;return[ix*a3+iw*-a0+iy*-a2-iz*-a1,iy*a3+iw*-a1+iz*-a0-ix*-a2,iz*a3+iw*-a2+ix*-a1-iy*-a0];};
     const q=rot(P[i*3],P[i*3+1],P[i*3+2]);P[i*3]=q[0]+tx;P[i*3+1]=q[1]+ty;P[i*3+2]=q[2]+tz;
-    if(N){const m=rot(N[i*3],N[i*3+1],N[i*3+2]);N[i*3]=m[0];N[i*3+1]=m[1];N[i*3+2]=m[2];}}
-  p.needsUpdate=true;if(nr)nr.needsUpdate=true;g.computeBoundingSphere();g.computeBoundingBox();}
+    if(N){const m=rot(N[i*3],N[i*3+1],N[i*3+2]);N[i*3]=m[0];N[i*3+1]=m[1];N[i*3+2]=m[2];}
+    if(HT){const m=rot(HT[i*3],HT[i*3+1],HT[i*3+2]);HT[i*3]=m[0];HT[i*3+1]=m[1];HT[i*3+2]=m[2];}}
+  p.needsUpdate=true;if(nr)nr.needsUpdate=true;if(HT)g.attributes.hairT.needsUpdate=true;g.computeBoundingSphere();g.computeBoundingBox();}
 /* bend the finalised body + feet groups; afterwards the lowest point stands on the floor again */
 /* position of one skinned vertex under a set of bone dual quaternions */
 function poseSkinPt(DQ,I,W,P,i,out){let a0=0,a1=0,a2=0,a3=0,b0=0,b1=0,b2=0,b3=0,r0=0,r1=0,r2=0,r3=0,first=true;

@@ -194,7 +194,7 @@ function slab(outline,yb,yt,o={}){
 /* =============== merge + vertical warp =============== */
 const KEEP=['position','normal','uv','color'];
 /* optional per-vertex data carried through the merge (zeros where a mesh has none) */
-const EXTRA={seamD:4,seamM:4,skinI:4,skinW:4};
+const EXTRA={seamD:4,seamM:4,skinI:4,skinW:4,hairT:3};
 function prepGeo(g,m){
   const gg=g.clone();
   if(!gg.index){const n=gg.attributes.position.count,ix=new Uint32Array(n);for(let i=0;i<n;i++)ix[i]=i;gg.setIndex(new THREE.BufferAttribute(ix,1));}
@@ -231,6 +231,8 @@ function warpGeo(g,W,tan){
   /* (hair strands carry their direction in the normal: a direction stretches with the height, a normal the other way) */
   const p=g.attributes.position,n=g.attributes.normal;
   for(let i=0;i<p.count;i++){const y=p.getY(i),k=W.k(y);p.setY(i,W.Y(y));const nx=n.getX(i),ny=tan?n.getY(i)*k:n.getY(i)/k,nz=n.getZ(i),l=Math.hypot(nx,ny,nz)||1;n.setXYZ(i,nx/l,ny/l,nz/l);}
+  /* (a hair lock's direction stretches like a strand's) */
+  const t=g.attributes.hairT;if(t)for(let i=0;i<t.count;i++){const k=W.k(p.getY(i)),x=t.getX(i),y=t.getY(i)*k,z=t.getZ(i),l=Math.hypot(x,y,z)||1;t.setXYZ(i,x/l,y/l,z/l);}
 }
 function finalize(G,W,free=true){
   G.updateMatrixWorld(true);
@@ -474,8 +476,41 @@ void RE_Direct_Hair(const in IncidentLight directLight,const in GeometricContext
   m.userData.depthMat=d;matCache.set(k,m);return m;
 }
 /* the dark inside of a mass of hair (under the strands of a hanging sheet): matte, a third darker than the hair */
-function hairCoreMat(hex){const k='core|'+hex;if(matCache.has(k))return matCache.get(k);
-  const m=new THREE.MeshStandardMaterial({color:lin(shade(hex,-0.2)),roughness:1,metalness:0,envMapIntensity:0.15,side:THREE.DoubleSide,vertexColors:true});matCache.set(k,m);return m;}
+function hairCoreMat(hex,d=-0.2){const k='core|'+hex+'|'+d;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:lin(shade(hex,d)),roughness:1,metalness:0,envMapIntensity:0.15,side:THREE.DoubleSide,vertexColors:true});matCache.set(k,m);return m;}
+/* hair locks (hair.js lockGeo): closed, flattened tubes, each standing for a lock of many hairs - a sculpted, game-like
+   look instead of single strands. The lock's direction comes in the 'hairT' attribute; the surface gets soft grooves
+   across it (a few bundles per lock, uv.x round its section) and the highlight of hair: Kajiya-Kay bands along the lock */
+function lockMat(hex){
+  const k='lock|'+hex;if(matCache.has(k))return matCache.get(k);
+  const m=new THREE.MeshStandardMaterial({color:lin(hex),roughness:0.6,metalness:0,envMapIntensity:0.35,vertexColors:true});
+  m.onBeforeCompile=sh=>{
+    sh.vertexShader='attribute vec3 hairT;varying vec3 vHT;varying vec2 vLU;\n'+sh.vertexShader.replace('#include <project_vertex>',
+      '#include <project_vertex>\nvHT=normalize((modelViewMatrix*vec4(hairT,0.0)).xyz);vLU=uv;');
+    sh.fragmentShader='varying vec3 vHT;varying vec2 vLU;\n'+sh.fragmentShader
+      /* the grooves: the normal tilts across the lock and the colour darkens a little in the furrows */
+      .replace('#include <normal_fragment_begin>',`#include <normal_fragment_begin>
+  {vec3 hT=normalize(vHT),hB=normalize(cross(hT,normal));float a=vLU.x*6.2832*3.0;
+   normal=normalize(normal+hB*(0.22*cos(a)+0.08*cos(a*2.3+1.1)));}`)
+      .replace('#include <color_fragment>',`#include <color_fragment>
+  {float a=vLU.x*6.2832*3.0;diffuseColor.rgb*=0.9+0.1*sin(a)+0.04*sin(a*2.3+1.1);}`)
+      .replace('#include <lights_physical_pars_fragment>',`#include <lights_physical_pars_fragment>
+void RE_Direct_Lock(const in IncidentLight directLight,const in GeometricContext geometry,const in PhysicalMaterial material,inout ReflectedLight reflectedLight){
+  vec3 T=normalize(vHT),L=directLight.direction,V=geometry.viewDir,N=geometry.normal;
+  /* soft, wrapped diffuse (clay, not plastic) */
+  float wrap=clamp((dot(N,L)+0.4)/1.4,0.0,1.0);
+  reflectedLight.directDiffuse+=directLight.color*wrap*0.75*BRDF_Lambert(material.diffuseColor);
+  /* two highlights along the lock: a white one shifted towards the tip, a coloured one towards the root */
+  vec3 H=normalize(L+V);vec3 T1=normalize(T+N*0.15),T2=normalize(T-N*0.2);
+  float h1=dot(T1,H),h2=dot(T2,H),s1=pow(sqrt(max(0.0,1.0-h1*h1)),48.0),s2=pow(sqrt(max(0.0,1.0-h2*h2)),18.0);
+  vec3 tint=mix(vec3(dot(material.diffuseColor,vec3(0.33))),material.diffuseColor,0.6)*2.0;
+  reflectedLight.directSpecular+=directLight.color*clamp(dot(N,L)+0.2,0.0,1.0)*(0.03*s1+0.03*s2*tint);
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Lock`)
+      .replace('#include <lights_fragment_end>','radiance*=0.06;irradiance*=0.75;\n#include <lights_fragment_end>');};
+  m.customProgramCacheKey=()=>'lock5';m.userData.needAttr={hairT:3};matCache.set(k,m);return m;
+}
 function stubbleMat(hex){
   const k='stub|'+hex;if(matCache.has(k))return matCache.get(k);
   const [c,ctx]=cnv(128,128);let map=null;

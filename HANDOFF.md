@@ -457,3 +457,32 @@ Stary arkusz został jako `sheetOld` (zapas, gdy pod czapką nie ma skóry na pr
   klatkę (ui.js: timeout zrzutu ekranu).
 - Znane: końce lob/wolf opierające się na barkach są jaśniejsze (poziome pasma oświetlone z góry); przy „Na lewe ramię”
   włosy przechodzące przez bark są widoczne od tyłu jako poziomy pas (fizycznie poprawne).
+
+## Runda 16 (2026-10-25): kosmyki zamiast pasm (styl „gra”), włosy przy ciele
+Prośba (ze zrzutem: długie falowane włosy w polarze, z boku stoją w powietrzu): „zamiast renderować osobno każdy włos,
+zrób taki »plastelinowy« render, że masz ileś włosów w jednym pasemku i ładnie się układają… styl nie fotorealistyczny,
+jak niektóre gry (Wiedźmin 2), żeby nie było zbyt obciążające, ale wyglądało ok”.
+- **Kosmyki (`flowLocks` + `lockGeo`, hair.js; `lockMat`, core.js):** każda prowadnica z rundy 15 to jeden zamknięty,
+  spłaszczony kosmyk (przekrój: elipsa o 8 bokach, brzegi lekko podwinięte do głowy). Na skórze głowy szeroki (2,4 cm)
+  i płaski, ułożony dachówkowo (każdy na swojej małej wysokości 0,5–1,8 mm); poza głową węższy i grubszy, zwęża się do
+  czubka. Zaczyna się 1 cm przed korzeniem, zwężony i schowany pod sąsiadów (bez szczeliny na przedziałku).
+  - Fale: kosmyk po prostu idzie za falującą prowadnicą. Loki: co druga prowadnica, gruby okrągły sznur (1,2 cm),
+    rowki na powierzchni skręcone z lokiem (`uv.x` + kąt wokół osi zwoju). Cienkie rurki albo wstążki wzdłuż zwojów
+    wyglądały jak makaron albo zmięty papier.
+  - `lockMat`: kierunek kosmyka w atrybucie `hairT` (przenoszony przez `EXTRA`, `warpGeo` i `poseSkinGeo`), trzy miękkie
+    rowki w poprzek kosmyka (normalna + lekkie przyciemnienie), rozproszone owinięte (glina), dwa refleksy Kajiya-Kay.
+    Skalibrowane tak, by średni kolor na ekranie był bliski wybranemu.
+  - Pod kosmykami powłoka prawie w kolorze włosów (`hairCoreMat(hex,-0.07)`), bo ciemniejsza prześwitywała jak klin.
+  - Wierzchołki z postacią (perf / std / high): długie 0,23 / 0,31 / 0,46 mln (runda 15: same pasma 0,42 / 2,4 / 3,2 mln),
+    budowa szybsza o kilka sekund. Stary renderer pasm został do QA: `window.__strandsQA=1`.
+- **Włosy przy ciele zamiast w powietrzu:**
+  - Siła rozkładająca włosy na ramiona (`drapeSide`) działała w całym pasie wysokości barków i do końca symulacji, więc
+    trzymała włosy z dala od piersi i pleców. Teraz działa tylko na punkt leżący na prawie poziomej powierzchni (wierzch
+    barku: flaga `TP`, kolizja z ciałem o nachyleniu `g<-1.2`). Niżej włosy wiszą pod własnym ciężarem.
+  - Kolizja z ciałem: obwiednia (zaokrąglony prostokąt na wysokość) wystawała kilka cm przed górną częścią klatki.
+    `hairField(…, G)` liczy teraz prawdziwą powierzchnię ciała i ubrań (`bodyRadii`: największy promień od osi na komórkę
+    wysokość × kąt, z trójkątów skóry `userData.bodySkin` i siatek `ctx==='cloth'`). Używana tylko poniżej barków (płynnie
+    od `shY-0.03` w dół) i nigdy większa niż obwiednia: nad barkami promień od osi nie opisuje „dachu”, a rękawy dawały
+    kolce wyrzucające punkt na bok.
+- Znane: krótkie fryzury, grzywki, kucyk i koki nadal są z pasm (`hairCards`, `tailStrands`); wyglądają inaczej niż
+  kosmyki długich fryzur. Przy pozie „idzie” ręka w polarze oversized wysuwa się do przodu, a włosy na barku zostają.

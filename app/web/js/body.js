@@ -293,7 +293,7 @@ function buildUnder(G){const U=S.under;if(!U)return;const fem=S.gender==='f';
 function buildBody(G){
   const skin=skinMat();
   const SH=SHOES[S.shoes.type]||{},showFeet=S.shoes.type==='none'||SH.open||SH.low||SH.clog;
-  G.add(mk(bodyGeo(!!showFeet),skin));
+  {const bm=mk(bodyGeo(!!showFeet),skin);bm.userData.bodySkin=1;G.add(bm);}
   /* the head ends on the line where the neck strip starts (both share it exactly): watertight and smooth */
   if(BC.neckLoft){G.add(mk(surf(96,64,(u,v)=>{const ph=-u*TAU;return headPt(v*headAttachTh(ph),ph);},{wrapU:true,noAO:true}),skin));
     G.add(mk(surf(96,14,(u,v)=>neckLoftPt(-u*TAU,1-v),{wrapU:true,noAO:true}),skin));}

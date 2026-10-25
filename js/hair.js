@@ -99,10 +99,37 @@ function sheetColsStatic(o,nu,nv){
 /* collision field for falling hair: the radius a strand keeps round the head axis (the head) and round the body axis (the
    torso and the clothes over it), tabulated over height and angle, with its slope in y: on a near-flat surface (the top of
    the shoulders, the crown) a strand is pushed up onto it, not out sideways */
-function hairField(yTop,yBot){
+/* the body's and the clothes' largest radius round the body's axis per (height row, angle) - their triangles sampled every
+   few mm; cells between samples filled from their neighbours along the row; 0 where nothing is (above yB, below the figure) */
+function bodyRadii(G,yTop,yBot,DY,NA,NY,yB){const BR=new Float32Array(NY*NA),v=new THREE.Vector3();G.updateMatrixWorld(true);let any=false;
+  G.traverse(o=>{if(!o.isMesh||!(o.userData.bodySkin||o.userData.ctx==='cloth'))return;const g=o.geometry,p=g.attributes.position;if(!p)return;
+    const n=p.count,W=new Float32Array(n*3);for(let i=0;i<n;i++){v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);W[i*3]=v.x;W[i*3+1]=v.y;W[i*3+2]=v.z;}
+    const ix=g.index?g.index.array:null,nt=ix?ix.length/3:n/3;
+    for(let t=0;t<nt;t++){const a=(ix?ix[t*3]:t*3)*3,b=(ix?ix[t*3+1]:t*3+1)*3,c=(ix?ix[t*3+2]:t*3+2)*3;
+      const y0=Math.min(W[a+1],W[b+1],W[c+1]),y1=Math.max(W[a+1],W[b+1],W[c+1]);if(y1<yBot||y0>yB)continue;
+      const e=Math.max(Math.hypot(W[b]-W[a],W[b+1]-W[a+1],W[b+2]-W[a+2]),Math.hypot(W[c]-W[a],W[c+1]-W[a+1],W[c+2]-W[a+2]),Math.hypot(W[c]-W[b],W[c+1]-W[b+1],W[c+2]-W[b+2])),m=Math.min(24,Math.max(1,Math.ceil(e/0.003)));
+      for(let i=0;i<=m;i++)for(let k=0;i+k<=m;k++){const u=i/m,w2=k/m,x=W[a]+(W[b]-W[a])*u+(W[c]-W[a])*w2,y=W[a+1]+(W[b+1]-W[a+1])*u+(W[c+1]-W[a+1])*w2,z=W[a+2]+(W[b+2]-W[a+2])*u+(W[c+2]-W[a+2])*w2;
+        if(y>yB||y<yBot)continue;const j=Math.round((yTop-y)/DY);if(j<0||j>=NY)continue;const q=j*NA+((Math.round(((Math.atan2(z,x)/TAU)+1)%1*NA))%NA),r=Math.hypot(x,z);if(r>BR[q]){BR[q]=r;any=true;}}}});
+  if(!any)return null;
+  /* (each cell the largest of itself and its neighbours up and down: a row sampled between the triangles' sample points
+     read lower than the surface) */
+  {const B0=BR.slice();for(let j=1;j<NY-1;j++)for(let a=0;a<NA;a++){const k=j*NA+a;BR[k]=Math.max(B0[k],B0[k-NA],B0[k+NA]);}}
+  /* (gaps along a row filled from the nearest filled cells either side, up to 6 cells away) */
+  for(let j=0;j<NY;j++){const o=j*NA;for(let a=0;a<NA;a++){if(BR[o+a]>0)continue;let l=0,r=0,dl=0,dr=0;for(let d=1;d<=6;d++){if(!l&&BR[o+(a-d+NA)%NA]>0){l=BR[o+(a-d+NA)%NA];dl=d;}if(!r&&BR[o+(a+d)%NA]>0){r=BR[o+(a+d)%NA];dr=d;}}
+    if(l&&r)BR[o+a]=(l*dr+r*dl)/(dl+dr);}}
+  return BR;}
+function hairField(yTop,yBot,G){
   const hc=BC.headC,ry=BC.hd.ry,DY=0.004,NA=180,NY=Math.ceil((yTop-yBot)/DY)+2,Hd=new Float32Array(NY*NA),Bd=new Float32Array(NY*NA),yB=hc.y-ry*0.55;
+  /* with the figure at hand: the true surface of the body and the clothes, as the largest radius round the body's axis per
+     angle and height (the envelope, a rounded box per height, stood several cm proud of the upper chest at the front
+     corners - the hair lay on it, in the air in front of the chest); never more than the envelope: round the shoulders the
+     arms and sleeves are in the way of a radius from the axis, and a point on top of the shoulder was flung out over them) */
+  const BR=G?bodyRadii(G,yTop,yBot,DY,NA,NY,yB):null;
   for(let j=0;j<NY;j++){const y=yTop-j*DY,env=y<yB?bodyEnv(y,LAYERS):null;
-    for(let a=0;a<NA;a++){const ph=a/NA*TAU,hr=headHorizR(y,ph);Hd[j*NA+a]=hr!=null?hr:0;Bd[j*NA+a]=env?envR(env,ph):0;}}
+    for(let a=0;a<NA;a++){const ph=a/NA*TAU,hr=headHorizR(y,ph);Hd[j*NA+a]=hr!=null?hr:0;Bd[j*NA+a]=env?envR(env,ph):0;}
+    /* (the true surface only below the shoulders, eased in over 4 cm - over the top of the shoulders a radius from the axis
+       does not describe a roof, and the rows' sampling jumped there) */
+    const wB=BR?1-smooth((y-(BC.shY-0.07))/0.04):0;if(wB>0)for(let a=0;a<NA;a++){const k=j*NA+a;if(BR[k]>0&&Bd[k]>0)Bd[k]=lerp(Bd[k],Math.min(BR[k],Bd[k]),wB);}}
   const at=(T,y,ph,out)=>{const fj=(yTop-y)/DY;if(fj<0||fj>NY-1.001){out[0]=0;return;}const j=Math.floor(fj),tj=fj-j,fa=(((ph%TAU)+TAU)%TAU)/TAU*NA,a=Math.floor(fa)%NA,ta=fa-Math.floor(fa),a1=(a+1)%NA;
     const r0=lerp(T[j*NA+a],T[j*NA+a1],ta),r1=lerp(T[(j+1)*NA+a],T[(j+1)*NA+a1],ta);
     /* no surface at this height on either row: none (an edge row keeps its own value) */
@@ -469,7 +496,7 @@ function hairFlow(G,o){
     const phE=Math.atan2(P.z-hc.z,P.x-hc.x),yr=P.y;
     let y1=tipY(phE);{const ct=0.5+0.5*Math.sin(phE*7+1.6*fbm(phE*2,1.3,2.1));y1-=0.016*ct*smooth((yr-y1-0.06)/0.12);}
     g.S=SP;g.arc=arc;g.tipY=y1;g.L=Math.max(arc+0.03,arc+Math.max(0,yr-y1)*1.02*(1-0.03*R0()));}
-  const yMin=Math.min(...gd.map(g=>g.P.y-g.L)),field=hairField(hc.y+ry*1.05,yMin-0.2);
+  const yMin=Math.min(...gd.map(g=>g.P.y-g.L)),field=hairField(hc.y+ry*1.05,yMin-0.2,G);
   const key=[NGT,o.gap,o.ring?1:0,hat?1:0,band?1:0,mode,field.sig,ry,BC.hd.rx,hc.y,gd.map(g=>g.L.toFixed(4)).join(',').length,gd.reduce((s,g)=>s+g.L,0).toFixed(5),o.dmin||0,o.tipCurl||0,S.hair.texture||'',(S.acc.scarf&&S.acc.scarf.type)||''].join('|');
   let sim=FLOW_CACHE.get(key);
   if(!sim){const so=Object.assign({},o,{field,band,mode,hat},lod?{steps:100}:{});
@@ -500,14 +527,15 @@ function hairFlow(G,o){
   if(window.__guidesOnly){addStrands(G,sim.map(q=>({P:q.P,K:q.K,w0:0.0015,w1:0.0015,tone:1,root:1})));return true;}
   /* the strands too (a new colour, clothes the hair does not touch: the same hair) */
   const skey=key+'|'+STRAND_Q+'|'+(window.__perGuide||0)+'|'+lod;let list=STRAND_CACHE.get(skey);
-  if(!list){list=flowStrands(gd,sim,o,ro);STRAND_CACHE.set(skey,list);if(STRAND_CACHE.size>2)STRAND_CACHE.delete(STRAND_CACHE.keys().next().value);}
-  addStrands(G,list);return true;
+  if(window.__strandsQA){if(!list){list=flowStrands(gd,sim,o,ro);STRAND_CACHE.set(skey,list);if(STRAND_CACHE.size>2)STRAND_CACHE.delete(STRAND_CACHE.keys().next().value);}addStrands(G,list);return true;}
+  if(!list){list=flowLocks(gd,sim);STRAND_CACHE.set(skey,list);if(STRAND_CACHE.size>2)STRAND_CACHE.delete(STRAND_CACHE.keys().next().value);}
+  G.add(mk(lockGeo(list),lockMat(S.hair.color)));return true;
 }
 /* the simulation of the guides; returns per guide its points (flat xyz) and an occlusion per point */
 function flowSim(gd,o){
   const hc=BC.headC,ry=BC.hd.ry,F=o.field,HT=headTab(),tmp=[0,0],seg=0.015,n=gd.length,mode=o.mode;
   const off=new Int32Array(n+1);for(let i=0;i<n;i++){gd[i].K=Math.max(5,Math.ceil(gd[i].L/seg)+1);off[i+1]=off[i]+gd[i].K;}
-  const NP=off[n],X=new Float32Array(NP*3),Q=new Float32Array(NP*3),D=new Float32Array(NP*3),SEGL=new Float32Array(n),GI=new Int32Array(NP),KI=new Int32Array(NP),CT=new Uint8Array(NP),CB=new Uint8Array(NP),AC=new Float32Array(NP*3),XS=X;
+  const NP=off[n],X=new Float32Array(NP*3),Q=new Float32Array(NP*3),D=new Float32Array(NP*3),SEGL=new Float32Array(n),GI=new Int32Array(NP),KI=new Int32Array(NP),CT=new Uint8Array(NP),CB=new Uint8Array(NP),TP=new Uint8Array(NP),AC=new Float32Array(NP*3),XS=X;
   for(let i=0;i<n;i++){SEGL[i]=gd[i].L/(gd[i].K-1);for(let k=0;k<gd[i].K;k++){GI[off[i]+k]=i;KI[off[i]+k]=k;}}
   /* clearance: thin at the root (the hair lies on the scalp), the hair's own thickness further on */
   const clr=(k,y,ph)=>{let c=0.0016+0.0022*smooth(k*seg/0.066);if(o.band){const bk=hairBandK((y-hc.y)/ry,ph);if(bk>0)c=lerp(c,Math.min(c,HB_H-0.003),bk);}return c;};
@@ -525,7 +553,7 @@ function flowSim(gd,o){
     {const dx=x-hc.x,dy=y-hc.y,dz=z-hc.z,d2=dx*dx+dy*dy+dz*dz;if(dy>-ry*0.8&&d2<HTM2){const d=Math.sqrt(d2)||1e-6,R=HT.at(dx,dy,dz,d)+clr(k,y,Math.atan2(dz,dx));if(d<R){const s=R/d;X[p]=hc.x+dx*s;X[p+1]=hc.y+dy*s;X[p+2]=hc.z+dz*s;hit|=1;}}}
     /* the lower head and the neck (radius per height round the head's axis), the body and clothes round the body's axis */
     if(X[p+1]<hc.y-ry*0.5&&X[p+1]>hc.y-ry*0.98){const dx=X[p]-hc.x,dz=X[p+2]-hc.z,r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);F.head(X[p+1],ph,tmp);if(tmp[0]>0){const R=tmp[0]+clr(k,X[p+1],ph);if(r<R){const g=tmp[1],d=(R-r)/(1+g*g);X[p]+=dx/r*d;X[p+2]+=dz/r*d;X[p+1]-=g*d;hit|=1;}}}
-    if(X[p+1]<yNeck){const dx=X[p],dz=X[p+2],r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[p+1],ph,tmp);if(tmp[0]>0){const R=tmp[0]+0.006;if(r<R){const g=tmp[1],d=(R-r)/(1+g*g);X[p]+=dx/r*d;X[p+2]+=dz/r*d;X[p+1]-=g*d;hit|=2;}}}
+    if(X[p+1]<yNeck){const dx=X[p],dz=X[p+2],r=Math.hypot(dx,dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[p+1],ph,tmp);if(tmp[0]>0){const R=tmp[0]+0.006;if(r<R){const g=tmp[1],d=(R-r)/(1+g*g);X[p]+=dx/r*d;X[p+2]+=dz/r*d;X[p+1]-=g*d;hit|=g<-1.2?10:2;}}}
     if(scf){const j=Math.round((X[p+1]-scY0+0.004)/0.002);if(j>=0&&j<48&&SCR[j]>0){const r=Math.hypot(X[p],X[p+2])||1e-6;if(r<SCR[j]){X[p]*=SCR[j]/r;X[p+2]*=SCR[j]/r;hit|=2;}}}
     /* the arms */
     if(X[p+1]<yS+0.05&&Math.abs(X[p])>armX)for(const a of arms){const dx=X[p]-a[0],dy=X[p+1]-a[1],dz=X[p+2]-a[2];if(Math.abs(dy)>0.05)continue;const r=Math.hypot(dx,dz)||1e-6;if(r<a[3]){X[p]+=dx/r*(a[3]-r);X[p+2]+=dz/r*(a[3]-r);hit|=2;}}
@@ -559,22 +587,25 @@ function flowSim(gd,o){
      (neighbouring locks wave together, a few centimetres apart no longer: one phase over the whole head
      drew level stripes, a washboard), curls each their own (ringlets are not in step), of uneven size and either hand */
   /* (straight hair too: a slow, gentle S along each lock - no hair hangs like a plumb line) */
-  const TX=hairTexP(),R1=rng(77+n),WA=[0.009,0.009,0.0075,0.0068][TX.wave||0],WH=TX.wave>=2,
-    WLg=gd.map(()=>TX.wave?[1,0.095,0.042,0.026][TX.wave]*(WH?0.82+0.4*R1():0.94+0.12*R1()):0.26+0.16*R1()),
+  const TX=hairTexP(),R1=rng(77+n),WA=[0.009,0.009,0.0065,0.0055][TX.wave||0],WH=TX.wave>=2,
+    WLg=gd.map(()=>TX.wave?[1,0.095,0.062,0.044][TX.wave]*(WH?0.82+0.4*R1():0.94+0.12*R1()):0.26+0.16*R1()),
     WP=gd.map(g=>WH?R1()*TAU:5*fbm(g.P.x*4.5+3,g.P.y*4.5,g.P.z*4.5)+0.4*R1()),
     WAg=gd.map(g=>WA*(WH?0.65+0.7*R1():TX.wave?0.7+0.6*clamp(0.5+fbm(g.P.x*6+11,g.P.y*6,g.P.z*6),0,1)+0.1*R1():0.5+R1())),
     HAND=gd.map(()=>R1()<0.5?-1:1),
     /* a wave is flat: a zigzag in a plane tilted out of the hair's surface (the light catches its crests - in the surface
        alone the waves did not show in thick hair; side to side and in and out a quarter apart it was a twist, not a wave) */
     WPL=gd.map(g=>{const a=(TX.wave?0.32:0.25)+0.25*fbm(g.P.x*3.1+7,g.P.y*3.1,g.P.z*3.1)+0.15*(R1()-0.5);return[Math.cos(a),Math.sin(a)];});
-  const dt=1/50,Gv=9.8*dt*dt,steps=o.steps||260,side=new Float32Array(n),xt=new Float32Array(n),rmin=o.rmin||0.022;let sideSet=false;
+  const dt=1/50,Gv=9.8*dt*dt,steps=o.steps||260,side=new Float32Array(n),xt=new Float32Array(n),rmin=o.rmin||0.022,sideStep=Math.min(70,Math.round(steps*0.45));let sideSet=false;
   for(let st=0;st<steps;st++){
     const damp=st<steps*0.6?0.94:0.82;
     /* which way each guide falls over the shoulders, once the hair has settled on the head */
-    if(st===70&&!sideSet){sideSet=true;for(let i=0;i<n;i++){let best=-1,bd=9;for(let k=0;k<gd[i].K;k++){const p=(off[i]+k)*3,d=Math.abs(X[p+1]-(yS+0.12));if(d<bd){bd=d;best=p;}}
+    if(st===sideStep&&!sideSet){sideSet=true;for(let i=0;i<n;i++){let best=-1,bd=9;for(let k=0;k<gd[i].K;k++){const p=(off[i]+k)*3,d=Math.abs(X[p+1]-(yS+0.12));if(d<bd){bd=d;best=p;}}
       if(bd<0.03&&gd[i].P.y-gd[i].L<yS-0.02){const D2=drapeSide(Math.atan2(X[best+2]-hc.z,X[best]),mode);side[i]=D2.side;xt[i]=D2.xt;}}}
     for(let q=0;q<NP;q++){if(KI[q]<KS[GI[q]])continue;const p=q*3,i=GI[q],vx=(X[p]-Q[p])*damp,vy=(X[p+1]-Q[p+1])*damp,vz=(X[p+2]-Q[p+2])*damp;Q[p]=X[p];Q[p+1]=X[p+1];Q[p+2]=X[p+2];
-      let fx=0,fz=0;if(side[i]){const w=gauss(X[p+1]-(yS+0.03),0.07);fx=(xt[i]-X[p])*8*w*dt*dt;if(CT[q]||X[p+1]>yS+0.06)fz=side[i]*16*w*dt*dt;}
+      /* (the push over the shoulder acts only where the hair lies on a near-level surface - the top of the shoulder; on the
+         chest and the back, and still beside the neck, the hair hangs under its own weight: pushed all round the shoulder's
+         height, it was flung forward and back and stood off the body, in the air in front of the chest and behind the back) */
+      let fx=0,fz=0;if(side[i]&&TP[q]){fx=(xt[i]-X[p])*8*dt*dt;fz=side[i]*16*dt*dt;}
       X[p]+=vx+fx;X[p+1]+=vy-Gv;X[p+2]+=vz+fz;}
     if(st%2===0||st>steps-40)repel();
     /* follow the leader from the root: inextensible, a little stiff (more so near the root), never folding tighter than rmin */
@@ -590,7 +621,7 @@ function flowSim(gd,o){
         const c=dx*px+dy*py+dz*pz;if(c<cM){let qx=dx-px*c,qy=dy-py*c,qz=dz-pz*c;const ql=Math.hypot(qx,qy,qz)||1e-9;qx/=ql;qy/=ql;qz/=ql;dx=px*cM+qx*sM;dy=py*cM+qy*sM;dz=pz*cM+qz*sM;}
         X[p]=X[a]+dx*L;X[p+1]=X[a+1]+dy*L;X[p+2]=X[a+2]+dz*L;
         let hit=0;for(let r=0;r<2;r++){const h=collide(p,k);if(!h)break;hit|=h;const ex=X[p]-X[a],ey=X[p+1]-X[a+1],ez=X[p+2]-X[a+2],ed=Math.hypot(ex,ey,ez)||1e-9;X[p]=X[a]+ex/ed*L;X[p+1]=X[a+1]+ey/ed*L;X[p+2]=X[a+2]+ez/ed*L;}
-        CT[q]=hit?1:0;CB[q]=hit&2?1:0;if(hit){Q[p]=lerp(Q[p],X[p],0.5);Q[p+1]=lerp(Q[p+1],X[p+1],0.5);Q[p+2]=lerp(Q[p+2],X[p+2],0.5);}
+        CT[q]=hit?1:0;CB[q]=hit&2?1:0;TP[q]=hit&8?1:0;if(hit){Q[p]=lerp(Q[p],X[p],0.5);Q[p+1]=lerp(Q[p+1],X[p+1],0.5);Q[p+2]=lerp(Q[p+2],X[p+2],0.5);}
         D[p]=X[p]-D[p];D[p+1]=X[p+1]-D[p+1];D[p+2]=X[p+2]-D[p+2];}
       for(let k=KS[i];k+1<gd[i].K;k++){const p=(o0+k)*3;Q[p]+=0.9*D[p+3];Q[p+1]+=0.9*D[p+4];Q[p+2]+=0.9*D[p+5];}}}
   /* occlusion: how much hair lies further out from each point (density sampled outward over 3 cm) */
@@ -692,6 +723,55 @@ function flowStrands(gd,sim,o,ro){
       const ao=sim[i0].AO[Math.min(sim[i0].K-1,Math.round(t*(sim[i0].K-1)))];AO[k]=lerp(0.72,1,ao)*lerp(0.86,1,dep);}
     list.push({P:Fp,K,w0:0.00042*(0.8+0.4*R()),w1:0.00011,tone,ao:AO,root:0.82});}
   return list;}
+/* the locks (the look since round 16): one per guide, a closed, flattened tube along it - a lock of many hairs drawn as one
+   sculpted piece, as games draw hair, instead of thousands of single strands. Over the scalp each lock is broad and flat,
+   lying like a shingle over its neighbours (each at its own small height above the scalp: no two coincide); off the head
+   it narrows and fills out and tapers to a point at its end; curls are narrow and round. Section: an ellipse whose edges
+   curl in towards the head, its seam on the inner side. Returns flat arrays (built into a geometry by lockGeo). */
+function flowLocks(gd,sim){
+  const hc=BC.headC,ry=BC.hd.ry,T=hairTexP(),R=rng(5151+gd.length),n=gd.length,M=8,WH=T.wave>=2;
+  /* (curls: every other guide makes a lock - a thick round rope coiling a little round its axis, its grooves twisted with
+     the coil: a ringlet as games draw it. Thin tubes along the coils, or ribbons, read as noodles or crumpled paper) */
+  const drawn=WH?Math.ceil(n/2):n,sc=Math.sqrt(420/drawn),WS=0.024*sc,WF=(WH?0.012:T.wave?0.024:0.022)*Math.min(1.5,sc),TH=WH?0.012:0.0045,CW=WH?[0,0,0.062,0.044][T.wave]:0;
+  const sp=(WH?0.0045:T.wave?0.0075:0.012)*(HAIR_LOD?1.5:1);
+  const KL=sim.map((q,i)=>WH&&i%2?0:Math.max(4,Math.round(q.L/sp)+1));let nv=0,ni=0;for(const k of KL){if(!k)continue;nv+=k*(M+1);ni+=(k-1)*M*6;}
+  const P=new Float32Array(nv*3),N=new Float32Array(nv*3),U=new Float32Array(nv*2),C=new Float32Array(nv*3),HT=new Float32Array(nv*3),I=new Uint32Array(ni);
+  let v=0,w=0;const A=[0,0,0],Tg=[0,0,0];
+  for(let i=0;i<n;i++){const q=sim[i],K=q.K,G=q.P,arc=gd[i].arc||0,Kl=KL[i];if(!Kl)continue;
+    /* the guide's length along its points, to place the lock's rings evenly by length */
+    const S=new Float32Array(K);for(let k=1;k<K;k++)S[k]=S[k-1]+Math.hypot(G[k*3]-G[k*3-3],G[k*3+1]-G[k*3-2],G[k*3+2]-G[k*3-1]);const Lg=S[K-1]||1e-6;
+    const wk=0.82+0.36*R(),tone=0.95+0.12*R(),h0=0.0005+0.0013*R(),tipW=0.22+0.25*R(),fr=Math.max(1e-3,Lg-arc);
+    let m0=0;const v0=v;
+    /* (each lock starts 1 cm before its root, back along its direction, tucked under the parting: the locks of both sides
+       meet there - starting at their roots, up to a spacing apart from the line, they left a gap widening at the front) */
+    const EX=0.01;
+    for(let j=0;j<Kl;j++){const s=-EX+(Lg+EX)*j/(Kl-1);while(m0<K-2&&S[m0+1]<s)m0++;const u=s<0?s/((S[1]-S[0])||1):clamp((s-S[m0])/((S[m0+1]-S[m0])||1),0,1);
+      for(let c=0;c<3;c++){A[c]=lerp(G[m0*3+c],G[m0*3+3+c],u);Tg[c]=G[m0*3+3+c]-G[m0*3+c];}
+      /* (the tangent smoothed over the neighbouring segments: the highlight runs on without steps) */
+      if(m0>0)for(let c=0;c<3;c++)Tg[c]+=(G[m0*3+c]-G[m0*3-3+c])*(1-u);if(m0<K-2)for(let c=0;c<3;c++)Tg[c]+=(G[m0*3+6+c]-G[m0*3+3+c])*u;
+      let tl=Math.hypot(Tg[0],Tg[1],Tg[2])||1;const tx=Tg[0]/tl,ty=Tg[1]/tl,tz=Tg[2]/tl,x=A[0],y=A[1],z=A[2];
+      /* out of the head (round its centre) higher up, out of the body (round its axis) lower down */
+      const hw=smooth((y-(hc.y-ry*0.95))/(ry*0.35));let nx=x-hc.x*hw,ny=(y-hc.y)*hw,nz=z-hc.z*hw;{const dd=nx*tx+ny*ty+nz*tz;nx-=tx*dd;ny-=ty*dd;nz-=tz*dd;const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;}
+      const bx=ty*nz-tz*ny,by=tz*nx-tx*nz,bz=tx*ny-ty*nx;
+      /* (a curl's twist: the angle of the guide round the coil's axis - the guide averaged over a turn - in this frame) */
+      let tw=0;if(WH&&s>arc){let ax=0,ay=0,az=0,cn=0;for(let k=Math.max(0,m0-40);k<Math.min(K,m0+41);k++){if(Math.abs(S[k]-s)>CW*0.5)continue;ax+=G[k*3];ay+=G[k*3+1];az+=G[k*3+2];cn++;}
+        if(cn>2){const rx=x-ax/cn,ry2=y-ay/cn,rz=z-az/cn;tw=Math.atan2(rx*nx+ry2*ny+rz*nz,rx*bx+ry2*by+rz*bz)/TAU;}}
+      /* the width and thickness along the lock */
+      const us=s-arc,a=1-smooth((us+0.005)/0.05),f=clamp(us/fr,0,1),tap=1-(1-tipW)*smooth((f-0.45)/0.55),end=Math.sqrt(clamp((1-s/Lg)/0.06,0,1)),root=s<0?lerp(0.25,0.55,1+s/EX):lerp(0.55,1,smooth(s/0.012));
+      const hwid=0.5*lerp(WF*wk*tap,WS*wk,a)*end*root,hth=0.5*lerp(TH*lerp(0.55,1,tap),0.0028,a)*end*root,lift=h0*a-(s<0?0.003*(-s/EX):0);
+      const ao=q.AO[clamp(Math.round(m0+u),0,K-1)],sh=tone*lerp(0.5,1,ao)*lerp(0.85,1,smooth(s/0.04));
+      for(let m=0;m<=M;m++){const th=-Math.PI/2+TAU*m/M,ct=Math.cos(th),st=Math.sin(th),ox=ct*hwid,oy=st*hth-0.35*hth*ct*ct+lift;
+        const ex=ct/(hwid||1e-6),ey=st/(hth||1e-6),el=Math.hypot(ex,ey)||1,qb=ex/el,qn=ey/el,o3=v*3;
+        P[o3]=x+bx*ox+nx*oy;P[o3+1]=y+by*ox+ny*oy;P[o3+2]=z+bz*ox+nz*oy;
+        N[o3]=bx*qb+nx*qn;N[o3+1]=by*qb+ny*qn;N[o3+2]=bz*qb+nz*qn;HT[o3]=tx;HT[o3+1]=ty;HT[o3+2]=tz;
+        U[v*2]=m/M+tw;U[v*2+1]=0;C[o3]=C[o3+1]=C[o3+2]=sh;v++;}}
+    for(let j=0;j+1<Kl;j++)for(let m=0;m<M;m++){const a=v0+j*(M+1)+m,b=a+M+1;I[w++]=a;I[w++]=b;I[w++]=a+1;I[w++]=a+1;I[w++]=b;I[w++]=b+1;}}
+  return{P,N,U,C,HT,I};}
+/* a geometry from the locks' arrays (copies: the hair is moved in place afterwards - over a collar, onto the clothes - and
+   the arrays stay cached) */
+function lockGeo(L){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(L.P.slice(),3));g.setAttribute('normal',new THREE.BufferAttribute(L.N.slice(),3));
+  g.setAttribute('uv',new THREE.BufferAttribute(L.U.slice(),2));g.setAttribute('color',new THREE.BufferAttribute(L.C.slice(),3));g.setAttribute('hairT',new THREE.BufferAttribute(L.HT.slice(),3));
+  g.setIndex(new THREE.BufferAttribute(L.I.slice(),1));g.userData.keepNormals=true;return g;}
 function tubeAlong(curve,n,rf,o={}){
   const fr=curve.computeFrenetFrames(n,false),out=[];
   for(let i=0;i<=n;i++){const t=i/n,r=rf(t);out.push({c:curve.getPointAt(t),rx:r,rz:r,u:fr.normals[i],v:fr.binormals[i],t});}
@@ -781,7 +861,8 @@ function buildHair(G){
     /* the sheet leaves the scalp shell tangentially (as thick as the shell where it starts): a thin start grew out of the shell as a ledge */
     thin:thick*0.85,crown:!hat&&!o.noCrown},o));
   /* under flowing hair: a thin dark scalp (the strands themselves cover the head, from the parting and the crown down) */
-  const flowShell=()=>hairShell(G,hairCoreMat(H.color),()=>0.0012,{noise:0,edge:.6});
+  /* (under the locks: nearly the hair's own colour - a darker core showed through every gap between them as a dark wedge) */
+  const flowShell=()=>hairShell(G,hairCoreMat(H.color,-0.07),()=>0.0012,{noise:0,edge:.6});
   let fr=H.fringe&&H.fringe!=='none'?H.fringe:null;
   /* strand cards per style: length, width, count; dir -1 = combed from the hairline back (pulled back / slicked) */
   const C=(len,count,o={})=>Object.assign({len:len*2.4,count:Math.round(count*1.6),w:0.02,lift:0.0018,fan:0.0025},o,o.w?{w:o.w*1.4}:{});
