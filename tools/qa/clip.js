@@ -35,11 +35,13 @@ const ROOT = path.resolve(__dirname, '../..');
 
   /* ---------- cases ---------- */
   let cases = [];
-  const sets = set === 'all' ? ['random:40', 'bodies', 'acc'] : [set];
+  const sets = set === 'all' ? ['random:40', 'bodies', 'acc', 'bags', 'hair'] : [set];
   for (const s of sets) {
     if (s.startsWith('random')) { const [, n = '24', seed = '1'] = s.split(':'); cases.push(...await page.evaluate(([n, seed]) => qaRandomCases(+n, +seed), [n, seed])); }
     else if (s === 'bodies') cases.push(...await page.evaluate(() => qaBodyCases()));
     else if (s === 'acc') cases.push(...await page.evaluate(() => qaAccCases()));
+    else if (s === 'bags') cases.push(...await page.evaluate(() => qaBagCases()));
+    else if (s === 'hair') cases.push(...await page.evaluate(() => qaHairCases()));
     else if (s.endsWith('.js')) cases.push(...require(path.resolve(s)).map(c => ({ name: c.name, state: c.state })));
   }
   /* QA_ONLY=<regexp>: only the cases whose name matches (re-check one finding) */
@@ -124,6 +126,9 @@ function installQA() {
     G.traverse(o => { if (o.isMesh && o.material === skinMat() && !o.userData.under) o.userData.qaBody = 'body'; });
     GS.traverse(o => { if (o.isMesh && o.material === skinMat()) o.userData.qaBody = 'body'; });
     buildShells(G, GS);
+    /* (long hair falls on the fitted clothes after them, as in the app) */
+    if (typeof scarfFinish === 'function') scarfFinish(G);
+    if (typeof hairFlowFinish === 'function') hairFlowFinish(G);
     const body = qaFinalize(G, WARP); body.position.y = LIFT;
     const feet = qaFinalize(GS, null); feet.traverse(o => { if (o.isMesh && !/^(body|hand|head)/.test(o.userData.qa)) o.userData.qa = 'shoes'; });
     const root = new THREE.Group(); root.add(body, feet); root.scale.set(BC.sxz, BC.sy, BC.sxz); root.updateMatrixWorld(true);
@@ -257,6 +262,24 @@ function installQA() {
       if (g === 'm' && (k === 'skirt' || k === 'leggings')) continue;
       const s = sanitize(clone(DEFAULT)); s.gender = g; if (g === 'f') { s.height = 168; s.under.bottom = 'brief'; s.under.bra = 'tshirt'; } s.mus = BODY_TYPES[bt].mus; s.fat = BODY_TYPES[bt].fat; s.outer.type = 'none'; s.hair.style = 'buzz'; f(s);
       out.push({ name: `body-${g}-${bt}-${k}`, state: sanitize(s) }); }
+    return out;
+  };
+  /* every bag over the tops and coats it is worn on (both figures, two builds) */
+  window.qaBagCases = function () {
+    const out = [], tops = { hoodie: s => { s.top.type = 'hoodie'; }, hoodieOv: s => { s.top.type = 'hoodie'; s.top.fit = 'oversized'; }, crewOv: s => { s.top.type = 'crewneck'; s.top.fit = 'oversized'; },
+      tee: s => { s.top.type = 'tee'; }, puffer: s => { s.top.type = 'tee'; s.outer.type = 'puffer'; }, coat: s => { s.top.type = 'sweater'; s.outer.type = 'overcoat'; }, fleece: s => { s.top.type = 'tee'; s.outer.type = 'fleece'; s.outer.fit = 'oversized'; } };
+    for (const g of ['m', 'f']) for (const bt of ['slim', 'heavy']) for (const bag of Object.keys(BAGS).filter(k => k !== 'none')) for (const [k, f] of Object.entries(tops)) {
+      if (!BODY_TYPES[bt]) continue;
+      const s = sanitize(clone(DEFAULT)); s.gender = g; if (g === 'f') { s.height = 168; s.under.bottom = 'brief'; } s.mus = BODY_TYPES[bt].mus; s.fat = BODY_TYPES[bt].fat; s.hair.style = 'buzz'; s.acc.bag.type = bag; f(s);
+      out.push({ name: `bag-${g}-${bt}-${bag}-${k}`, state: sanitize(s) }); }
+    return out;
+  };
+  /* every hanging style over a few tops (the hair against the clothes) */
+  window.qaHairCases = function () {
+    const out = [], tops = { tee: s => { s.top.type = 'tee'; }, hoodie: s => { s.top.type = 'hoodie'; }, coat: s => { s.top.type = 'sweater'; s.outer.type = 'overcoat'; }, scarf: s => { s.top.type = 'sweater'; s.outer.type = 'overcoat'; s.acc.scarf.type = 'long'; } };
+    for (const g of ['m', 'f']) for (const st of ['long', 'lob', 'wolf', 'bob', 'curtains', 'ponytail']) for (const tx of ['straight', 'curly']) for (const [k, f] of Object.entries(tops)) {
+      const s = sanitize(clone(DEFAULT)); s.gender = g; if (g === 'f') { s.height = 168; s.under.bottom = 'brief'; } s.hair.style = st; s.hair.texture = tx; f(s);
+      out.push({ name: `hair-${g}-${st}-${tx}-${k}`, state: sanitize(s) }); }
     return out;
   };
   window.qaAccCases = function () {

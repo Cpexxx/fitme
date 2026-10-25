@@ -136,14 +136,14 @@ function buildInto(group,state,cache=true){
       runBuilders(G,GS);const seq=matSeq(G,GS);
       safe('shells',()=>buildShells(G,GS));
       /* long hair falls on the fitted clothes */
-      safe('hair flow',()=>hairFlowFinish(G));
+      safe('scarf',()=>scarfFinish(G));safe('hair flow',()=>hairFlowFinish(G));
       if(cache){if(BUILT)BUILT.dispose();BUILT={key,skey,seq,G,GS,state:clone(state),weighted:false,dispose(){for(const g of [this.G,this.GS])g.traverse(o=>{if(o.isMesh&&!o.geometry.userData.keep)o.geometry.dispose();});}};}
     }
     const posed=S.pose&&S.pose!=='stand'&&POSES[S.pose];
     if(posed&&!(cache&&BUILT&&BUILT.G===G&&BUILT.weighted)){safe('pose weights',()=>poseAssign(G,GS));if(cache&&BUILT&&BUILT.G===G)BUILT.weighted=true;}
     const body=finalize(G,WARP,!cache);body.position.y=LIFT;const feet=finalize(GS,null,!cache);
     if(posed)safe('pose',()=>posePose(body,feet,S.pose));
-    const out=new THREE.Group();out.add(body,feet);
+    const out=new THREE.Group();out.add(body,feet);if(group===root)HAIR_HEADY.value=BC.headC.y-BC.hd.ry*0.55;
     out.scale.set(BC.sxz,BC.sy,BC.sxz);
     group.add(out);
   }finally{S=saved;}
@@ -230,6 +230,7 @@ function init3D(){
   applyOpts(scene,renderer,true);resize();flyTo('full',10,true);
   /* render on demand: only while the camera moves, the model changed or something animates; the shadow map only after a rebuild */
   renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
+  const HS={v:{x:0,z:0},az:null,t:0};
   const loop=()=>{requestAnimationFrame(loop);if(page!=='creator')return;
     if(fly.active){fly.t=Math.min(1,fly.t+1/40);const k=1-Math.pow(1-fly.t,3);camera.position.lerpVectors(fly.fromP,fly.toP,k);controls.target.lerpVectors(fly.fromT,fly.toT,k);if(fly.t>=1)fly.active=false;dirty=true;}
     controls.autoRotate=spin&&!fly.active;const moved=controls.update(),now=performance.now();
@@ -242,6 +243,12 @@ function init3D(){
     else if(QUALITY==='high'&&!stillHi&&!lowRes&&now-lastMove>350&&now-lastBuildAt>350){const w=renderer.domElement.clientWidth||1,h=renderer.domElement.clientHeight||1,pr=Math.min(basePR*1.6,3,Math.sqrt(16e6/(w*h)));
       if(pr>basePR+0.05){stillHi=true;renderer.setPixelRatio(pr);dirty=true;}}
     wasMoving=!!(moved||spin||fly.active);
+    /* hair sway: a damped spring pulled by how fast the view turns round the figure (the hair lags behind, swings back and
+       settles); while it moves the scene keeps rendering */
+    {const dt=Math.min(0.05,Math.max(0.001,(now-(HS.t||now))/1000));HS.t=now;const az=Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z);
+      let da=HS.az==null?0:az-HS.az;da=Math.atan2(Math.sin(da),Math.cos(da));HS.az=az;const w=da/dt,tg=clamp(-w*0.022,-0.04,0.04),rx=Math.cos(az),rz=-Math.sin(az);
+      const P=HAIR_SWAY.value;for(const[c,t] of [['x',tg*rx],['z',tg*rz]]){const a=(t-P[c])*70-HS.v[c]*7;HS.v[c]+=a*dt;P[c]+=HS.v[c]*dt;}
+      const act=Math.abs(P.x)+Math.abs(P.z)+Math.abs(HS.v.x)+Math.abs(HS.v.z)>2e-4;if(act){HAIR_T.value+=dt;dirty=true;}else if(P.x||P.z){P.set(0,0,0);HS.v.x=HS.v.z=0;dirty=true;}}
     if(moved||dirty||spin||OPT.fps){renderer.render(scene,camera);dirty=false;lastFrame=performance.now();fpsTick();}};
   loop();
 }

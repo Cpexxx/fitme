@@ -527,3 +527,37 @@ kanciaste i płaskie; 7) styl renderu jak w Arcane (LoL); 8) włosy mają opada�
     strony twarzy (od skroni przed uchem, falujące, do linii żuchwy).
 - Bez zmian (krótkie i teksturowane): buzz, crew, fade, curlytop, afro, twists, cornrows, dreads, braids, mullet (góra).
 - Stare `hairSheet`/`hairFringe`/`hairTail` zostały w kodzie jako zapas (pod czapką, gdy brak korzeni).
+
+## Runda 18 (2026-10-25): szyja, koszule, torba, szalik, spodnie, oversize, kołysanie włosów, crop
+Prośby (zrzuty: szerokie sztruksy z „obręczami” na kolanach, krzywa szyja z tyłu, koszula z ciemnym paskiem z guzikami):
+przerobić fryzury i dodać grawitację, żeby kucyk i długie włosy falowały przy ruchu kamery; odbiorcy poniżej 28 lat
+(sugerować się Instagramem, TikTokiem, Pinterestem); torebka przenika bluzę; szalik stoi w powietrzu; spodnie źle leżą;
+skolioza szyi; oversize zbyt kanciaste; dziwny pasek z guzikami w koszulach.
+- **Szyja:** pas szyi (`neckLoftPt`) wychodzi z pierścienia w stronę głowy (75% kierunku do głowy zamiast osi szyi), a
+  `BC.headC` jest o 1,2 cm bliżej podstawy szyi. Głowa wysunięta 4 cm przed podstawą dawała zgiętą szyję w kształcie S.
+- **Koszule:** listwa z guzikami to już nie osobna łata (cieniowała się ciemniej), tylko przeszycia i guziki na tkaninie.
+  Kieszenie: `tube` dla fragmentów (nie pełny obwód) ma prawdziwą skalę tekstury, a nie jeden kafel rozciągnięty na
+  kieszeń (ciemniejsza płytka). `shPocketOnFabric` kładzie kieszeń na dopasowaną tkaninę. Szwy z boków i na dole kieszeni.
+- **Torba:** listonoszka na przodzie biodra (kąt 0,8 zamiast 0,35; wcześniej ręka i rękaw przechodziły przez torbę).
+  `shBagsOut` sprawdza każdy wierzchołek. W pozie cała torba (korpus, klapa, zamek) ma jedną transformację, bo wcześniej
+  rozpadała się na kawałki. Nowe zestawy w `clip.js`: `bags` i `hair` (część `all`). `qaBuild` woła `scarfFinish` i
+  `hairFlowFinish`.
+- **Szalik:** końce symulowane po dopasowaniu ubrań (`scarfFinish` w app.js przed `hairFlowFinish`). `hairDrapeSim` /
+  `hairKeepOff` z opcją `sdf` (pole odległości postaci, razem z owinięciem szalika).
+- **Spodnie (`shFolds`, nogi):** bez poziomych pierścieni wokół kolan i nad dołem (wyglądały jak obręcze lub harmonijka).
+  Długie pionowe fałdy (głębsze przy luźnym kroju), delikatne skośne zmarszczki pod kolanem tylko przy dopasowanych,
+  załamanie tylko z przodu nad butem.
+- **Oversize:** luz 3,6 cm (było 4,8), kurtki ×1,28 (było ×1,5). Obniżone ramię łagodniejsze (`topCap`: mniej na zewnątrz,
+  bardziej zaokrąglone). Szerokie, miękkie pionowe fałdy tułowia i rękawów przy dużym luzie.
+- **Kołysanie włosów:** `lockMat` ma uniform `HAIR_SWAY` (core.js) i atrybut `hairW` na wierzchołek (0 przy skórze, 1 na
+  końcach wolnych włosów; kucyk od gumki, pasemka przy twarzy ×0,6). Sprężyna w pętli renderowania (app.js, `HS`):
+  prędkość obrotu widoku wokół postaci, tłumione wahnięcie, fala w dół włosów. Póki trwa ruch, scena się renderuje.
+  Cienie nie kołyszą się (materiał głębokości jest bez tego).
+- **Fryzury (trendy):** crew, fade i góra mulleta to textured crop (French crop, `cropLocks`): kosmyki od wiru (z
+  zawirowaniem wokół niego, `COMB.crop`) do przodu, postrzępiona krótka grzywka, boki krótkie lub fade.
+  Gęsto: 360 kosmyków (crew 500), szerokie końce (`tipW 0.24`, `tap0 0.55`), warstwy od odległości do wiru (`o.upFrom`).
+- **Korzenie kosmyków (`scalpLocks`, wszystkie fryzury):** spirala złotego kąta generowana od razu w gęstości dającej
+  ~N korzeni w regionie. Wcześniej brano co k-ty punkt gęstej spirali i przy k bliskim liczbie Fibonacciego korzenie
+  układały się w ramiona spirali: kosmyki w „płatkach” z łysą skórą między nimi (najgorzej w crew).
+- **Uwaga do pracy w kopiach roboczych:** nie łączyć `cd` z `&&` po poleceniu, które może zawieść (np. brak `rsync`):
+  dalsze polecenia wykonają się w głównym repo. Zawsze ścieżki bezwzględne.

@@ -166,7 +166,7 @@ function hairField(yTop,yBot){
 const DRAPE_CACHE=new Map();
 function hairDrape(roots,nv,o){
   /* the same hair over the same body and clothes drapes the same: remembered (a change of colour, shoes, ... is free) */
-  const key=nv+'|'+(o.steps||0)+'|'+[o.thin,o.thick,o.bodyClr,o.lat,o.band,o.stiff,o.latK||0,o.pushZ||0].join(',')+'|'+o.field.sig+'|'+roots.map(r=>[r.ph,r.y,r.len,r.bias,r.xt,r.p0?r.p0.x+','+r.p0.y+','+r.p0.z+','+r.p1.x+','+r.p1.y+','+r.p1.z:''].map(v=>typeof v==='number'?v.toFixed(5):v).join(',')).join(';');
+  const key=nv+'|'+(o.steps||0)+'|'+[o.thin,o.thick,o.bodyClr,o.lat,o.band,o.stiff,o.latK||0,o.pushZ||0].join(',')+'|'+o.field.sig+'|'+(o.sdf?o.sdf.sig:'')+'|'+roots.map(r=>[r.ph,r.y,r.len,r.bias,r.xt,r.p0?r.p0.x+','+r.p0.y+','+r.p0.z+','+r.p1.x+','+r.p1.y+','+r.p1.z:''].map(v=>typeof v==='number'?v.toFixed(5):v).join(',')).join(';');
   const hit=DRAPE_CACHE.get(key);if(hit)return hit.map(c=>c.map(p=>p.clone()));
   /* a wide sheet: every third strand is simulated, the ones between follow their neighbours (kept off the body); in high
      quality every strand is */
@@ -182,10 +182,11 @@ function hairDrape(roots,nv,o){
 /* push a point between simulated strands out of the head and body (as the strands themselves are) */
 function hairKeepOff(p,v,o){const hc=BC.headC,F=o.field,t=[0,0],cl=lerp(o.thin,o.thick,smooth(v/0.2));
   for(let it=0;it<2;it++){{const dx=p.x,dz=p.z-hc.z,r=Math.hypot(dx,dz)||1e-6;F.head(p.y,Math.atan2(dz,dx),t);if(t[0]>0&&r<t[0]+cl){const d=(t[0]+cl-r)/(1+t[1]*t[1]);p.x+=dx/r*d;p.z+=dz/r*d;p.y-=t[1]*d;}}
-    {const dx=p.x,dz=p.z,r=Math.hypot(dx,dz)||1e-6;F.body(p.y,Math.atan2(dz,dx),t);if(t[0]>0&&r<t[0]+o.bodyClr){const d=(t[0]+o.bodyClr-r)/(1+t[1]*t[1]);p.x+=dx/r*d;p.z+=dz/r*d;p.y-=t[1]*d;}}}
+    if(o.sdf&&p.y<o.sdf.y1&&p.y>o.sdf.y0){const d=o.sdf.at(p.x,p.y,p.z);if(d<o.bodyClr){const g=[0,0,0];o.sdf.grad(p.x,p.y,p.z,g);p.x+=g[0]*(o.bodyClr-d);p.y+=g[1]*(o.bodyClr-d);p.z+=g[2]*(o.bodyClr-d);}}
+    else{const dx=p.x,dz=p.z,r=Math.hypot(dx,dz)||1e-6;F.body(p.y,Math.atan2(dz,dx),t);if(t[0]>0&&r<t[0]+o.bodyClr){const d=(t[0]+o.bodyClr-r)/(1+t[1]*t[1]);p.x+=dx/r*d;p.z+=dz/r*d;p.y-=t[1]*d;}}}
   return p;}
 function hairDrapeSim(roots,nv,o){
-  const hc=BC.headC,ry=BC.hd.ry,n=roots.length,np=nv+1,F=o.field,tmp=[0,0];
+  const hc=BC.headC,ry=BC.hd.ry,n=roots.length,np=nv+1,F=o.field,tmp=[0,0],SG=[0,0,0];
   const X=new Float32Array(n*np*3),Q=new Float32Array(n*np*3),D=new Float32Array(n*np*3),CT=new Uint8Array(n*np),CB=new Uint8Array(n*np),SEG=new Float32Array(n),CL=new Float32Array(np);
   for(let j=0;j<np;j++)CL[j]=lerp(o.thin,o.thick,smooth(j/nv/0.2));
   /* how far a point keeps from the head: its clearance, more over the ears, less under a headband */
@@ -197,7 +198,9 @@ function hairDrapeSim(roots,nv,o){
       if(tmp[0]>0){const R=tmp[0]+headClr(j,y,ph);if(r<R){const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit|=1;}}}
     /* body and clothes (axis through the torso; pushZ: a sheet on the front is pushed straight forward, not out from the
        axis, which spread its columns sideways) */
-    if(X[k+1]<yBd){const dx=X[k],dz=X[k+2],r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[k+1],ph,tmp);
+    /* (with the dressed figure's distance field: out along its gradient - onto what is drawn, not its envelope) */
+    if(o.sdf&&X[k+1]<o.sdf.y1&&X[k+1]>o.sdf.y0){const d=o.sdf.at(X[k],X[k+1],X[k+2]);if(d<o.bodyClr){o.sdf.grad(X[k],X[k+1],X[k+2],SG);const m=o.bodyClr-d;X[k]+=SG[0]*m;X[k+1]+=SG[1]*m;X[k+2]+=SG[2]*m;hit|=2;}}
+    else if(X[k+1]<yBd){const dx=X[k],dz=X[k+2],r=Math.sqrt(dx*dx+dz*dz)||1e-6,ph=Math.atan2(dz,dx);F.body(X[k+1],ph,tmp);
       if(tmp[0]>0){const R=tmp[0]+o.bodyClr;if(r<R){if(o.pushZ&&dz>0){X[k+2]=Math.max(dz,Math.sqrt(Math.max(0,R*R-dx*dx)));hit|=2;}else{const g=tmp[1],nn=1+g*g,d=(R-r)/nn;X[k]+=dx/r*d;X[k+2]+=dz/r*d;X[k+1]-=g*d;hit|=2;}}}}
     return hit;};
   /* start: hanging straight down from the root, pushed out of the head and body */
@@ -513,7 +516,7 @@ function hairFlow(G,o){
   FLOW_PENDING={o};const g=new THREE.BufferGeometry(),hc=BC.headC;
   g.setAttribute('position',new THREE.BufferAttribute(new Float32Array([hc.x,hc.y,hc.z,hc.x+1e-4,hc.y,hc.z,hc.x,hc.y+1e-4,hc.z]),3));
   g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array([0,0,1,0,0,1,0,0,1]),3));g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(6),2));
-  g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(9).fill(1),3));g.setAttribute('hairT',new THREE.BufferAttribute(new Float32Array([0,-1,0,0,-1,0,0,-1,0]),3));g.setIndex([0,1,2]);g.userData.keepNormals=true;
+  g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(9).fill(1),3));g.setAttribute('hairT',new THREE.BufferAttribute(new Float32Array([0,-1,0,0,-1,0,0,-1,0]),3));g.setAttribute('hairW',new THREE.BufferAttribute(new Float32Array(3),1));g.setIndex([0,1,2]);g.userData.keepNormals=true;
   const m=mk(g,lockMat(S.hair.color));m.userData.flowLock=1;G.add(m);return true;}
 function hairFlowFinish(G){const P=FLOW_PENDING;FLOW_PENDING=null;if(!P)return;let ph=null;G.traverse(x=>{if(x.isMesh&&x.userData.flowLock)ph=x;});if(!ph)return;
   const g=hairFlowRun(G,P.o);if(g){ph.geometry.dispose();ph.geometry=g;}
@@ -777,7 +780,7 @@ function lockArrays(locks,sp){
   const hc=BC.headC,ry=BC.hd.ry,M=12;
   const KL=locks.map(l=>{let L=0;for(let k=1;k<l.K;k++)L+=Math.hypot(l.P[k*3]-l.P[k*3-3],l.P[k*3+1]-l.P[k*3-2],l.P[k*3+2]-l.P[k*3-1]);l._L=L;return Math.max(4,Math.round((L+(l.ex||0))/(l.sp||sp))+1);});
   let nv=0,ni=0;for(const k of KL){nv+=k*(M+1);ni+=(k-1)*M*6;}
-  const P=new Float32Array(nv*3),N=new Float32Array(nv*3),U=new Float32Array(nv*2),C=new Float32Array(nv*3),HT=new Float32Array(nv*3),I=new Uint32Array(ni);
+  const P=new Float32Array(nv*3),N=new Float32Array(nv*3),U=new Float32Array(nv*2),C=new Float32Array(nv*3),HT=new Float32Array(nv*3),SW=new Float32Array(nv),I=new Uint32Array(ni);
   let v=0,w=0;const A=[0,0,0],Tg=[0,0,0];
   locks.forEach((l,li)=>{const K=l.K,G=l.P,arc=l.arc||0,Kl=KL[li],EX=l.ex||0,CW=l.twist||0;
     const S=new Float32Array(K);for(let k=1;k<K;k++)S[k]=S[k-1]+Math.hypot(G[k*3]-G[k*3-3],G[k*3+1]-G[k*3-2],G[k*3+2]-G[k*3-1]);const Lg=S[K-1]||1e-6,fr=Math.max(1e-3,Lg-arc);
@@ -803,9 +806,11 @@ function lockArrays(locks,sp){
         const ex=ct/(hwid||1e-6),ey=st/(hth||1e-6),el=Math.hypot(ex,ey)||1,qb=ex/el,qn=ey/el,o3=v*3;
         P[o3]=x+bx*ox+nx*oy;P[o3+1]=y+by*ox+ny*oy;P[o3+2]=z+bz*ox+nz*oy;
         N[o3]=bx*qb+nx*qn;N[o3+1]=by*qb+ny*qn;N[o3+2]=bz*qb+nz*qn;HT[o3]=tx;HT[o3+1]=ty;HT[o3+2]=tz;
+        /* how freely the point swings (the view's sway, lockMat): from where the lock leaves the head, or l.sway0 */
+        SW[v]=l.sway0!=null?smooth((s-l.sway0)/Math.max(0.05,(Lg-l.sway0)*0.8))*(l.swayK!=null?l.swayK:1):arc>0?smooth((s-arc)/Math.max(0.08,fr*0.8)):0;
         U[v*2]=m/M+tw;U[v*2+1]=s+(l.uOff||li*0.731);C[o3]=C[o3+1]=C[o3+2]=sh;v++;}}
     for(let j=0;j+1<Kl;j++)for(let m=0;m<M;m++){const a=v0+j*(M+1)+m,b=a+M+1;I[w++]=a;I[w++]=b;I[w++]=a+1;I[w++]=a+1;I[w++]=b;I[w++]=b+1;}});
-  return{P,N,U,C,HT,I};}
+  return{P,N,U,C,HT,SW,I};}
 /* the hanging styles' locks: one per guide (curls: every other guide makes a lock - a thick round rope coiling round its
    axis, its grooves twisted with the coil; thin tubes along the coils, or ribbons, read as noodles or crumpled paper) */
 function flowLocks(gd,sim){
@@ -834,7 +839,7 @@ function flowLocks(gd,sim){
 /* a geometry from the locks' arrays (copies: the hair is moved in place afterwards - over a collar, onto the clothes - and
    the arrays stay cached) */
 function lockGeo(L){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(L.P.slice(),3));g.setAttribute('normal',new THREE.BufferAttribute(L.N.slice(),3));
-  g.setAttribute('uv',new THREE.BufferAttribute(L.U.slice(),2));g.setAttribute('color',new THREE.BufferAttribute(L.C.slice(),3));g.setAttribute('hairT',new THREE.BufferAttribute(L.HT.slice(),3));
+  g.setAttribute('uv',new THREE.BufferAttribute(L.U.slice(),2));g.setAttribute('color',new THREE.BufferAttribute(L.C.slice(),3));g.setAttribute('hairT',new THREE.BufferAttribute(L.HT.slice(),3));g.setAttribute('hairW',new THREE.BufferAttribute(L.SW.slice(),1));
   g.setIndex(new THREE.BufferAttribute(L.I.slice(),1));g.userData.keepNormals=true;return g;}
 function tubeAlong(curve,n,rf,o={}){
   const fr=curve.computeFrenetFrames(n,false),out=[];
@@ -919,16 +924,21 @@ function faceAf(ny){return clamp(hairlineAf(ny)-0.03,0.35,ny<-0.55?0.9:1.02);}
 function scalpLocks(o){
   const hc=BC.headC,ry=BC.hd.ry,HT=headTab(),R=rng(o.seed||313),hat=capType()!=='none',locks=[],v=new THREE.Vector3();
   const N=Math.max(4,Math.round((o.n||300)*(HAIR_LOD?0.5:QUALITY==='perf'?0.75:1)));let cand=o.roots;
-  if(!cand){cand=[];const M=8000,ga=Math.PI*(3-Math.sqrt(5));for(let i=0;i<M;i++){const ny=1-2*(i+0.5)/M;if(ny<-0.75)break;const ph=wrapA(i*ga);if(ny<hairlineNy(ph)+(o.line!=null?o.line:0.01))continue;
+  /* the roots: a golden spiral over the sphere, kept where the hair grows - laid out at the density that gives N of them
+     there (every k-th point of a denser spiral lined the roots up in its arms when k came near a Fibonacci number: the
+     locks in petals with bare scalp between) */
+  if(!cand){const ga=Math.PI*(3-Math.sqrt(5)),spiral=M=>{const c=[];for(let i=0;i<M;i++){const ny=1-2*(i+0.5)/M;if(ny<-0.75)break;const ph=wrapA(i*ga);if(ny<hairlineNy(ph)+(o.line!=null?o.line:0.01))continue;
       if(hat&&!o.hatOK){const hl=hatLineNy(ph);if(hl!=null&&ny>hl-0.025)continue;}
-      if(o.region&&!o.region(ny,ph))continue;cand.push([ny,ph]);}}
+      if(o.region&&!o.region(ny,ph))continue;c.push([ny,ph]);}return c;};
+    cand=spiral(8000);if(cand.length>N)cand=spiral(Math.max(8,Math.round(8000*N/cand.length)));}
   const stepC=Math.max(1,cand.length/N),st=0.004;
   const onHead=(P,h)=>{const dx=P.x-hc.x,dy=P.y-hc.y,dz=P.z-hc.z,d=Math.hypot(dx,dy,dz)||1,Rr=HT.at(dx,dy,dz,d)+h;P.set(hc.x+dx*Rr/d,hc.y+dy*Rr/d,hc.z+dz*Rr/d);return P;};
   for(let f=0;f<cand.length;f+=stepC){const[ny,ph]=cand[Math.floor(f)],L=o.len(ny,ph)*(1+(o.lenVar!=null?o.lenVar:0.15)*(R()-0.5)*2);if(!(L>0.006))continue;
     /* layering: a lock lies higher the nearer its root is to where the hair comes from (the parting, the whorl): traced
        back against the comb to there (where the comb turns round) - the locks from upstream pass over this one's root and
-       hide it (lifted at random, every root stood out as a scale) */
-    let up=0;if(o.layer){let Q=onHead(headPt(Math.acos(clamp(ny,-0.99,0.995)),ph,0,false),0),pd=o.comb(Q,0).clone();for(let k=0;k<60;k++){const d=o.comb(Q,0);if(d.dot(pd)<0.2)break;pd.copy(d);Q=onHead(Q.clone().addScaledVector(d,-0.004),0);up+=0.004;}}
+       hide it (lifted at random, every root stood out as a scale); o.upFrom: from a single whorl the distance to it (traced
+       back, the trace broke off at random round the swirl: neighbours at different heights, the locks heaped in petals) */
+    let up=0;if(o.layer&&o.upFrom)up=headPt(Math.acos(clamp(ny,-0.99,0.995)),ph,0,false).distanceTo(o.upFrom);else if(o.layer){let Q=onHead(headPt(Math.acos(clamp(ny,-0.99,0.995)),ph,0,false),0),pd=o.comb(Q,0).clone();for(let k=0;k<60;k++){const d=o.comb(Q,0);if(d.dot(pd)<0.2)break;pd.copy(d);Q=onHead(Q.clone().addScaledVector(d,-0.004),0);up+=0.004;}}
     const hm=o.lift(ny,ph)+(o.layer||0)*(1-clamp(up/0.24,0,1)),pts=[];let P=onHead(headPt(Math.acos(clamp(ny,-0.99,0.995)),ph,0,false),hm*0.35),dv=o.comb(P,0).clone(),free=false,fd=null;
     const wav=o.wave||0,wl=o.waveL||0.06,wp=R()*TAU;
     const jit=R()*2-1;
@@ -962,7 +972,9 @@ const COMB={
   /* back from the hairline over the top (slicked, a quiff's base) */
   back:()=>{const hc=BC.headC;return P=>{const n=P.clone().sub(hc).normalize(),v=V3(0.12*Math.sign(P.x-hc.x),-0.35*smooth((hc.y-P.y)/0.04+0.5),-1);v.addScaledVector(n,-v.dot(n));return v.normalize();};},
   /* forward and down from the crown (crops, textured short hair), out from the whorl */
-  crop:()=>{const hc=BC.headC,W=headPt(0.42,BACKA,0,false);return P=>{const n=P.clone().sub(hc).normalize(),v=P.clone().sub(W);v.y-=0.04;v.addScaledVector(n,-v.dot(n));return v.normalize();};},
+  /* (round the whorl the hair turns in a swirl: straight out from a point it left a bald star at the crown) */
+  crop:()=>{const hc=BC.headC,W=headPt(0.42,BACKA,0,false);return P=>{const n=P.clone().sub(hc).normalize(),v=P.clone().sub(W),dw=v.length();v.y-=0.04*smooth(dw/0.05);v.addScaledVector(n,-v.dot(n));
+    const l=v.length()||1;v.multiplyScalar(1/l);const sw=n.clone().cross(v);v.addScaledVector(sw,1.4*Math.exp(-dw/0.035));return v.normalize();};},
   /* to one side from a side parting at x = px */
   side:(px)=>{const hc=BC.headC;return(P,f)=>{const n=P.clone().sub(hc).normalize(),sx=(P.x-hc.x)>px?1:-1,v=V3(sx*(sx>0?1:0.7),-0.4-0.4*f,-0.2+0.15*(sx>0?1:-0.5));v.addScaledVector(n,-v.dot(n));return v.normalize();};},
 };
@@ -999,6 +1011,13 @@ function fringeLocks(G,kind){const hc=BC.headC,ry=BC.hd.ry,w=0.85;
   const comb=(P,f)=>{const n=P.clone().sub(hc).normalize(),v=P.clone().sub(W);v.y=Math.min(v.y,0)-0.04-0.08*f;if(kind==='curtain')v.x+=0.06*Math.sign(P.x-hc.x)*f;if(sw)v.x+=0.05*(1-f);v.addScaledVector(n,-v.dot(n));return v.normalize();};
   addLocks(G,scalpLocks({n:90,seed:61,region:(ny,ph)=>angFront(ph)<w&&ny<hairlineNy(ph)+0.3,face:false,comb,len:()=>0.25,lenVar:0,
     stop:(P,j)=>{const ph=Math.atan2(P.z-hc.z,P.x-hc.x);return(P.y-hc.y)/ry<y1(ph)+0.04*(j||0)&&P.z-hc.z>0.02;},lift:ny=>0.007*(hairTexP().vol||1),layer:0.004,ramp:0.03,w:0.022,th:0.0065,tipW:0.2,tap0:0.55,root0:0.4,ex:0.002}),0.004);}
+/* a textured crop (French crop): short locks on the top combed forward from the crown, a short choppy fringe over the
+   forehead; o.top: the lowest ny of the top (the sides below it are left to the shell - a fade or a short back and sides),
+   o.fringe: how low the fringe comes (ny), o.len: lock length */
+function cropLocks(G,o){const vol=hairTexP().vol||1,R=rng(83);
+  addLocks(G,scalpLocks({n:o.n||360,seed:89,upFrom:headPt(0.42,BACKA,0,false),region:(ny,ph)=>ny>o.top-(angFront(ph)<0.9?0.2:0),comb:(P,f)=>{const d=COMB.crop()(P,f);return d;},
+    len:()=>o.len,lenVar:0.25,stop:(P,j)=>{const hc=BC.headC,ry=BC.hd.ry,ny=(P.y-hc.y)/ry,ph=Math.atan2(P.z-hc.z,P.x-hc.x);return ny<(angFront(ph)<0.9?o.fringe:o.top-0.04)+0.05*(j||0);},
+    face:false,lift:ny=>(0.006+(o.vol||0.008)*smooth((ny-0.4)/0.4))*vol,tipLift:o.tipLift!=null?o.tipLift:0.003,layer:0.006,ramp:0.02,w:o.w||0.024,th:0.008,tipW:0.24,tap0:0.55,root0:0.4,ex:0.002}),0.004);}
 /* a ponytail: the hair combed from the hairline to the tie in locks, the tail a bundle of twisting locks round its line, a
    strand or two left loose in front of each ear to frame the face */
 function hairPonytail(G,ny,len,r,frame){
@@ -1018,7 +1037,7 @@ function hairPonytail(G,ny,len,r,frame){
       const a=a0+tw*t*Math.PI,rad=rf(t)*rr*(1+0.08*smooth((t-0.75)/0.25)*Math.sin(wp)),wv=T.wave?0.003*T.wave*Math.sin(wp+t*Lt/0.05*TAU)*smooth(t/0.2):0;
       const ox=Math.cos(a),oy=Math.sin(a);Q.addScaledVector(Nn,ox*(rad+wv)).addScaledVector(Bn,oy*(rad+wv));Pp[k*3]=Q.x;Pp[k*3+1]=Q.y;Pp[k*3+2]=Q.z;
       const on=Nn.clone().multiplyScalar(ox).addScaledVector(Bn,oy);O[k*3]=on.x;O[k*3+1]=on.y;O[k*3+2]=on.z;}
-    locks.push({P:Pp,K,O,arc:0,wS:0,wF:TAU*r*rr/NL*(inner?1.6:2.1),tF:0.0075,tS:0,tone:inner?0.85:0.95+0.12*R(),tipW:0.18+0.12*R(),tap0:0.45,root0:0.8,ex:0,uOff:R()*50});}
+    locks.push({P:Pp,K,O,arc:0,sway0:0,wS:0,wF:TAU*r*rr/NL*(inner?1.6:2.1),tF:0.0075,tS:0,tone:inner?0.85:0.95+0.12*R(),tipW:0.18+0.12*R(),tap0:0.45,root0:0.8,ex:0,uOff:R()*50});}
   addLocks(G,locks,0.006);
   /* face-framing strands: two locks each side, from the temple's hairline, falling in front of the ear along the cheek
      to below the jaw - a curve laid by hand (they hang free, not over the scalp), kept clear of the face and the jaw */
@@ -1032,7 +1051,7 @@ function hairPonytail(G,ny,len,r,frame){
         const hr=headHorizR(P.y,ang),R0=hr!=null?hr:BC.neckR,Rr=Math.max(hairClear(P.y,ang,0.008),R0+0.008+0.012*smooth((-ny-0.2)/0.6))+0.004*Math.sin(wp+s/0.07*TAU)*smooth(s/0.05);
         const tx=hc.x+Math.cos(ang)*Rr,tz=hc.z+Math.sin(ang)*Rr;P.x=tx;P.z=tz;
         {const wv=(T.wave?0.005*T.wave:0.003)*Math.sin(wp*1.7+s/0.08*TAU)*smooth(s/0.05);P.z+=wv;}}
-      const K=pts2.length/3;if(K>3)fl.push({P:Float32Array.from(pts2),K,arc:0,wS:0,wF:0.02*(0.85+0.3*R2()),tF:0.0065,tS:0,tone:0.97+0.08*R2(),tipW:0.18,tap0:0.35,root0:0.5,ex:0.004,uOff:R2()*50});}
+      const K=pts2.length/3;if(K>3)fl.push({P:Float32Array.from(pts2),K,arc:0,sway0:0.04,swayK:0.6,wS:0,wF:0.02*(0.85+0.3*R2()),tF:0.0065,tS:0,tone:0.97+0.08*R2(),tipW:0.18,tap0:0.35,root0:0.5,ex:0.004,uOff:R2()*50});}
     addLocks(G,fl,0.004);}
   const tie=mk(new THREE.TorusGeometry(r*0.62,0.004,8,24),plain('#1b1a19',.6));tie.position.copy(pts[1]);tie.quaternion.copy(qFromTo(VZ,pts[2].clone().sub(pts[1])));G.add(tie);
 }
@@ -1061,8 +1080,8 @@ function buildHair(G){
   const coil=T.wave>=2,ck=coil?'coil':'strand';
   switch(st){
     case 'buzz':hairShell(G,hairMat(H.color,'v','coil'),()=>0.0016,{edge:.8,noise:0});break;
-    case 'crew':hairShell(G,mat,ny=>0.004+0.011*smooth((ny-0.25)/0.5),{edge:.5,noise:.5,clump:.4,cards:C(0.03,320,{kind:'short',w:0.012,fan:0.002,minNy:0.15})});break;
-    case 'fade':hairShell(G,mat,(ny,d)=>0.0016+0.024*smooth((ny-0.42)/0.33)*(1+0.25*front(d)),{edge:.7,noise:1,clump:.4,messy:0.006,cards:C(0.04,300,{kind:coil?'coil':'short',fan:0.006,minNy:0.5})});break;
+    case 'crew':hairShell(G,hat?hairMat(H.color,'v','coil'):hairCoreMat(H.color,-0.22),ny=>0.0016+0.003*smooth((ny-0.2)/0.4),{edge:.8,noise:0});if(!hat)cropLocks(G,{n:500,top:0.35,fringe:0.32,len:hairLen(0.045,0.08)});break;
+    case 'fade':hairShell(G,hairMat(H.color,'v','coil'),ny=>0.0012+0.0045*smooth((ny-0.38)/0.25),{edge:.8,noise:0});if(!hat)cropLocks(G,{top:0.55,fringe:0.38,len:hairLen(0.05,0.09),vol:0.012});break;
     case 'quiff':hairShell(G,mat,(ny,d)=>0.0016+0.006*smooth((ny-0.3)/0.3),{edge:.7,noise:1,clump:.4,cards:C(0.025,260,{kind:'short',fan:0.004,minNy:0.2})});shortLocks(G,{region:(ny,ph)=>ny>0.52,comb:COMB.back(),cut:ph=>0.38,lift:(ny,ph)=>0.004+0.032*gauss(angFront(ph),0.65)*smooth((ny-0.55)/0.2)*(1-0.55*smooth((ny-0.85)/0.15)),tipLift:-0.004,layer:0.006,n:200,jit:0.04});break;
     case 'slick':hairShell(G,hairCoreMat(H.color,-0.07),()=>0.0016,{edge:.4,noise:0});shortLocks(G,{comb:COMB.back(),cut:ph=>-0.55+0.25*smooth((1.3-angFront(ph))/0.6),lift:ny=>0.004+0.008*smooth((ny-0.3)/0.5),layer:0.006,jit:0.04,w:0.022,th:0.006});break;
     case 'sidepart':hairShell(G,hairCoreMat(H.color,-0.07),()=>0.0016,{edge:.4,noise:0});shortLocks(G,{comb:COMB.side(0.035),cut:ph=>{const af=angFront(ph);return lerp(0.22,-0.1,smooth((af-0.7)/0.6))+lerp(0,-0.42,smooth((af-1.8)/1.0));},lift:(ny,ph)=>0.004+0.01*smooth((ny-0.3)/0.5),jit:0.06});break;
@@ -1073,7 +1092,7 @@ function buildHair(G){
     case 'cornrows':hairShell(G,bmat,(ny,d,ph,dir)=>0.0035+0.0045*Math.abs(Math.sin(dir.x*34)),{edge:.6,noise:0});break;
     case 'dreads':hairShell(G,bmat,()=>0.011,{edge:.5,noise:.3});hairLocks(G,bmat,{n:hat?40:80,len:hairLen(0.22,0.55),r:0.0078,stand:0.014});break;
     case 'braids':hairShell(G,bmat,(ny,d,ph,dir)=>0.006+0.003*Math.abs(Math.sin(dir.x*30)),{edge:.5,noise:0});hairLocks(G,bmat,{n:hat?60:115,len:hairLen(0.3,0.66),r:0.0055,stand:0.01});break;
-    case 'mullet':hairShell(G,mat,ny=>0.008+0.016*smooth((ny-0.3)/0.5),{edge:.5,noise:1,clump:.4,messy:.004,cards:C(0.05,300,{endRand:0.55,kind:ck,fan:0.006})});sheet(1.75,sheetTo.mullet,0.016,{noCrown:1,choppy:1,flare:0.008,cards:C(0.09,160,{kind:ck,w:0.018,v0:0.02,v1:1,fan:0.006})});break;
+    case 'mullet':hairShell(G,hairCoreMat(H.color,-0.07),ny=>0.002+0.004*smooth((ny-0.3)/0.5),{edge:.6,noise:0});if(!hat)cropLocks(G,{top:0.3,fringe:0.3,len:hairLen(0.06,0.1),vol:0.01});sheet(1.75,sheetTo.mullet,0.016,{noCrown:1,choppy:1,flare:0.008,cards:C(0.09,160,{kind:ck,w:0.018,v0:0.02,v1:1,fan:0.006})});break;
     case 'wolf':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.012+0.022*smooth((ny-0.2)/0.6),{under:hat?null:0.93,edge:.5,noise:1.2,clump:.4,messy:.008,cards:hat?C(0.06,340,{endRand:0.55,kind:ck,fan:0.008,drift:0.12}):C(0.08,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.003,lift:0.0012})});else flowShell();sheet(0.98,sheetTo.wolf,0.022,{choppy:1,flare:0.012,cards:C(0.1,240,{kind:ck,w:0.02,v0:0.02,v1:1,fan:0.008,drift:0.1})});fr=fr||'curtain';break;
     case 'pixie':hairShell(G,hairCoreMat(H.color,-0.07),()=>0.0016,{edge:.4,noise:0});shortLocks(G,{comb:COMB.side(0.03),cut:ph=>{const af=angFront(ph);return lerp(0.18,-0.25,smooth((af-0.5)/0.8))+lerp(0,-0.3,smooth((af-1.9)/1.0));},lift:(ny,ph)=>0.005+0.014*smooth((ny-0.25)/0.5),jit:0.12,tipLift:0.004,w:0.024});fr=null;break;
     case 'bob':if(hat)hairShell(G,hat?mat:hairCoreMat(H.color),ny=>0.01+0.012*smooth((ny-0.2)/0.6),{under:hat?null:0.8099999999999999,edge:.5,clump:.4,cards:hat?C(0.06,280,{endRand:0.55,kind:ck}):C(0.09,800,{kind:'strand',front:1.15,v0:0.2,v1:1,fan:0.0008,lift:0.0007})});else flowShell();sheet(0.86,sheetTo.bob,0.017,{tipCurl:0.12,flare:-0.004,cards:C(0.1,260,{kind:ck,w:0.02,v0:0.02,v1:1})});break;

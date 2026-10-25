@@ -314,7 +314,9 @@ function buildBag(G0){
   const placeBox=(geo,mat,a,y,out)=>{const e=bodyEnv(y,LAYERS),P=envPt(e,a,y,out),b=mk(geo,mat);b.position.copy(P);b.quaternion.copy(qFromTo(VZ,radialN(P)));G.add(b);return b;};
   if(t0==='crossbody'||t0==='sling'){
     const sling=t0==='sling';strapRing(G,web,sling?1.31:1.22,sling?0.18:0.27,Math.PI,sling?0.034:0.028);
-    const a=sling?FRONT-0.28:0.35,y=sling?1.16:0.97,geo=sling?roundBox(0.22,0.085,0.06,0.03):roundBox(0.2,0.15,0.055,0.018);
+    /* (a crossbody bag rests on the front of the hip: at its side, 0.35 rad from the side, the arm hanging there went
+       through it - a sleeve and the hand cut into the bag) */
+    const a=sling?FRONT-0.28:0.8,y=sling?1.16:0.97,geo=sling?roundBox(0.22,0.085,0.06,0.03):roundBox(0.2,0.15,0.055,0.018);
     const b=placeBox(geo,sling?nm:lm,a,y,sling?0.036:0.034);b.userData.bagBody=true;
     const z=mk(cordGeo([V3(-0.09,sling?0.03:0.06,0.03),V3(0.09,sling?0.03:0.06,0.03)],0.0016),metal);b.add(z);
     if(!sling){const fl=mk(roundBox(0.2,0.08,0.008,0.01),lm);fl.position.set(0,0.035,0.03);b.add(fl);}
@@ -360,8 +362,11 @@ function buildBag(G0){
       const hd=mk(cordGeo(pp,0.0058,false,8,60),fabric('canvas',shade(col,-0.08)));hd.userData.ctx='none';G.add(hd);}
   }
 }
+let SCARF_PENDING=null;
+/* the scarf's ends on the fitted clothes: the dressed figure's distance field (the scarf's wrap included) */
+function scarfFinish(G){const f=SCARF_PENDING;SCARF_PENDING=null;if(!f)return;const ms=sdfMeshes(G),sdf=bodySDF(ms,0.6,1.56);sdf.sig=sdfSig(ms);f(sdf);}
 function buildScarf(G){
-  const A=S.acc.scarf,t0=A.type;if(!t0||t0==='none')return;
+  const A=S.acc.scarf,t0=A.type;SCARF_PENDING=null;if(!t0||t0==='none')return;
   /* every piece of the scarf is tagged: once the clothes are fitted it is moved out over them (shScarfOut) */
   /* (not re-seated point by point with the cloth: that tore the hanging ends into shards; the ends are draped over the
      clothes already and shScarfOut lifts each piece clear of the fitted clothes as a whole) */
@@ -380,12 +385,14 @@ function buildScarf(G){
   /* the hanging ends: cloth simulated like hair (each end a few columns kept side by side, falling over the chest and
      the coat, resting on them), then given the knit's thickness and a fringe */
   const ends=loose?[[-0.06,0.5],[0.055,0.4]]:[[-0.035,0.29]],W=loose?0.11:0.13,NC=9,nv=20,yTop=y0+0.032;
-  const field=hairField(1.58,0.6);
+  /* (the ends are draped once the clothes are fitted - scarfFinish, after buildShells: over the clothes' first, looser
+     outline they hung off the chest in the air) */
+  SCARF_PENDING=(sdf)=>{const field=hairField(1.58,0.6);
   ends.forEach(([x0,len],ei)=>{const roots=[];
     /* (the top of each end starts inside the wrap, under its front, and comes out from under it) */
     for(let c=0;c<NC;c++){const x=x0+(c/(NC-1)-0.5)*W*0.8,r=neckR(yTop)+0.006,z=Math.sqrt(Math.max(0.0004,r*r-x*x))+0.004,p0=V3(x,yTop,z),p1=V3(x*1.04,yTop-len/nv,z+0.012);
       roots.push({p0,p1,ph:Math.atan2(z,x),len,bias:0,xt:x});}
-    const cols=hairDrape(roots,nv,{field,thin:TH+0.004,thick:TH+0.004,bodyClr:TH+0.005,latK:1.03,pushZ:true,band:false,stiff:0.04});
+    const cols=hairDrape(roots,nv,{field,sdf,thin:TH+0.004,thick:TH+0.004,bodyClr:TH+0.005,latK:1.03,pushZ:true,band:false,stiff:0.04});
     /* the sheet's two faces, its long edges rounded */
     const P=(c,j)=>cols[c][j],Nf=(c,j)=>{const a=P(Math.min(NC-1,c+1),j).clone().sub(P(Math.max(0,c-1),j)),b=P(c,Math.min(nv,j+1)).clone().sub(P(c,Math.max(0,j-1)));const n=b.cross(a).normalize();if(n.z<0)n.negate();return n;};
     /* soft lengthwise folds of the knit, growing as it hangs (the same on both faces) */
@@ -398,7 +405,7 @@ function buildScarf(G){
     {const em=mk(surf(4*12,nv,(u,v)=>at(u*4,Math.round(v*nv)),{wrapU:true,uRep:3,vRep:Math.max(2,len/0.05),noAO:true}),m);em.userData.scarfEnd=ei+1;G.add(em);}
     /* the end: closed by a narrow band, a fringe of knotted tassels */
     const last=nv;for(let i=0;i<11;i++){const cf=i/10*(NC-1),c=Math.min(NC-2,Math.floor(cf)),t=cf-c,p=P(c,last).clone().lerp(P(c+1,last),t);
-      const fr=mk(cordGeo([p,p.clone().add(V3(0.002*Math.sin(i*2+ei),-0.032-0.006*Math.sin(i*3.1),0.002))],0.0022),m);fr.userData.scarfEnd=ei+1;G.add(fr);}});
+      const fr=mk(cordGeo([p,p.clone().add(V3(0.002*Math.sin(i*2+ei),-0.032-0.006*Math.sin(i*3.1),0.002))],0.0022),m);fr.userData.scarfEnd=ei+1;G.add(fr);}});};
 }
 function buildTie(G){
   const A=S.acc.tie,t0=A.type;if(!t0||t0==='none')return;const TL=LAYERS_TOP||LAYERS;

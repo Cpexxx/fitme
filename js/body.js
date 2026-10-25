@@ -38,7 +38,9 @@ function setupBody(){
   const nk=(()=>{const t=M.torso(1.54);return Math.max(t.rx,(t.rz+t.rzb)/2);})(),nk0=g==='f'?0.052:0.06,neckK=Math.max(1,Math.pow(nk/nk0,0.75));
   BC.hd={rx:E.rx*hk*kw*Math.max(hw,neckK),ry:E.ry*hk*kh*Math.max(hb,Math.pow(neckK,0.5)),zf:E.zf*hk*kw*Math.max(hd,neckK*0.97),zb:E.zb*hk*kw*Math.max(hd,neckK*0.97)};
   BC.jaw=clamp(0.76+0.05*Math.max(0,fat)+0.03*Math.max(0,mus-0.5),0.76,0.92);
-  BC.headC=V3(0,MP.hb+BC.hd.ry,H.c[2]+0.004+MH_DZ);
+  /* (1.2 cm further back than the model's head: 4 cm in front of the neck's base, the head hung forward on a bent neck -
+     seen from behind at an angle, a crooked one) */
+  BC.headC=V3(0,MP.hb+BC.hd.ry,H.c[2]+0.004+MH_DZ-0.012);
   BC.meas=bodyMeasures();
   BC.arm={geos:[]};
 }
@@ -124,7 +126,9 @@ function neckLoftPt(ph,v){
   /* the ring point in the same direction as seen from the head's axis (monotonic around: the strip never twists) */
   const a=Math.atan2(P1.z-BC.headC.z,P1.x-BC.headC.x),r0=neckRingR(NL,a),P0=V3(NL.cx+Math.cos(a)*r0,NL.y,NL.cz+Math.sin(a)*r0);
   const L=P1.distanceTo(P0),v2=v*v,v3=v2*v,h00=2*v3-3*v2+1,h10=v3-2*v2+v,h01=-2*v3+3*v2,h11=v3-v2;
-  const A=NL.ax?V3(NL.ax[0],NL.ax[1],NL.ax[2]).normalize():V3(0,1,0);
+  /* (leaving the ring towards the head, not along the body's own neck axis: that leaned back while the head sits forward
+     of the ring, and the strip ran in an S - seen from behind at an angle, a crooked neck) */
+  const A0=NL.ax?V3(NL.ax[0],NL.ax[1],NL.ax[2]).normalize():V3(0,1,0),A=A0.lerp(P1.clone().sub(P0).normalize(),0.75).normalize();
   return P0.multiplyScalar(h00).add(A.multiplyScalar(L*h10)).add(P1.multiplyScalar(h01)).add(T1.multiplyScalar(L*h11));
 }
 function headHorizR(y,ph){const ny=(y-BC.headC.y)/BC.hd.ry;if(ny<-0.97||ny>0.999)return null;const P=headPt(Math.acos(ny),ph,0);return Math.hypot(P.x,P.z-BC.headC.z);}

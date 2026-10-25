@@ -196,8 +196,10 @@ function topCap(y,e,prev,drop=0){
   if(y<1.3)return null;
   /* the measured trunk already carries the real shoulder slope; add a rounded deltoid so the sleeve can start inside it */
   const base=bodyEnv(Math.min(y,1.56),prev),sy=BC.shY,dy=y-sy;
-  const R=Math.max(armAt(0.05)*0.95,sleeveEnv(0.05,prev)*0.95)+e*0.3+0.004,cx=BC.shX+drop*0.7;
-  const u=dy<0?dy/R:dy/(0.6*R),bump=(u*u<1?cx+R*Math.sqrt(1-u*u):cx-2*(Math.abs(u)-1)*R)+0.002,flat=base.rx+e*0.55,k=0.018;
+  /* (a dropped shoulder slopes softly off the shoulder: little wider, rounder on top - pushed far out with a tight
+     curve it made a square box of the shoulders) */
+  const R=Math.max(armAt(0.05)*0.95,sleeveEnv(0.05,prev)*0.95)+e*0.3+0.004,cx=BC.shX+drop*0.35;
+  const u=dy<0?dy/R:dy/((0.6+6*drop)*R),bump=(u*u<1?cx+R*Math.sqrt(1-u*u):cx-2*(Math.abs(u)-1)*R)+0.002,flat=base.rx+e*0.55,k=0.018;
   const rx=(bump+flat+Math.sqrt((bump-flat)*(bump-flat)+k*k))/2-k*0.12;
   const w=smooth((y-1.3)/0.06),ez=e*0.55+0.003;
   return{rx:Math.max(rx,flat),rz:base.rz+ez,rzb:zbk(base)+ez,n:lerp(base.n||2.3,2.35,w)};
@@ -294,7 +296,10 @@ function buildTop(G,P=S.top){
   if(neck==='crew'||neck==='henley'||(neck==='hood'&&false))G.add(mk(tube(vSamples(top-0.018,top+0.003,4,y=>addE(rf0(Math.min(y,top)),roundE(y,top-0.018,top+0.003,0.004))),{seg:64}),trim));
   if(neck==='v'||neck==='sweetheart'){for(const sd of [-1,1]){const pts=[];for(let k=0;k<=16;k++){const y=lerp(neck==='v'?1.376:1.276,top,k/16),r=rf0(y),g=vX(y),a=sd>0?angAtX(r,Math.max(g,0.001)):Math.PI-angAtX(r,Math.max(g,0.001));pts.push(ringPt(r,a,y,1,0,0.0025));}cordsAlong(G,trim,pts,neck==='v'?0.0055:0.004);}
     if(neck==='v'){const bk=[];for(let k=0;k<=24;k++){const r=rf0(top),gR=angAtX(r,vX(top)),a=lerp(Math.PI-gR,gR+TAU,k/24);bk.push(ringPt(r,a,top,1,0,0.002));}cordsAlong(G,trim,bk,0.0055);}}
-  if(neck==='henley'||T.placket==='short'){const yb=T.placket==='short'?1.37:1.35;G.add(mk(patch(rf0,FRONT-0.08,FRONT+0.08,yb,top-0.01,0.0018,{nv:6,seg:3}),md));
+  /* plackets: the band is the shirt's own fabric - drawn by its stitching and buttons only (a separate patch over the
+     shell shaded differently from it: a darker strip down the front) */
+  if(neck==='henley'||T.placket==='short'){const yb=T.placket==='short'?1.37:1.35;
+    for(const sd of [-1,1])stitchV(G,vSamples(yb,top-0.01,8,y=>addE(rf0(y),0.0032)),FRONT+sd*0.075,thread);
     const n=T.buttons||3;for(let i=0;i<n;i++){const y=lerp(top-0.03,yb+0.02,n>1?i/(n-1):0),Pb=onFront(rf0,0,y,0.0034);buttonAt(G,Pb,V3(0,0,1),0.0048,plain(shade(P.color,-0.25),.35));}}
   if(neck==='turtle'){const h=0.062,nr=y=>{const b=bodyEnv(NECK_Y,null);return{rx:BC.neckR*1.02+0.012,rz:BC.neckR*0.98+0.012,rzb:BC.neckR*1.04+0.012};};
     G.add(mk(tube(vSamples(top-0.012,top+h,10,y=>{const r=nr(y),t=(y-top)/h;return addE(r,0.002*Math.sin(Math.PI*t)+0.006*smooth((t-0.5)/0.5));},0,0.004),{seg:56,mod:(a,t,s)=>1+0.012*Math.sin(s.y*120+a)}),md));
@@ -305,7 +310,7 @@ function buildTop(G,P=S.top){
   if(T.collar==='camp')fallCollar(G,m,{y:top-0.006,env:rf0,gapX:0.07,stand:0.008,drop:0.05,point:0.012,spread:0.03,tip:0});
   /* mandarin (band) collar: a low stand closed at the front */
   if(T.collar==='mandarin')standCollar(G,md,{y:top-0.004,h:0.03,env:rf0,gapX:0.005,lean:0.004});
-  if(T.placket==='full'){const yb=tuck?waistY-0.03:hem+0.004,yt=T.collar==='camp'?1.34:top-0.01;G.add(mk(patch(rf0,FRONT-0.085,FRONT+0.085,yb,yt,0.0018,{nv:24,seg:3,mod:folds}),md));
+  if(T.placket==='full'){const yb=tuck?waistY-0.03:hem+0.004,yt=T.collar==='camp'?1.34:top-0.01;
     stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT-0.08,thread);stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT+0.08,thread);
     const n=T.buttons||6,ytop=T.collar==='camp'?1.32:top-0.025,ybot=Math.max(yb+0.06,tuck?waistY+0.02:hem+0.08);
     /* frog fastenings (pankou): a knotted cord loop across the opening instead of a button */
@@ -314,10 +319,12 @@ function buildTop(G,P=S.top){
       if(T.frogs){const pts=[];for(let k=0;k<=8;k++){const x=lerp(-0.034,0.034,k/8);pts.push(onFront(rf0,x,y+0.003*Math.sin(Math.PI*k/8),0.0045));}cordsAlong(G,fm,pts,0.0022);
         for(const x of [-0.034,0.034,0.004]){const kn=mk(new THREE.SphereGeometry(x===0.004?0.0048:0.0034,12,8),fm);kn.position.copy(onFront(rf0,x,y,0.005));G.add(kn);}}
       else{const Pb=onFront(rf0,0,y,0.0036);buttonAt(G,Pb,V3(0,0,1),0.0052,plain(shade(P.color,-0.22),.35));}}}
-  if(T.chestPocket){const e=rf0(1.26),a0=angAtX(e,0.115),a1=angAtX(e,0.05);G.add(mk(patch(rf0,a0,a1,1.2,1.3,0.0028,{nv:6,seg:8}),m));
-    const sp=[];for(let k=0;k<=8;k++)sp.push(envPt(addE(rf0(1.2+0.1*0),0.004),lerp(a0,a1,k/8),1.2,0));stitchPts(G,sp,thread);}
+  if(T.chestPocket){const e=rf0(1.26),a0=angAtX(e,0.115),a1=angAtX(e,0.05);{const pm=mk(patch(rf0,a0,a1,1.2,1.3,0.0028,{nv:6,seg:8,noAO:true}),m);pm.userData.pocket=true;G.add(pm);}
+    /* stitched down the sides and across the bottom (the edges show where the pocket sits on the shirt) */
+    const sp=[];for(let k=8;k>=1;k--)sp.push(envPt(addE(rf0(1.2+0.1*k/8),0.004),a0+0.012,1.2+0.1*k/8,0));for(let k=0;k<=8;k++)sp.push(envPt(addE(rf0(1.204),0.004),lerp(a0+0.012,a1-0.012,k/8),1.204,0));
+    for(let k=1;k<=8;k++)sp.push(envPt(addE(rf0(1.2+0.1*k/8),0.004),a1-0.012,1.2+0.1*k/8,0));stitchPts(G,sp,thread);}
   if(T.flapPockets)for(const sx of [-1,1]){const e=rf0(1.27),a0=sideAng(sx*0.12,e),a1=sideAng(sx*0.045,e),lo=Math.min(a0,a1),hi=Math.max(a0,a1);
-    G.add(mk(patch(rf0,lo,hi,1.19,1.3,0.0028,{nv:6,seg:8}),m));G.add(mk(patch(rf0,lo-0.02,hi+0.02,1.28,1.31,0.0055,{nv:2,seg:8}),md));
+    {const pm=mk(patch(rf0,lo,hi,1.19,1.3,0.0028,{nv:6,seg:8,noAO:true}),m);pm.userData.pocket=true;G.add(pm);const fl=mk(patch(rf0,lo-0.02,hi+0.02,1.28,1.31,0.0055,{nv:2,seg:8,noAO:true}),md);fl.userData.pocket=true;G.add(fl);}
     const b=onFront(rf0,sx*0.0825,1.288,0.0075);buttonAt(G,b,V3(0,0,1),0.0042,plain(shade(P.color,-0.3),.4));}
   /* guayabera: four patch pockets (two on the chest, two low) and pin-tucked pleats running down the front */
   if(T.guaya){const yLo=Math.max(hem+0.05,tuck?waistY+0.03:hem+0.05);

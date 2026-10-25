@@ -84,7 +84,11 @@ function poseAssign(G,GS){
     else if(ud.bodySrc&&ud.bodySrc.length===n){const D=poseDenseWeights(ud.bodySrcFeet,hi);if(D&&D.I.length===ud.bodySrcN*4)direct=D;}
     o.updateMatrixWorld(true);const mw=o.matrixWorld;
     /* small rigid pieces (buttons, rings, chain links, hair locks, eyelets): one lookup at the centre, one transform */
-    if(!direct){g.computeBoundingBox();const bb=g.boundingBox;if(bb.max.distanceTo(bb.min)*mw.getMaxScaleOnAxis()<0.11||o.userData.rigid){const c=bb.getCenter(new THREE.Vector3()).applyMatrix4(mw);let y=c.y;if(shoe)y=winv(y-LIFT);
+    /* (a bag's body and everything on it - flap, zip, buckles: one transform, taken at the body's centre; each piece on its
+       own followed a different bone and the bag came apart in a pose) */
+    let bagB=null;for(let q=o;q;q=q.parent){if(q.userData&&q.userData.bagBody)bagB=q;if(q.userData&&q.userData.bagGroup)break;}
+    if(!direct){g.computeBoundingBox();const bb=g.boundingBox;if(bagB||bb.max.distanceTo(bb.min)*mw.getMaxScaleOnAxis()<0.11||o.userData.rigid){let c=bb.getCenter(new THREE.Vector3()).applyMatrix4(mw);
+      if(bagB){bagB.updateMatrixWorld(true);bagB.geometry.computeBoundingBox();c=bagB.geometry.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(bagB.matrixWorld);}let y=c.y;if(shoe)y=winv(y-LIFT);
       acc.fill(0);const hw=smooth((y-headY)/0.05);if(hw<1){const[j]=H.any(c.x,y,c.z);if(j>=0)addD(DW,j,1-hw);}if(hw>0)acc[hd]+=hw;const row=acc.slice();put(I,W,0,row);
       for(let i=1;i<n;i++)for(let k=0;k<4;k++){I[i*4+k]=I[k];W[i*4+k]=W[k];}
       g.setAttribute('skinI',new THREE.BufferAttribute(I,4));g.setAttribute('skinW',new THREE.BufferAttribute(W,4));return;}}

@@ -27,10 +27,12 @@ const PRINTS={none:'Brak',logo:'Logo na piersi',text:'Napis',star:'Gwiazda',cros
 /* =============== fits =============== */
 const TOP_FITS={
   slim:{label:'Slim',e:0.008,se:0.007},regular:{label:'Regular',e:0.02,se:0.014},
-  oversized:{label:'Oversized',e:0.048,se:0.032,hem:-0.06,sleeveAdd:0.08,drop:0.03,tags:['streetwear']},
+  /* (oversize: dropped shoulders, longer, a soft hang - not the width of a box: 4.8 cm of ease all round made the figure look
+     heavier than it is) */
+  oversized:{label:'Oversized',e:0.036,se:0.026,hem:-0.06,sleeveAdd:0.08,drop:0.03,tags:['streetwear']},
   boxy:{label:'Boxy crop',e:0.042,se:0.028,hem:0.13,tags:['y2k','streetwear']}
 };
-const OUTER_FITS={regular:{label:'Regular',m:1,hem:0},oversized:{label:'Oversized',m:1.5,hem:-0.05,drop:0.03,tags:['streetwear']},cropped:{label:'Cropped',m:1.1,hem:0.08,tags:['y2k']}};
+const OUTER_FITS={regular:{label:'Regular',m:1,hem:0},oversized:{label:'Oversized',m:1.28,hem:-0.05,drop:0.03,tags:['streetwear']},cropped:{label:'Cropped',m:1.1,hem:0.08,tags:['y2k']}};
 const PANTS_FITS={
   skinny:{label:'Skinny',e:0.005,tags:['rock','indie']},slim:{label:'Slim',e:0.012,tags:['smart casual']},
   straight:{label:'Straight',k:[0.1,0.074,0.072]},tapered:{label:'Tapered',k:[0.104,0.068,0.056],tags:['smart casual']},

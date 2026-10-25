@@ -364,6 +364,10 @@ function shDetailOnFabric(o,L){const SG=L.newG&&L.newG[0];if(!SG||!SG.any)return
   for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);shPoint(0,c[0],c[1],c[2]-ex,q);p.setXYZ(i,q[0],q[1],q[2]);}p.needsUpdate=true;}
 function shPocketOnFabric(o,L){const SG=L.newG&&L.newG[0];if(!SG||!SG.any)return;if(!SG.S)SG.sdf();
   const p=o.geometry.attributes.position,c=new Float32Array(3);let cx=0;for(let i=0;i<p.count;i++)cx+=p.getX(i);const sd=cx>=0?1:-1;
+  /* (laid onto the fitted fabric: a patch keeping the garment's first outline stood off it as a flat plate, shaded darker
+     than the fabric round it) */
+  {const q=new Float32Array(3);
+    for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const R=SG.at(c[0],c[1]);if(R>0){shPoint(0,c[0],c[1],R+0.002,q);p.setXYZ(i,q[0],q[1],q[2]);}}}
   for(let pass=0;pass<3;pass++){let worst=0,r=0;for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const d=SG.sdfAt(c[0],c[1]);if(d<worst){worst=d;r=c[2];}}
     if(worst>-0.002||!r)break;const th=sd*(0.006-worst)/r,cs=Math.cos(th),sn=Math.sin(th);
     for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setX(i,x*cs+z*sn);p.setZ(i,-x*sn+z*cs);}}
@@ -447,7 +451,8 @@ function shBagsOut(G,layers){const groups=[];G.traverse(o=>{if(o.userData&&o.use
   for(const g of groups){g.updateMatrixWorld(true);const kids=[];g.traverse(o=>{if(o.isMesh)kids.push(o);});
     /* the bag body: smallest radial lift that clears the clothes everywhere it overlaps them */
     const body=kids.filter(o=>o.userData.bagBody);let lift=0;
-    for(const o of body){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i+=3){v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);shCoord(0,v.x,v.y,v.z,c,0);const R=U.at(c[0],c[1]);if(R>0)lift=Math.max(lift,R+0.004-c[2]);}}
+    /* (every vertex - every 3rd missed the corners of a small bag, and a hem cut a notch in one) */
+    for(const o of body){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);shCoord(0,v.x,v.y,v.z,c,0);const R=U.at(c[0],c[1]);if(R>0)lift=Math.max(lift,R+0.004-c[2]);}}
     if(lift>0)for(const o of body){const ctr=new THREE.Vector3();o.getWorldPosition(ctr);const d=V3(ctr.x,0,ctr.z).normalize();o.position.addScaledVector(d,lift);o.updateMatrixWorld(true);}
     /* straps: point by point */
     for(const o of kids){if(o.userData.bagBody)continue;let p0=o.parent,skip=false;while(p0&&p0!==g){if(p0.userData.bagBody)skip=true;p0=p0.parent;}if(skip)continue;
@@ -791,7 +796,11 @@ function shFolds(B,L){
       d+=soft*0.0032*side*smooth((1.33-y)/0.05)*smooth((y-1.08)/0.08)*foldP(pa);
       /* soft horizontal wrinkles at the small of the back and the waist */
       d+=soft*0.0018*gauss(y-1.05,0.05)*foldP(y*85+Math.sin(th*3)*2)*(0.6+0.4*Math.max(0,-sn));
-      d+=0.0012*fbm(cs*1.7,y*5,sn*1.7)*(0.4+loose);}
+      d+=0.0012*fbm(cs*1.7,y*5,sn*1.7)*(0.4+loose);
+      /* an oversized body hangs from the chest in a few broad, soft folds (a smooth wide cylinder read as a stiff box and
+         made the figure look heavier); deepest at the sides and the back, fading into the hem band */
+      {const big=smooth((e-0.012)/0.02)*(L.fitE!=null?smooth((L.fitE-0.022)/0.012):1);if(big>0){const pb=th*5+1.6*Math.sin(th*1.7+y*3.3)+0.8*Math.sin(y*5.2+th*3.1);
+        d+=big*0.011*smooth((1.22-y)/0.18)*edgeK*foldP(pb)*(0.55+0.45*Math.abs(cs));}}}
     else if(r<=2){const t=xx;
       /* elbow: crossing diagonal folds where the sleeve bunches */
       const pe=t*68+2.6*Math.sin(th*1.4+t*9),pe2=t*55-2.2*Math.sin(th*1.7-t*7);
@@ -799,14 +808,19 @@ function shFolds(B,L){
       /* sleeve bunching at the wrist and under the upper arm */
       d+=(0.001+0.0035*loose)*smooth((t-0.78)/0.12)*edgeK*foldP(t*52+Math.sin(th*2.2)*2.4);
       d+=loose*0.0035*gauss(t-0.16,0.08)*Math.max(0,-Math.cos(th))*foldP(t*48+th*3);
-      d+=0.0012*fbm(Math.cos(th)*1.5,t*6,Math.sin(th)*1.5)*(0.4+loose);}
+      d+=0.0012*fbm(Math.cos(th)*1.5,t*6,Math.sin(th)*1.5)*(0.4+loose);
+      {const big=smooth((e-0.018)/0.016);if(big>0)d+=big*0.005*smooth((t-0.12)/0.15)*foldP(th*3+1.2*Math.sin(t*6+th*2));}}
     else{const y=xx,sn=Math.sin(th);
-      /* knee folds at the back, whiskers at the front of the crotch, break above the hem */
-      d+=(0.0012+0.004*loose)*gauss(y-0.47,0.06)*foldP(y*85+th*1.6)*(0.5+0.5*Math.max(0,-sn));
-      d+=(0.001+0.0028*loose)*gauss(y-0.78,0.045)*Math.max(0,sn)*foldP((y-0.78)*110+Math.cos(th)*9);
-      d+=(0.001+0.005*loose)*gauss(y-0.14,0.08)*edgeK*foldP(y*95+th*2.2)*(0.6+0.4*Math.sin(th*2.3));
-      d+=loose*0.004*smooth((0.7-y)/0.3)*foldP(th*5+1.4*Math.sin(y*6+th*3));
-      d+=0.001*fbm(Math.cos(th)*1.5,y*5,sn*1.5)*(0.4+loose);}
+      /* trouser legs hang: long vertical folds from the seat and the knee to the hem, wider and deeper the looser the cut
+         (horizontal ring folds round the knee and the hem - the old model - read as bands round the legs, an accordion) */
+      d+=(0.0015+0.0045*loose)*smooth((0.82-y)/0.3)*foldP(th*4+1.3*Math.sin(y*3.1+th*2.2)+0.6*Math.sin(y*7+th));
+      /* a fitted leg creases a little behind the knee (soft diagonal wrinkles, not rings) */
+      d+=0.0018*(1-loose)*gauss(y-0.47,0.045)*Math.max(0,-sn)*foldP(y*70+th*4);
+      /* whiskers at the front of the crotch */
+      d+=(0.001+0.0022*loose)*gauss(y-0.78,0.045)*Math.max(0,sn)*foldP((y-0.78)*110+Math.cos(th)*9);
+      /* the break: where the leg meets the shoe the fabric folds once, at the front, slanting */
+      d+=(0.0012+0.0025*loose)*gauss(y-0.1,0.05)*edgeK*Math.max(0,sn)*foldP(y*60+th*5);
+      d+=0.0008*fbm(Math.cos(th)*1.5,y*5,sn*1.5)*(0.4+loose);}
     /* where the drape bunched the fabric the folds are deeper; where it hangs taut they almost vanish */
     if(L.comp)d*=0.6+0.8*smooth(L.comp[v]/0.05)*smooth((L.fe||L.f)[v]/0.04);
     d*=heavy;

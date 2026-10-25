@@ -94,7 +94,9 @@ function tube(samples,o={}){
   const full=!per&&Math.abs(A1-A0-TAU)<1e-6;
   let avg=0;for(const s of samples)avg+=(s.rx+s.rz)/2;avg/=n;
   const s0=samples[Math.floor(n/2)],span=(s0.a1!=null?s0.a1:A1)-(s0.a0!=null?s0.a0:A0);
-  const uRep=o.uv01?1:(o.uRep||Math.max(1,Math.round(span*avg/TILE)));
+  /* (whole tiles only round a closed tube - its seam must match; a patch keeps the fabric's real scale: one tile stretched
+     over a small pocket shaded it as a darker plate) */
+  const uRep=o.uv01?1:(o.uRep||(span<TAU-1e-3?Math.max(1e-3,span*avg/TILE):Math.max(1,Math.round(span*avg/TILE))));
   let total=0;for(let i=1;i<n;i++)total+=samples[i].c.distanceTo(samples[i-1].c);
   const vRep=o.uv01?1/Math.max(total,1e-6):(o.vRep||1/TILE);
   const cnt=n*(seg+1),pos=new Float32Array(cnt*3),uv=new Float32Array(cnt*2);
@@ -194,7 +196,7 @@ function slab(outline,yb,yt,o={}){
 /* =============== merge + vertical warp =============== */
 const KEEP=['position','normal','uv','color'];
 /* optional per-vertex data carried through the merge (zeros where a mesh has none) */
-const EXTRA={seamD:4,seamM:4,skinI:4,skinW:4,hairT:3};
+const EXTRA={seamD:4,seamM:4,skinI:4,skinW:4,hairT:3,hairW:1};
 function prepGeo(g,m){
   const gg=g.clone();
   if(!gg.index){const n=gg.attributes.position.count,ix=new Uint32Array(n);for(let i=0;i<n;i++)ix[i]=i;gg.setIndex(new THREE.BufferAttribute(ix,1));}
@@ -484,6 +486,9 @@ function hairCoreMat(hex,d=-0.2){const k='core|'+hex+'|'+d;if(matCache.has(k))re
    - painted strands: thin darker lines along the lock, broken and wavering along it, over a few broader bundles;
    - matte: soft wrapped diffuse, one broad highlight band in the hair's own colour (no white glints, no reflections);
    - a soft lighter rim at the silhouette (the painted backlight that gives a mass of hair its volume). */
+/* hair sway: the free hair (below the head) swings with the view - inertia as the figure turns in front of the camera,
+   a spring in app.js drives HAIR_SWAY (an offset in metres, figure space); HAIR_HEADY: where the free hair starts */
+const HAIR_SWAY={value:new THREE.Vector3()},HAIR_HEADY={value:1.6},HAIR_T={value:0};
 function lockMat(hex){
   const k='lock|'+hex;if(matCache.has(k))return matCache.get(k);
   const m=new THREE.MeshStandardMaterial({color:lin(hex),roughness:0.9,metalness:0,envMapIntensity:0,vertexColors:true});
@@ -491,7 +496,12 @@ function lockMat(hex){
 float lkN(float x){float i=floor(x),f=fract(x);f=f*f*(3.0-2.0*f);return mix(lkH(i),lkH(i+1.0),f);}
 `;
   m.onBeforeCompile=sh=>{
-    sh.vertexShader='attribute vec3 hairT;varying vec3 vHT;varying vec2 vLU;\n'+sh.vertexShader.replace('#include <project_vertex>',
+    sh.uniforms.uSway=HAIR_SWAY;sh.uniforms.uHeadY=HAIR_HEADY;sh.uniforms.uHT=HAIR_T;
+    sh.vertexShader='attribute vec3 hairT;attribute float hairW;varying vec3 vHT;varying vec2 vLU;uniform vec3 uSway;uniform float uHeadY;uniform float uHT;\n'+sh.vertexShader.replace('#include <begin_vertex>',
+      /* the lower, the freer: the tips swing most, a little later than the hair above them (a wave down the hair) */
+      `#include <begin_vertex>
+  {float hw=hairW;float lag=sin(uHT*7.0-hw*4.0);
+   transformed+=(uSway*(1.0+0.25*lag)+vec3(0.0,0.0,0.0))*hw;}`).replace('#include <project_vertex>',
       '#include <project_vertex>\nvHT=normalize((modelViewMatrix*vec4(hairT,0.0)).xyz);vLU=uv;');
     sh.fragmentShader='varying vec3 vHT;varying vec2 vLU;\n'+NOISE+sh.fragmentShader
       /* bundles: the normal tilts across the lock in 3 soft ridges; strands: fine ripples */
@@ -520,7 +530,7 @@ void RE_Direct_Lock(const in IncidentLight directLight,const in GeometricContext
       .replace('#include <lights_fragment_end>',`radiance*=0.0;irradiance*=0.8;
   {float rim=pow(1.0-clamp(abs(dot(geometry.normal,geometry.viewDir)),0.0,1.0),3.0);totalEmissiveRadiance+=max(diffuseColor.rgb,vec3(0.012,0.011,0.01))*0.22*rim;}
 #include <lights_fragment_end>`);};
-  m.customProgramCacheKey=()=>'lock8';m.userData.needAttr={hairT:3};matCache.set(k,m);return m;
+  m.customProgramCacheKey=()=>'lock10';m.userData.needAttr={hairT:3,hairW:1};matCache.set(k,m);return m;
 }
 function stubbleMat(hex){
   const k='stub|'+hex;if(matCache.has(k))return matCache.get(k);
