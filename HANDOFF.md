@@ -593,3 +593,22 @@ z poszarpaną krawędzią), lepsze czapki i czapki z daszkiem.
   `hatLineNy` uśredniona w oknie ±0,3 rad (bez „V” z tyłu). Kaszkiet, beret, fedora, kufi bez zmian.
 - **Znane, nie ruszane:** zarost (`beard`) to płaskie ciemne płaty; dłoń opierająca się o biodro może przeciąć detal
   spodni (nit/szlufka).
+
+## Runda 20 (2026-10-30): zarost, polowanie na usterki
+Prośba: poprawić zarost i wszystkie usterki (przenikania, glitche, artefakty).
+- **Zarost (hair.js, `buildBeard`):** stary zarost to płaty `beardPatch` (stubble przezroczysty z `FrontSide` - jego trójkąty
+  patrzą w głowę, więc był w całości odrzucany i nigdy się nie wyświetlał). Teraz: warstwa podkładu `beardGroundMat`
+  (nakrapiana alfa, poszarpane brzegi zanikające w skórę, `DoubleSide`) + krótkie kosmyki `beardLocks` (`scalpLocks`
+  z podanymi korzeniami, czesane w dół, na policzkach na zewnątrz; gęstość maleje ku krawędziom: `eTop`, `eSide`).
+  stubble = sam podkład, short/full/goatee/mustache = podkład + kosmyki. `stubbleMat` usunięty z core.js.
+- **Powłoka ubrań na ciele z rzeźbą (`shellBase`):** `muscleRelief` jak w renderowanym ciele (mhGeo). Bez tego ubrania
+  dopasowywano do gładszego ciała, a wypukłości (góra pośladków przy pełnej sylwetce) przebijały obcisłe spodnie.
+- **`shBodyClear`:** odsunięcie od najbliższego punktu ciała wszędzie (wcześniej tylko krocze i pachy).
+- **`shSkirtClear`:** elementy nie dopasowane jako powłoka (spódnice, curtain długich topów, doły koszul, zachowane doły
+  nogawek) ≥3 mm od ciała wzdłuż normalnej najbliższego punktu. Także gdy nie ma żadnej powłoki.
+- **Top wpuszczony w spódnicę** zostaje pod spódnicą (spódnica to nie powłoka, `shOrder` jej nie widział).
+- **Curtain** (dół długiego płaszcza/kimona) układa się także na curtainach niższych warstw.
+- **Kołnierz pod golfem:** `underTurtle` w `buildTop` – koszula/polo/kaptur/golf dolnej warstwy pod golfem (mid) nie ma
+  kołnierza. Golf: promień nie mniejszy niż tułów+7 mm (kapturowy mięsień przebijał przy karku).
+- **Bandana na golfie** (`turtleWorn`, `neckRing`).
+- Fałszywe alarmy clip zostawione: kołnierz w otwartym przodzie kurtki („top przez outer”), goła pięta w klapkach.

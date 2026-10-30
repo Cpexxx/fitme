@@ -532,13 +532,6 @@ void RE_Direct_Lock(const in IncidentLight directLight,const in GeometricContext
 #include <lights_fragment_end>`);};
   m.customProgramCacheKey=()=>'lock10';m.userData.needAttr={hairT:3,hairW:1};matCache.set(k,m);return m;
 }
-function stubbleMat(hex){
-  const k='stub|'+hex;if(matCache.has(k))return matCache.get(k);
-  const [c,ctx]=cnv(128,128);let map=null;
-  if(ctx){const R=rng(7);ctx.clearRect(0,0,128,128);for(let i=0;i<2600;i++){ctx.fillStyle=`rgba(255,255,255,${.25+R()*.6})`;ctx.fillRect(R()*128,R()*128,1,1);}map=new THREE.CanvasTexture(c);map.wrapS=map.wrapT=THREE.RepeatWrapping;}
-  const m=new THREE.MeshStandardMaterial({color:lin(hex),alphaMap:map,transparent:true,opacity:.75,roughness:.9,depthWrite:false,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
-  m.userData.noShadow=true;matCache.set(k,m);return m;
-}
 /* decals (prints, patches, rips) */
 function decalTex(kind,hex,extra){
   const key='d|'+kind+'|'+hex+'|'+(extra||'');if(texCache.has(key))return texCache.get(key);
