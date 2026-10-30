@@ -605,7 +605,10 @@ Prośba: poprawić zarost i wszystkie usterki (przenikania, glitche, artefakty).
   dopasowywano do gładszego ciała, a wypukłości (góra pośladków przy pełnej sylwetce) przebijały obcisłe spodnie.
 - **`shBodyClear`:** odsunięcie od najbliższego punktu ciała wszędzie (wcześniej tylko krocze i pachy).
 - **`shSkirtClear`:** elementy nie dopasowane jako powłoka (spódnice, curtain długich topów, doły koszul, zachowane doły
-  nogawek) ≥3 mm od ciała wzdłuż normalnej najbliższego punktu. Także gdy nie ma żadnej powłoki.
+  nogawek) ≥3 mm od ciała wzdłuż normalnej najbliższego punktu. Także gdy nie ma żadnej powłoki. Przesunięcie jest
+  rozlewane na sąsiadów (10 przejść, ×0.88, nigdy mniej niż własne) – samo przesunięcie pojedynczych wierzchołków robiło
+  uskoki w plisach i kiltach (clip „ostra krawędź na bottom”). Clip i tak liczy tam więcej ostrych krawędzi niż w r19
+  (fałdy plis/stacked, renderami sprawdzone, że to nie usterki), za to prześwit skóry przez dół 1822 → ~180 px.
 - **Top wpuszczony w spódnicę** zostaje pod spódnicą (spódnica to nie powłoka, `shOrder` jej nie widział).
 - **Curtain** (dół długiego płaszcza/kimona) układa się także na curtainach niższych warstw.
 - **Kołnierz pod golfem:** `underTurtle` w `buildTop` – koszula/polo/kaptur/golf dolnej warstwy pod golfem (mid) nie ma

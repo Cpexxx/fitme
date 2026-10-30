@@ -181,10 +181,19 @@ function shLayerFit(L){
    patches, full hips through a shirt's tail over a skirt. Each vertex at least 3 mm out from the nearest body point along
    that point's normal */
 function shSkirtClear(G,sk){const H=poseHash(),B=shellBase(1),BP=B.P,BN=B.N;
-  for(const o of sk){if(!o||!o.geometry)continue;shBake(o,o.parent||G);const p=o.geometry.attributes.position;let ch=false;
-    for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),[j]=H.near2(x,y,z);if(j<0)continue;
-      const d=(x-BP[j*3])*BN[j*3]+(y-BP[j*3+1])*BN[j*3+1]+(z-BP[j*3+2])*BN[j*3+2];if(d<0.003){const q=0.003-d;p.setXYZ(i,x+BN[j*3]*q,y+BN[j*3+1]*q,z+BN[j*3+2]*q);ch=true;}}
-    if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
+  for(const o of sk){if(!o||!o.geometry)continue;shBake(o,o.parent||G);const g=o.geometry,p=g.attributes.position,NV=p.count,D=new Float32Array(NV*3);let ch=false;
+    for(let i=0;i<NV;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),[j]=H.near2(x,y,z);if(j<0)continue;
+      const d=(x-BP[j*3])*BN[j*3]+(y-BP[j*3+1])*BN[j*3+1]+(z-BP[j*3+2])*BN[j*3+2];if(d<0.003){const q=0.003-d;D[i*3]=BN[j*3]*q;D[i*3+1]=BN[j*3+1]*q;D[i*3+2]=BN[j*3+2]*q;ch=true;}}
+    if(!ch)continue;
+    /* spread the push to the neighbours with a falloff: pushing single vertices out of a pleat valley left sharp steps */
+    const can=new Uint32Array(NV),same=new Map(),pa=p.array;for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=same.get(k);if(c===undefined){same.set(k,i);c=i;}can[i]=c;}
+    const nb=new Map(),add=(a,b)=>{a=can[a];b=can[b];if(a===b)return;let s=nb.get(a);if(!s)nb.set(a,s=new Set());s.add(b);};
+    const ix=g.index?g.index.array:null,NT=ix?ix.length:NV;for(let t=0;t<NT;t+=3)for(let k=0;k<3;k++){const a=ix?ix[t+k]:t+k,b=ix?ix[t+(k+1)%3]:t+(k+1)%3;add(a,b);add(b,a);}
+    for(let i=0;i<NV;i++){const c=can[i];if(c!==i&&D[i*3]*D[i*3]+D[i*3+1]*D[i*3+1]+D[i*3+2]*D[i*3+2]>D[c*3]*D[c*3]+D[c*3+1]*D[c*3+1]+D[c*3+2]*D[c*3+2])for(let k=0;k<3;k++)D[c*3+k]=D[i*3+k];}
+    for(let it=0;it<10;it++){const E=D.slice();for(const [c,s] of nb){let x=0,y=0,z=0;for(const b of s){x+=E[b*3];y+=E[b*3+1];z+=E[b*3+2];}const f=0.88/s.size;x*=f;y*=f;z*=f;
+      if(x*x+y*y+z*z>E[c*3]*E[c*3]+E[c*3+1]*E[c*3+1]+E[c*3+2]*E[c*3+2]){D[c*3]=x;D[c*3+1]=y;D[c*3+2]=z;}}}
+    for(let i=0;i<NV;i++){const c=can[i];p.setXYZ(i,p.getX(i)+D[c*3],p.getY(i)+D[c*3+1],p.getZ(i)+D[c*3+2]);}
+    p.needsUpdate=true;g.computeVertexNormals();}}
 function buildShells(G,GS){
   if(!BC.core)return;
   G.updateMatrixWorld(true);
