@@ -311,7 +311,9 @@ function buildTop(G,P=S.top){
   if(neck==='henley'||T.placket==='short'){const yb=T.placket==='short'?1.37:1.35;
     for(const sd of [-1,1])stitchV(G,vSamples(yb,top-0.01,8,y=>addE(rf0(y),0.0032)),FRONT+sd*0.075,thread);
     const n=T.buttons||3;for(let i=0;i<n;i++){const y=lerp(top-0.03,yb+0.02,n>1?i/(n-1):0),Pb=onFront(rf0,0,y,0.0034);buttonAt(G,Pb,V3(0,0,1),0.0048,plain(shade(P.color,-0.25),.35));}}
-  if(neck==='turtle'&&!underTurtle){const h=0.062,nr=y=>{const b=bodyEnv(NECK_Y,null);return{rx:BC.neckR*1.02+0.012,rz:BC.neckR*0.98+0.012,rzb:BC.neckR*1.04+0.012};};
+  /* (never inside the neck: the round neck radius ignored the trapezius at the sides and the back, which came through
+     between the folded collar and the body of the sweater) */
+  if(neck==='turtle'&&!underTurtle){const h=0.062,nr=y=>maxE({rx:BC.neckR*1.02+0.012,rz:BC.neckR*0.98+0.012,rzb:BC.neckR*1.04+0.012,n:2},addE(torsoAt(Math.min(y,1.6)),0.007));
     G.add(mk(tube(vSamples(top-0.012,top+h,10,y=>{const r=nr(y),t=(y-top)/h;return addE(r,0.002*Math.sin(Math.PI*t)+0.006*smooth((t-0.5)/0.5));},0,0.004),{seg:56,mod:(a,t,s)=>1+0.012*Math.sin(s.y*120+a)}),md));
     G.add(mk(tube(vSamples(top+h*0.42,top+h+0.004,6,y=>addE(nr(y),0.009+roundE(y,top+h*0.42,top+h+0.004,0.003)),0,0.004),{seg:56}),md));}
   if(neck==='hood'&&!underTurtle){hoodDown(G,m,{y:top-0.004,env:rf0,gapX:0.045});drawstrings(G,top-0.012,0.15,[-0.032,0.032],y=>addE(rf0(Math.min(y,top-0.01)),0.004));}
