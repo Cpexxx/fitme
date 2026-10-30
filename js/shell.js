@@ -300,7 +300,7 @@ function buildShells(G,GS){
     if(cut!=null&&ra===0){if(!L.curtain){L.curtain=1;const tails=others.filter(t=>t.userData.tail&&t.userData.layer===L.name);const cm=shCurtain(L,cut,shells,B2,tails,layers);for(const t of tails){if(t.parent)t.parent.remove(t);others.splice(others.indexOf(t),1);}if(cm){G.add(cm);L.curtainMesh=cm;const T3=shTrisOf(cm,0);newU[0].raster(T3,0);L.newG[0].raster(T3,0);}}continue;}
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3){shKeptOverShoes(o,OB);/* (pushed over the shoes after the blend: a ledge where the shell ends; blended again, then
       clear of the shoe once more - a boot's collar in the blend zone was pulled under; only for shafts reaching the cut:
-      at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+      at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}/* (clear of the skin too: the instep came through tight leggings at the front of the ankle) */shSkirtClear(G,[o]);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
@@ -1067,7 +1067,8 @@ function shCurtain(L,cut,shells,B2,tails,layers){
   const put=(x,y,z)=>{if(y>cut+0.005||y<hemMin-0.02)return;const j=Math.round((cut-y)/0.01);if(j<0||j>=rows)return;const th=Math.atan2(z,x),i=((Math.floor((th+Math.PI)/TAU*NA)%NA)+NA)%NA,rr=Math.hypot(x,z);for(const k of [i,(i+1)%NA,(i+NA-1)%NA])if(rr>floor[j*NA+k])floor[j*NA+k]=rr;};
   const P=B2.P,rg=B2.reg;for(let v=0;v<B2.n;v++)if(rg[v]===0||rg[v]>=3)put(P[v*3],P[v*3+1],P[v*3+2]);
   /* lower layers: vertices and points along their edges (their rows are ~1.5 cm apart, the outline rows 1 cm: a row without a sample let the curtain sink into the trousers) */
-  for(const m of shells){const Lm=m.userData.layer;const lo={bottom:1,top:2,mid:3,outer:4}[Lm];if(!(lo<L.rank))continue;const p=m.geometry.attributes.position,mr=m.geometry.userData.reg,ok=i=>!mr||mr[i]===0||mr[i]>=3;
+  /* (and the curtains of the lower layers: a long coat over a long shirt sank under the shirt's curtain at the front edges) */
+  for(const m of shells.concat((layers||[]).filter(l=>l.rank<L.rank&&l.curtainMesh).map(l=>l.curtainMesh))){const Lm=m.userData.layer;const lo={bottom:1,top:2,mid:3,outer:4}[Lm];if(!(lo<L.rank))continue;const p=m.geometry.attributes.position,mr=m.geometry.userData.reg,ok=i=>!mr||mr[i]===0||mr[i]>=3;
     for(let i=0;i<p.count;i++)if(ok(i))put(p.getX(i),p.getY(i),p.getZ(i));
     const ix=m.geometry.index?m.geometry.index.array:null;if(!ix)continue;
     for(let t=0;t<ix.length;t+=3)for(let k=0;k<3;k++){const a=ix[t+k],b=ix[t+(k+1)%3];if(a>b||!ok(a)||!ok(b))continue;const ay=p.getY(a),by=p.getY(b);if(Math.max(ay,by)<hemMin-0.02||Math.min(ay,by)>cut+0.005)continue;
