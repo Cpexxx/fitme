@@ -16,6 +16,9 @@ function shellBase(level){if(level==null)level=GEO_Q>1?2:1;const want2=level===2
   let P=ccApply(p1,M.P),W=ccApply(p1,W0),ix=p1.ix,n=p1.n;
   let pl=p1;if(want2){const p2=mhPlan2(true);P=ccApply(p2,P);W=ccApply(p2,W);ix=p2.ix;n=p2.n;pl=p2;}
   smoothSpots(P,pl,M.spots);
+  /* the same muscle and fat relief as the rendered body (mhGeo): fitted without it, its bumps (the top of the seat on a
+     full figure) showed through tight clothes */
+  if(typeof muscleRelief==='function')muscleRelief(P,pl,W);
   /* the same smoothed back of the knee as the rendered body (mhGeo): fitted to the raw hollow, trousers let the skin
      through behind the knees */
   const kneeY=BC.map?BC.map.inv(M.J.kneeL[1]):M.J.kneeL[1];poplitealFill(P,n,W,kneeY);
@@ -173,13 +176,22 @@ function shLayerFit(L){
     let under=0;if(L.rank>=3){const T=S.top;if(T&&T.type!=='none')under=Math.max(under,(TOP_FITS[T.fit]||TOP_FITS.regular).e);if(L.rank===4&&S.mid&&S.mid.type!=='none')under=Math.max(under,0.03);}
     L.fitE=Math.max(L.fitE,under*0.8+0.006);}
 }
+/* pieces not fitted as shells (a skirt as cut, the curtain of a long top, shirt tails) clear of the body: the outlines they
+   come from are smoother than the body's muscle and fat relief - the top of a full seat came through a skirt as two
+   patches, full hips through a shirt's tail over a skirt. Each vertex at least 3 mm out from the nearest body point along
+   that point's normal */
+function shSkirtClear(G,sk){const H=poseHash(),B=shellBase(1),BP=B.P,BN=B.N;
+  for(const o of sk){if(!o||!o.geometry)continue;shBake(o,o.parent||G);const p=o.geometry.attributes.position;let ch=false;
+    for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),[j]=H.near2(x,y,z);if(j<0)continue;
+      const d=(x-BP[j*3])*BN[j*3]+(y-BP[j*3+1])*BN[j*3+1]+(z-BP[j*3+2])*BN[j*3+2];if(d<0.003){const q=0.003-d;p.setXYZ(i,x+BN[j*3]*q,y+BN[j*3+1]*q,z+BN[j*3+2]*q);ch=true;}}
+    if(ch){p.needsUpdate=true;o.geometry.computeVertexNormals();}}}
 function buildShells(G,GS){
   if(!BC.core)return;
   G.updateMatrixWorld(true);
   const order=['bottom','top','mid','outer'],layers=[];
   const mains=[],others=[];
   const linings=[];G.traverse(o=>{if(!o.isMesh||o.userData.ctx!=='cloth')return;(o.userData.lining?linings:o.userData.main?mains:others).push(o);});
-  if(!mains.length){for(const o of others)o.userData.ctx='none';return;}
+  if(!mains.length){for(const o of others)o.userData.ctx='none';const sk=[];G.traverse(o=>{if(o.isMesh&&o.userData.skirtPiece)sk.push(o);});if(sk.length)shSkirtClear(G,sk);return;}
   const CY=shellBase(1).cy;
   for(const name of order){const ms=mains.filter(o=>o.userData.layer===name);if(!ms.length)continue;
     const lin=linings.find(o=>o.userData.layer===name);
@@ -303,6 +315,7 @@ function buildShells(G,GS){
       for(let i=0;i<p.count;i++){shCoord(r,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=UG.at(c[0],c[1]);if(Ru>0&&c[2]<Ru+0.003){shPoint(r,c[0],c[1],Ru+0.003,q);p.setXYZ(i,q[0],q[1],q[2]);}}}}
     p.needsUpdate=true;o.geometry.computeVertexNormals();o.userData.reseated=true;o.userData.tailFitted=true;o.userData.ctx='none';}
   for(const o of others){if(o.userData.tailFitted)continue;const L=layers.find(l=>l.name===o.userData.layer);shReseat(o,L?L.shift:shift,G,L&&L.curtainMesh?L.lowerCut:null);o.userData.reseated=true;if(L&&o.userData.pocket)shPocketOnFabric(o,L);if(L&&!o.userData.hood&&!o.userData.band&&!o.userData.hemPiece)shDetailOnFabric(o,L);if(L&&(o.userData.band||o.userData.hemPiece)){if(L.curtainMesh)shHemOnCurtain(o,L);else if(o.userData.band)shBandOnFabric(o,L);}if(L&&!o.userData.hood)shHideCovered(o,L,layers);}
+  shSkirtClear(G,layers.map(l=>l.curtainMesh).filter(Boolean).concat(others.filter(o=>o.userData.tailFitted&&o.parent)));
   /* curtains of lower layers stay inside everything of the layers above (their shells and their reseated hems / bands) */
   for(const L of layers){const cm=L.curtainMesh;if(!cm)continue;const up=new PGrid(0);
     G.traverse(o=>{if(!o.isMesh||o===cm)return;const lr={bottom:1,top:2,mid:3,outer:4}[o.userData.layer];if(!(lr>L.rank))return;if(o.geometry.userData.axis&&shRegionOfAxis(o.geometry.userData.axis)!==0)return;up.raster(shTrunkTris(o),0);});
@@ -310,7 +323,7 @@ function buildShells(G,GS){
     for(let i=0;i<p.count;i++){shCoord(0,p.getX(i),p.getY(i),p.getZ(i),c,0);const Ru=up.at(c[0],c[1]);if(Ru>0&&c[2]>Ru-0.004){shPoint(0,c[0],c[1],Math.max(0.02,Ru-0.004),q);p.setXYZ(i,q[0],q[1],q[2]);}}
     p.needsUpdate=true;cm.geometry.computeVertexNormals();}
   /* a skirt (kept as cut) stays under the fitted shells of the layers above it where they cover it, never inside the body */
-  {const sk=[];G.traverse(o=>{if(o.isMesh&&o.userData.skirtPiece)sk.push(o);});
+  {const sk=[];G.traverse(o=>{if(o.isMesh&&o.userData.skirtPiece)sk.push(o);});if(sk.length)shSkirtClear(G,sk);
     /* (under the innermost layer that covers it: pressed under the jacket only, a high-waisted skirt lay over the untucked
        top and showed through the jacket's open front; a top tucked into the skirt is under it) */
     if(sk.length){const ups=[];for(const nm of ['top','mid','outer']){const L=layers.find(l=>l.name===nm);if(!L||L.tuck==='in')continue;const g=new PGrid(0);
@@ -722,7 +735,7 @@ function shObstacles(B,layers,OB){
 }
 /* where body parts crowd each other (crotch, armpits) a fabric point can sit inside a different part of the body than
    the one it was made from: test against the nearest body point of any kind and step outside */
-function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,y0=cy-0.09,y1=cy+0.09,ay=BC.shY-0.2,off=B.off,adj=B.adj,bot=L.name==='bottom';
+function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,off=B.off,adj=B.adj,bot=L.name==='bottom';
   /* fabric bridges the crotch: trousers have a flat fly at the front and a smooth seat seam at the back,
      anything worn over the hips hangs straight across - valleys there only fill in */
   {const ids=[],w=[];
@@ -755,13 +768,14 @@ function shBodyClear(B,L){const n=B.n,P=B.P,Nn=B.N,X=L.X,H=poseHash(),cy=B.cy,y0
          sinks back into the fold) */
       for(let it=0;it<8;it++){const l0=lift.slice();for(let v=0;v<n;v++){if(!L.act[v]||X[v*3+2]<=0.02)continue;let s2=0,c=0;for(let q=off[v];q<off[v+1];q++){const j=adj[q];if(!L.act[j])continue;s2+=l0[j];c++;}if(c)lift[v]=Math.max(l0[v],0.9*s2/c);}}
       for(let v=0;v<n;v++)if(lift[v]>0)X[v*3+2]+=lift[v];}}
-  /* never inside the skin: against its own body point everywhere, against any body part where they crowd (crotch, armpits) */
+  /* never inside the skin: against its own body point and against the nearest body point */
   const sp=BC.core.spots||[],inSp=v=>{for(const q of sp){const dx=P[v*3]-q[0],dy=P[v*3+1]-q[1],dz=P[v*3+2]-q[2];if(dx*dx+dy*dy+dz*dz<q[3]*q[3]*2.2)return true;}return false;};
   for(let v=0;v<n;v++){if(!L.act[v])continue;
     if(inSp(v))continue;
     const d0=(X[v*3]-P[v*3])*Nn[v*3]+(X[v*3+1]-P[v*3+1])*Nn[v*3+1]+(X[v*3+2]-P[v*3+2])*Nn[v*3+2];if(d0<0.0025){const q=0.0025-d0;X[v*3]+=Nn[v*3]*q;X[v*3+1]+=Nn[v*3+1]*q;X[v*3+2]+=Nn[v*3+2]*q;}
     const x=X[v*3],y=X[v*3+1],z=X[v*3+2];
-    const crotch=y>y0&&y<y1&&Math.abs(x)<0.09,pit=y>ay&&y<BC.shY&&Math.abs(Math.abs(x)-BC.shX*0.8)<0.07;if(!crotch&&!pit)continue;
+    /* (everywhere, not only where body parts crowd: fabric that slid in the drape lies over another, fuller part of the body
+       than its own point - the top of a full seat came through tight trousers and skirts) */
     const[j]=H.near2(x,y,z);if(j<0)continue;const d=(x-P[j*3])*Nn[j*3]+(y-P[j*3+1])*Nn[j*3+1]+(z-P[j*3+2])*Nn[j*3+2];
     if(d<0.0025){const q=0.0025-d;X[v*3]+=Nn[j*3]*q;X[v*3+1]+=Nn[j*3+1]*q;X[v*3+2]+=Nn[j*3+2]*q;}}
   /* trousers: the front hangs from the fly down to the crotch seam - per column, going down, it recedes no faster than 0.45

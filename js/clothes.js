@@ -261,6 +261,9 @@ function buildTop(G,P=S.top){
   const mat=P.mat||T.mat,pat=P.pattern||'solid',c2=P.color2||'#1e1e1f';
   MK_STIFF=(STIFF[mat]||0.2)*0.7;
   const neck=T.necks?(T.necks.includes(P.neck)?P.neck:T.necks[0]):null,sleeve=T.sleeves.includes(P.sleeve)?P.sleeve:T.sleeves[0];
+  /* worn under a turtleneck the collar (and a hood or a turtleneck of its own) is tucked inside it: built, it stood out over
+     the turtleneck at the throat and the nape */
+  const underTurtle=P===S.top&&(()=>{const M=S.mid,TM=M&&M.type!=='none'&&MID_ITEMS[M.type]==='top'?TOPS[M.type]:null;if(!TM||!TM.necks)return false;return(TM.necks.includes(M.neck)?M.neck:TM.necks[0])==='turtle';})();
   const tuckM=T.tuck?(P.tuck||'out'):'out',tuck=tuckM!=='out';
   const m=fabric(mat,P.color,pat,c2),ribK=['fleece','jersey','tricot','mesh'].includes(mat)?'rib':mat;
   const md=fabric(ribK,shade(P.color,-0.06),ribK===mat?pat:'solid',c2);
@@ -308,15 +311,15 @@ function buildTop(G,P=S.top){
   if(neck==='henley'||T.placket==='short'){const yb=T.placket==='short'?1.37:1.35;
     for(const sd of [-1,1])stitchV(G,vSamples(yb,top-0.01,8,y=>addE(rf0(y),0.0032)),FRONT+sd*0.075,thread);
     const n=T.buttons||3;for(let i=0;i<n;i++){const y=lerp(top-0.03,yb+0.02,n>1?i/(n-1):0),Pb=onFront(rf0,0,y,0.0034);buttonAt(G,Pb,V3(0,0,1),0.0048,plain(shade(P.color,-0.25),.35));}}
-  if(neck==='turtle'){const h=0.062,nr=y=>{const b=bodyEnv(NECK_Y,null);return{rx:BC.neckR*1.02+0.012,rz:BC.neckR*0.98+0.012,rzb:BC.neckR*1.04+0.012};};
+  if(neck==='turtle'&&!underTurtle){const h=0.062,nr=y=>{const b=bodyEnv(NECK_Y,null);return{rx:BC.neckR*1.02+0.012,rz:BC.neckR*0.98+0.012,rzb:BC.neckR*1.04+0.012};};
     G.add(mk(tube(vSamples(top-0.012,top+h,10,y=>{const r=nr(y),t=(y-top)/h;return addE(r,0.002*Math.sin(Math.PI*t)+0.006*smooth((t-0.5)/0.5));},0,0.004),{seg:56,mod:(a,t,s)=>1+0.012*Math.sin(s.y*120+a)}),md));
     G.add(mk(tube(vSamples(top+h*0.42,top+h+0.004,6,y=>addE(nr(y),0.009+roundE(y,top+h*0.42,top+h+0.004,0.003)),0,0.004),{seg:56}),md));}
-  if(neck==='hood'){hoodDown(G,m,{y:top-0.004,env:rf0,gapX:0.045});drawstrings(G,top-0.012,0.15,[-0.032,0.032],y=>addE(rf0(Math.min(y,top-0.01)),0.004));}
-  if(T.collar==='shirt')fallCollar(G,md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.026,drop:0.045,point:0.016,spread:0.012});
-  if(T.collar==='polo')fallCollar(G,T.collar2?fabric('twill','#f4f1ea'):md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.018,drop:0.036,point:0.01,spread:0.01});
-  if(T.collar==='camp')fallCollar(G,m,{y:top-0.006,env:rf0,gapX:0.07,stand:0.008,drop:0.05,point:0.012,spread:0.03,tip:0});
+  if(neck==='hood'&&!underTurtle){hoodDown(G,m,{y:top-0.004,env:rf0,gapX:0.045});drawstrings(G,top-0.012,0.15,[-0.032,0.032],y=>addE(rf0(Math.min(y,top-0.01)),0.004));}
+  if(T.collar==='shirt'&&!underTurtle)fallCollar(G,md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.026,drop:0.045,point:0.016,spread:0.012});
+  if(T.collar==='polo'&&!underTurtle)fallCollar(G,T.collar2?fabric('twill','#f4f1ea'):md,{y:top-0.004,env:rf0,gapX:0.006,stand:0.018,drop:0.036,point:0.01,spread:0.01});
+  if(T.collar==='camp'&&!underTurtle)fallCollar(G,m,{y:top-0.006,env:rf0,gapX:0.07,stand:0.008,drop:0.05,point:0.012,spread:0.03,tip:0});
   /* mandarin (band) collar: a low stand closed at the front */
-  if(T.collar==='mandarin')standCollar(G,md,{y:top-0.004,h:0.03,env:rf0,gapX:0.005,lean:0.004});
+  if(T.collar==='mandarin'&&!underTurtle)standCollar(G,md,{y:top-0.004,h:0.03,env:rf0,gapX:0.005,lean:0.004});
   if(T.placket==='full'){const yb=tuck?waistY-0.03:hem+0.004,yt=T.collar==='camp'?1.34:top-0.01;
     stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT-0.08,thread);stitchV(G,vSamples(yb,yt,24,y=>addE(rf0(y),0.0032)),FRONT+0.08,thread);
     const n=T.buttons||6,ytop=T.collar==='camp'?1.32:top-0.025,ybot=Math.max(yb+0.06,tuck?waistY+0.02:hem+0.08);

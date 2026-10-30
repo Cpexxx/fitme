@@ -1109,19 +1109,58 @@ function buildHair(G){
   if(fr&&!hat)fringeLocks(G,fr);
 }
 /* ---------- facial hair ---------- */
+/* the beard's ground: a thin layer over the skin, its density a fine speckle of the hair's colour that thins out into the
+   skin along every edge (a ragged line, not a cut-out: the old opaque patch read as a mask). uv: u across the face,
+   v from the top line down; o.cover the overall density (stubble less), o.soft how far in from the edges it thins */
+function beardGroundMat(hex,o){const k='beardG|'+hex+'|'+o.cover+'|'+o.soft+'|'+(o.top||0)+'|'+(o.bot||0);if(matCache.has(k))return matCache.get(k);
+  const N=512,[c,ctx]=cnv(N,N);let map=null;
+  if(ctx){const img=ctx.createImageData(N,N),D=img.data,R=rng(11);
+    /* edge noise along each side so the border is ragged */
+    const nz=Array.from({length:4},()=>Float32Array.from({length:N},(_,i)=>0));for(const a of nz){let x=0;for(let i=0;i<N;i++){x=x*0.9+(R()-0.5)*0.35;a[i]=x;}}
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){const u=x/(N-1),v=y/(N-1),sm=o.soft;
+      const eu=Math.min(u,1-u)+0.04*(u<0.5?nz[0][y]:nz[1][y]),et=v+0.05*nz[2][x]+(o.top||0),eb=(1-v)+0.04*nz[3][x]+(o.bot||0);
+      const w=smooth(eu/sm)*smooth(et/(sm*0.9))*smooth(eb/(sm*0.5));
+      const d=R()<o.cover*w?(0.55+0.45*R()):0.18*w*R();D[(y*N+x)*4]=D[(y*N+x)*4+1]=D[(y*N+x)*4+2]=Math.round(255*Math.min(1,d));D[(y*N+x)*4+3]=255;}
+    ctx.putImageData(img,0,0);map=new THREE.CanvasTexture(c);}
+  /* (double-sided: the patch's triangles face into the head, front faces only it was culled whole - the old stubble never showed) */
+  const m=new THREE.MeshStandardMaterial({color:lin(hex),alphaMap:map,transparent:true,roughness:.95,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  m.userData.noShadow=true;matCache.set(k,m);return m;}
 function beardPatch(G,mat,dmax,nyTop,nyBot,hf){
   G.add(mk(surf(48,22,(u,v)=>{const ph=FRONT+(u*2-1)*dmax,d=Math.abs(ph-FRONT),t0=Math.acos(clamp(nyTop(d),-0.99,0.99)),t1=Math.acos(clamp(nyBot(d),-0.995,0.99)),th=lerp(t0,t1,v),ny=Math.cos(th);
-    const edge=smooth(Math.min(v,1-v*0.3)/0.15)*smooth((dmax-d)/0.12);return headPt(th,ph,Math.max(0.0005,hf(ny,d)*lerp(0.04,1,edge)),true);},{noAO:true,uRep:10,vRep:2}),mat));
+    return headPt(th,ph,Math.max(0.0005,hf(ny,d)),true);},{noAO:true}),mat));
 }
+/* the beard's hair: short locks rooted over the same area (roots given: scalpLocks keeps to the scalp), combed down along
+   the face, a little outwards on the cheeks, under the chin back towards the neck; a moustache combed down and out
+   from the middle of the lip */
+function beardLocks(G,o){const hc=BC.headC,R=rng(o.seed||97),roots=[],ga=Math.PI*(3-Math.sqrt(5)),M=60000;
+  for(let i=0;i<M&&roots.length<o.n*3;i++){const ny=1-2*(i+0.5)/M;if(ny>-0.1)continue;const ph=wrapA(i*ga),d=angFront(ph);if(d>o.dmax)continue;if(ny>o.top(d)||ny<o.bot(d))continue;roots.push([ny,ph]);}
+  /* thin to about n, evenly (every k-th point of the dense spiral lines up in arms: a random pick of them instead) */
+  /* and fewer towards every edge: the density runs out into the ground layer instead of stopping at a line */
+  const pick=[];const keep=o.n/Math.max(1,roots.length);for(const r of roots){const[ny,ph]=r,d=angFront(ph),e=Math.min((o.top(d)-ny)/(o.eTop||0.09),(o.dmax-d)/(o.eSide||0.16),(ny-o.bot(d))/0.04);
+    if(R()<keep*smooth(e))pick.push(r);}
+  const comb=(P,f)=>{const n=P.clone().sub(hc).normalize(),sx=Math.sign(P.x-hc.x)||1,v=V3(sx*(o.out||0.12),-1,o.fwd||0);v.addScaledVector(n,-v.dot(n));
+    if(v.lengthSq()<0.04)v.set(0,-0.25,-1).addScaledVector(n,-n.z);return v.normalize();};
+  addLocks(G,scalpLocks({n:pick.length,roots:pick,seed:o.seed||97,comb,face:false,len:o.len,lenVar:o.lenVar!=null?o.lenVar:0.3,lift:o.lift,tipLift:o.tipLift||0,
+    w:o.w,th:o.th||0.004,tipW:o.tipW!=null?o.tipW:0.3,tap0:0.45,root0:0.4,ex:0.001}),0.003);}
 function buildBeard(G){
   const B=S.hair.beard;if(!B||B==='none')return;
-  const col=S.hair.color,mat=hairMat(col,'v','coil');
+  const col=S.hair.color;
   const top=d=>interp1([[0,-.4],[.4,-.36],[.8,-.24],[1.15,-.12],[1.32,-.12]],d);
+  /* the jaw line: under the chin the beard ends at the neck (ny about -0.93 at the front, higher at the sides) */
+  const neck=d=>lerp(-0.985,-0.9,smooth(d/1.2));
+  const gnd=(cover,soft,dmax,t,b,h,extra)=>beardPatch(G,beardGroundMat(shade(col,-0.05),Object.assign({cover,soft},extra||{})),dmax,t,b,()=>h);
   switch(B){
-    case 'stubble':beardPatch(G,stubbleMat(shade(col,-0.1)),1.32,top,()=>-0.995,()=>0.0007);break;
-    case 'short':beardPatch(G,mat,1.32,top,()=>-0.995,(ny,d)=>0.0035+0.003*smooth((-ny-0.6)/0.3));break;
-    case 'full':beardPatch(G,mat,1.32,top,()=>-0.995,(ny,d)=>0.006+0.016*smooth((-ny-0.55)/0.35)*smooth((0.9-d)/0.6)+0.004*smooth((-ny-0.3)/0.3));break;
-    case 'goatee':beardPatch(G,mat,0.48,()=>-0.5,()=>-0.98,(ny)=>0.004+0.006*smooth((-ny-0.7)/0.2));beardPatch(G,mat,0.52,()=>-0.33,()=>-0.43,()=>0.004);break;
-    case 'mustache':beardPatch(G,mat,0.56,()=>-0.32,()=>-0.44,(ny,d)=>0.0045+0.002*gauss(d,0.3));break;
+    case 'stubble':gnd(0.55,0.09,1.32,top,neck,0.0006);break;
+    case 'short':gnd(0.96,0.07,1.32,top,neck,0.0007);
+      beardLocks(G,{n:3400,dmax:1.27,top:d=>top(d)-0.01,bot:neck,len:(ny,ph)=>0.0055+0.004*smooth((-ny-0.75)/0.2),lift:()=>0.0012,w:0.0075,th:0.0024,out:0.1,eTop:0.1,eSide:0.2});break;
+    case 'full':gnd(0.95,0.06,1.32,top,neck,0.0007);
+      beardLocks(G,{n:2200,dmax:1.29,top:d=>top(d)-0.005,bot:neck,len:(ny,ph)=>{const d=angFront(ph);return 0.008+0.022*smooth((-ny-0.6)/0.3)*(1-0.5*smooth((d-0.5)/0.6));},lift:(ny)=>0.002+0.005*smooth((-ny-0.55)/0.35),tipLift:0.002,w:0.011,th:0.0035,out:0.14,eTop:0.13,eSide:0.26});break;
+    case 'goatee':{/* a rounded chin patch and a moustache, both thinning out at their edges */
+      const t=d=>-0.55-0.18*smooth((d-0.12)/0.3),b=d=>-0.985,dm=0.44,tm=d=>-0.31-0.05*smooth((d-0.25)/0.25),bm=d=>-0.45+0.06*smooth((d-0.3)/0.22);
+      gnd(0.9,0.12,dm,t,b,0.0007);gnd(0.9,0.14,0.52,tm,bm,0.0007);
+      beardLocks(G,{n:520,dmax:dm,top:t,bot:b,len:(ny)=>0.006+0.006*smooth((-ny-0.8)/0.15),lift:()=>0.0014,w:0.0075,th:0.0026,out:0.05,seed:91,eTop:0.08,eSide:0.14});
+      beardLocks(G,{n:240,dmax:0.5,top:tm,bot:bm,len:()=>0.008,lift:()=>0.0015,w:0.008,th:0.0028,out:0.9,seed:93,eTop:0.04,eSide:0.16});break;}
+    case 'mustache':{const tm=d=>-0.31-0.05*smooth((d-0.25)/0.25),bm=d=>-0.45+0.06*smooth((d-0.3)/0.22);gnd(0.9,0.14,0.56,tm,bm,0.0007);
+      beardLocks(G,{n:300,dmax:0.54,top:tm,bot:bm,len:(ny,ph)=>0.009+0.003*gauss(angFront(ph),0.25),lift:()=>0.0018,tipLift:0.001,w:0.0085,th:0.003,out:0.9,seed:95,eTop:0.04,eSide:0.18});break;}
   }
 }

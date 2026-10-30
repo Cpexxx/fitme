@@ -467,7 +467,12 @@ function buildAcc(G){buildHat(G);buildGlasses(G);buildWatch(G);buildBracelets(G)
 /* =============== bandanas =============== */
 function bandanaMat(A){return fabric('poplin',A.color||'#a3262a',A.pattern||'paisley',A.color2||'#f4f1ea');}
 /* ring around the neck, sitting on whatever collar is worn */
-function neckRing(y,add){const nb=bodyEnv(Math.min(y,1.56),LAYERS),n=torsoAt(Math.min(y,1.58));const base={rx:Math.min(nb.rx,n.rx+0.03),rz:Math.min(nb.rz,n.rz+0.03),rzb:Math.min(zbk(nb),zbk(n)+0.03),n:2.1};return addE(base,add);}
+/* a turtleneck worn (as the top or over it): its outer radius (clothes.js builds it on the neck, outside the trunk's layers) */
+function turtleWorn(){for(const P of [S.mid,S.top]){if(!P||P.type==='none')continue;const T=TOPS[P.type];if(P===S.mid&&MID_ITEMS[P.type]!=='top')continue;if(!T||!T.necks)continue;if((T.necks.includes(P.neck)?P.neck:T.necks[0])==='turtle')return true;}return false;}
+function neckRing(y,add){const nb=bodyEnv(Math.min(y,1.56),LAYERS),n=torsoAt(Math.min(y,1.58));const base={rx:Math.min(nb.rx,n.rx+0.03),rz:Math.min(nb.rz,n.rz+0.03),rzb:Math.min(zbk(nb),zbk(n)+0.03),n:2.1};
+  /* (over a turtleneck: inside it the band showed only as its knot and a corner poking through) */
+  if(turtleWorn()){const t=BC.neckR*1.04+0.012+0.012;base.rx=Math.max(base.rx,t);base.rz=Math.max(base.rz,t);base.rzb=Math.max(base.rzb,t);}
+  return addE(base,add);}
 function buildBandana(G){
   const A=S.acc.bandana,t0=A.type;if(!t0||t0==='none')return;
   const m=bandanaMat(A),y0=1.51,y1=1.555,n0=G.children.length;
