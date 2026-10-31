@@ -191,10 +191,13 @@ function shSkirtClear(G,sk,spread=true,horiz=false,gap=0.003){const H=poseHash()
     if(!ch)continue;if(!spread){for(let i=0;i<NV;i++)p.setXYZ(i,p.getX(i)+D[i*3],p.getY(i)+D[i*3+1],p.getZ(i)+D[i*3+2]);p.needsUpdate=true;g.computeVertexNormals();continue;}
     /* spread the push to the neighbours with a falloff: pushing single vertices out of a pleat valley left sharp steps */
     const can=new Uint32Array(NV),same=new Map(),pa=p.array;for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=same.get(k);if(c===undefined){same.set(k,i);c=i;}can[i]=c;}
-    const nb=new Map(),add=(a,b)=>{a=can[a];b=can[b];if(a===b)return;let s=nb.get(a);if(!s)nb.set(a,s=new Set());s.add(b);};
-    const ix=g.index?g.index.array:null,NT=ix?ix.length:NV;for(let t=0;t<NT;t+=3)for(let k=0;k<3;k++){const a=ix?ix[t+k]:t+k,b=ix?ix[t+(k+1)%3]:t+(k+1)%3;add(a,b);add(b,a);}
+    /* (neighbours in flat arrays: a Map of Sets per vertex made the whole outfit build ~20% slower) */
+    const ix=g.index?g.index.array:null,NT=ix?ix.length:NV,deg=new Uint32Array(NV+1);
+    for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){deg[a+1]++;deg[b+1]++;}}
+    for(let i=0;i<NV;i++)deg[i+1]+=deg[i];const nbr=new Uint32Array(deg[NV]),fill=deg.slice(0,NV);
+    for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){nbr[fill[a]++]=b;nbr[fill[b]++]=a;}}
     for(let i=0;i<NV;i++){const c=can[i];if(c!==i&&D[i*3]*D[i*3]+D[i*3+1]*D[i*3+1]+D[i*3+2]*D[i*3+2]>D[c*3]*D[c*3]+D[c*3+1]*D[c*3+1]+D[c*3+2]*D[c*3+2])for(let k=0;k<3;k++)D[c*3+k]=D[i*3+k];}
-    for(let it=0;it<10;it++){const E=D.slice();for(const [c,s] of nb){let x=0,y=0,z=0;for(const b of s){x+=E[b*3];y+=E[b*3+1];z+=E[b*3+2];}const f=0.88/s.size;x*=f;y*=f;z*=f;
+    for(let it=0;it<10;it++){const E=D.slice();for(let c=0;c<NV;c++){const d0=deg[c],d1=deg[c+1];if(d1===d0)continue;let x=0,y=0,z=0;for(let q=d0;q<d1;q++){const b=nbr[q];x+=E[b*3];y+=E[b*3+1];z+=E[b*3+2];}const f=0.88/(d1-d0);x*=f;y*=f;z*=f;
       if(x*x+y*y+z*z>E[c*3]*E[c*3]+E[c*3+1]*E[c*3+1]+E[c*3+2]*E[c*3+2]){D[c*3]=x;D[c*3+1]=y;D[c*3+2]=z;}}}
     for(let i=0;i<NV;i++){const c=can[i];p.setXYZ(i,p.getX(i)+D[c*3],p.getY(i)+D[c*3+1],p.getZ(i)+D[c*3+2]);}
     p.needsUpdate=true;g.computeVertexNormals();}}
