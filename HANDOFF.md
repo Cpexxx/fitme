@@ -615,3 +615,30 @@ Prośba: poprawić zarost i wszystkie usterki (przenikania, glitche, artefakty).
   kołnierza. Golf: promień nie mniejszy niż tułów+7 mm (kapturowy mięsień przebijał przy karku).
 - **Bandana na golfie** (`turtleWorn`, `neckRing`).
 - Fałszywe alarmy clip zostawione: kołnierz w otwartym przodzie kurtki („top przez outer”), goła pięta w klapkach.
+
+## Runda 21 (2026-10-31): spodnie leżą na nodze, bez dzwonu przy kostce
+Prośba: spodnie bez dziwnych zgięć i marszczek, naturalnie na nodze, bez poszerzenia ~1,5x przy kostkach; trencz/racer
+na biodrach; palce w szerokich koszulach.
+- **Przyczyna dzwonu:** poniżej `legCut` (0,17) nogawka to zachowany wykrój (`kept`), a nie powłoka. Wykrój był szerszy od
+  dopasowanej powłoki nad nim i rósł razem z kostką/piętą (podłoga `legAt+0,008` w `pantsLegR`), do tego `shKeptOverShoes`
+  rozpychał go na bucie. Pomiar (szerokość nogawki 16 cm → 9 cm nad ziemią): dresy 11,2 → 15,9; slim 7,9 → 11,1.
+- **`shKeptTaper` (shell.js):** zachowany dół = promień powłoki tuż nad cięciem (na kąt) + własna zmiana kroju
+  `hemD` (buildPants: `pantsLegR(...,design=true)` bez podłogi ciała; jogger: ściągacz) + 0,6 drobnych fal wykroju.
+  Po zmianie: dresy 11,2 → 11,4, straight 11,4 → 12,8; bootcut/flared/wide dalej się rozszerzają (tak mają).
+- Dół 1,2 mm pod powłoką (`shBlendKept`, było 3 mm: widoczny uskok na goleni).
+- `shKeptOverShoes`: odsuwa tylko do 12 mm (`__kosCap`); głębsze wejście buta (język, podbicie) zostaje w bucie
+  zamiast rozdymać nogawkę w fartuch.
+- `shSkirtClear` dla zachowanych dołów: `horiz` (odsuwanie w poziomie; wzdłuż normalnej podbicia brzeg nogawki
+  podnosił się w trójkąt i było widać wnętrze loafera), tam gdzie poziomo za daleko – wzdłuż normalnej; margines 8 mm
+  (`gap`; przy 3 mm skóra nad językiem buta wychodziła między wierzchołkami jako jasna plamka).
+- **Krok (`shBodyClear`):** dodatkowe wygładzanie pasa wokół `Y0` (koniec płaskiego panelu rozporka, rozejście nóg):
+  były tam poszarpane płaty z ciemnymi szczelinami i jasne zagięcie w poprzek obu ud (`__noCrSm` wyłącza).
+- Sprawdzone i odrzucone: ograniczenie przodu wykroju (`tRf`) do ciała – elipsa wokół bioder musi być głęboka, żeby
+  objąć boki, nic nie zmienia; luz przodu w powłoce i „zwisanie od paska” – przód wyznacza płaski panel rozporka
+  wyrównany do przodu nogawek. Ciemny „dołek” pod paskiem u kobiety to pochylenie przodu (11 cm przy pasku, 6 cm w kroku).
+- Kokardka sznurówek pod pełną nogawką nie ma pętli (`laceRow`, `flat`).
+- Clip: „body przez bottom” przy stopach rośnie w loaferach/klapkach (węższy dół bliżej stopy) – na renderach tak samo
+  lub lepiej niż wcześniej.
+- Nie rozwiązane: rnd-7-47 – pasek plisowanej spódnicy wychodzi przed krawędź rozpiętej poły trencza (spódnica jest
+  wciskana pod warstwy wyżej, ale przy krawędzi poły to nie działa); rnd-7-81 – widok przez rozcięcie (prawdopodobnie
+  fałszywy alarm). Palców w szerokich koszulach nie udało się odtworzyć (stand/relaxed/walk, fat 0,9, mus 0,9).

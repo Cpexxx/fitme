@@ -95,7 +95,10 @@ function laceRow(GS,Lr,sides,mat,eyelet){
   const[a,b]=sides[0];GS.add(mk(cordGeo([a,a.clone().lerp(b,0.5).add(V3(0,0.002,0)),b],0.0022,false,6,10),mat));
   for(const[a2,b2] of sides)for(const e of [a2,b2]){const t=mk(new THREE.TorusGeometry(0.0034,0.0012,6,12),eyelet);t.position.copy(e);t.rotation.x=Math.PI/2;GS.add(t);}
   const[ta,tb]=sides[sides.length-1],c=ta.clone().lerp(tb,0.5).add(V3(0,0.006,0));
-  for(const sd of [-1,1]){const l=mk(new THREE.TorusGeometry(0.012,0.0022,6,16,Math.PI*1.4),mat);l.position.copy(c).add(V3(sd*0.008,0.002,0));l.rotation.set(-1.1,sd*0.6,sd>0?-0.4:Math.PI+0.4);GS.add(l);
+  /* under a full-length trouser hem the bow's loops lie flat under the cloth (standing up they came through the front of
+     the leg as a white fleck) */
+  const flat=PANTS&&PANTS.hem!=null&&PANTS.hem<0.1;
+  for(const sd of [-1,1]){if(!flat){const l=mk(new THREE.TorusGeometry(0.012,0.0022,6,16,Math.PI*1.4),mat);l.position.copy(c).add(V3(sd*0.008,0.002,0));l.rotation.set(-1.1,sd*0.6,sd>0?-0.4:Math.PI+0.4);GS.add(l);}
     GS.add(mk(cordGeo([c,c.clone().add(V3(sd*0.006,-0.012,0.01)),c.clone().add(V3(sd*0.01,-0.03,0.014))],0.002,false,6,8),mat));}
 }
 /* chosen EU size against the mannequin's own foot: bigger shoes reach further past the toes */

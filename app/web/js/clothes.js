@@ -26,12 +26,12 @@ function drawstrings(G,yTop,len,xs,envF,col){
     cordsAlong(G,cm,pts,0.0026);const e=pts[pts.length-1];G.add(mk(rodGeo(e.clone().add(V3(0,0.012,0)),e.clone().add(V3(0,-0.004,0)),0.0034),tip));}
 }
 /* =============== trousers & skirts =============== */
-function pantsLegR(y,fit,T){
+function pantsLegR(y,fit,T,design){
   const t=clamp((0.82-y)/0.74,0,1),body=legAt(y);
   if(T&&T.tight)return body+0.0035;
   if(!fit.k)return body+fit.e;
-  const k=fit.k,s=t<0.43?lerp(k[0],k[1],smooth(t/0.43)):lerp(k[1],k[2],smooth((t-0.43)/0.57));
-  return Math.max(s*Math.pow(BC.b,0.8)*(1+(BC.F.hips-1)*0.4*(1-t)),body+0.008);
+  const k=fit.k,s=t<0.43?lerp(k[0],k[1],smooth(t/0.43)):lerp(k[1],k[2],smooth((t-0.43)/0.57)),r=s*Math.pow(BC.b,0.8)*(1+(BC.F.hips-1)*0.4*(1-t));
+  return design?r:Math.max(r,body+0.008);
 }
 function legWrinkles(hem,amp=1){return(a,tt,s)=>{const y=s.y,r=s.rx,e=Math.max(0,r-legAt(y));let d=0;
   d+=gauss(y-0.5,0.05)*0.08*e*Math.sin(y*120+Math.sin(a*2)*2.2+a*1.5)*(0.5+0.5*Math.max(0,-Math.sin(a)));
@@ -112,7 +112,11 @@ function buildPants(G,P,T){
   const stripes=T.stripes||(T.stripesOpt&&P.stripes);
   for(const side of [-1,1]){
     const x=side*BC.legX,out=side>0?0:Math.PI,inn=side>0?Math.PI:0,lr=y=>{const r=legR(y)-0.004*smooth((y-0.765)/0.025);return{rx:r,rz:r,n:2};};
-    G.add(mkMain(tube(vSamples(0.87,hem,len.stack?130:100,lr,x),{seg:56,mod}),m));
+    const lg=mkMain(tube(vSamples(0.87,hem,len.stack?130:100,lr,x),{seg:56,mod}),m);G.add(lg);
+    /* the cut's own change of width below the shin (taper / flare / jogger cuff), without following the body: the kept hem
+       continues the fitted shell by this much (the pattern's floor round the ankle and heel made a bell 1.4x the shin) */
+    if(!T.tight&&hem<0.17){const rd=y=>{let r=fit.k?pantsLegR(y,fit,null,true):pantsLegR(0.17,fit,null);if(len.jogger&&y<hem+0.08)r=lerp(legAt(y)+0.012,r,smooth((y-hem)/0.08));return r;},r0=rd(0.17);
+      const hd=[];for(let y=0;y<=0.2001;y+=0.01)hd.push(+(rd(y)-r0).toFixed(4));lg.geometry.userData.hemD=hd;}
     if(len.cuff){const r=legR(hem+0.02)+0.006;G.add(mk(tube(vSamples(hem-0.002,hem+0.05,6,y=>{const e=roundE(y,hem-0.002,hem+0.05,0.004);return{rx:r+e,rz:r+e};},x),{seg:56}),mb));stitchRing(G,hem+0.044,()=>({rx:r+0.004,rz:r+0.004}),thread,x);}
     else if(len.jogger)G.add(mk(tube(vSamples(hem,hem+0.042,5,y=>addE(lr(y),roundE(y,hem,hem+0.042,0.003)),x),{seg:56,mod:(a)=>1+0.003*Math.abs(Math.sin(a*40))}),fabric('rib',shade(P.color,-0.05))));
     else{G.add(mk(tube(vSamples(hem,hem+0.016,4,y=>addE(lr(y),roundE(y,hem,hem+0.016,0.003)),x),{seg:56,mod}),m));if(!T.tight)stitchRing(G,hem+0.022,lr,thread,x,mod);}
