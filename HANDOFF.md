@@ -636,6 +636,9 @@ na biodrach; palce w szerokich koszulach.
 - Sprawdzone i odrzucone: ograniczenie przodu wykroju (`tRf`) do ciała – elipsa wokół bioder musi być głęboka, żeby
   objąć boki, nic nie zmienia; luz przodu w powłoce i „zwisanie od paska” – przód wyznacza płaski panel rozporka
   wyrównany do przodu nogawek. Ciemny „dołek” pod paskiem u kobiety to pochylenie przodu (11 cm przy pasku, 6 cm w kroku).
+- **Buty odkryte:** w klapkach/sandałach (`SH.open`) odsuwanie dołu od skóry jak dawniej – wzdłuż normalnej, 3 mm (poziomo
+  podbicie przebijało przód brzegu klinem skóry); w balerinach/mary jane (`low>=2`) i odkrytych `shKeptTaper` przy podłodze
+  (y<0,12) wraca do szerokości wykroju (`bare`), żeby przykryć bose podbicie. Buty zakryte i loafery: poziomo, 8 mm.
 - Kokardka sznurówek pod pełną nogawką nie ma pętli (`laceRow`, `flat`).
 - Clip: „body przez bottom” przy stopach rośnie w loaferach/klapkach (węższy dół bliżej stopy) – na renderach tak samo
   lub lepiej niż wcześniej.

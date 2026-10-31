@@ -316,7 +316,8 @@ function buildShells(G,GS){
     if(cut!=null&&ra===0){if(!L.curtain){L.curtain=1;const tails=others.filter(t=>t.userData.tail&&t.userData.layer===L.name);const cm=shCurtain(L,cut,shells,B2,tails,layers);for(const t of tails){if(t.parent)t.parent.remove(t);others.splice(others.indexOf(t),1);}if(cm){G.add(cm);L.curtainMesh=cm;const T3=shTrisOf(cm,0);newU[0].raster(T3,0);L.newG[0].raster(T3,0);}}continue;}
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){if(!window.__noTaper)shKeptTaper(o,L.newG[ra],ra,cut);shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3){shKeptOverShoes(o,OB);/* (pushed over the shoes after the blend: a ledge where the shell ends; blended again, then
       clear of the shoe once more - a boot's collar in the blend zone was pulled under; only for shafts reaching the cut:
-      at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}/* (clear of the skin too: the instep came through tight leggings at the front of the ankle) */shSkirtClear(G,[o],true,true,window.__gap||0.008);o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+      at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}/* (clear of the skin too: the instep came through tight leggings at the front of the ankle) */{/* (sideways only in a closed shoe: on a bare foot in a sandal the instep came through the front of the hem - there it
+      rides up the instep) */const SH=SHOES[S.shoes.type]||{},open=!S.shoes.type||S.shoes.type==='none'||!!SH.open;shSkirtClear(G,[o],true,!open,window.__gap||(open?0.003:0.008));}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
@@ -1195,9 +1196,12 @@ function shKeptTaper(o,SG,ra,cut){const hd=o.geometry.userData.hemD;if(!hd||!SG|
   const A=y=>{let b=bin(y);for(let k=0;k<NB;k++){if(b-k>=0&&cnt[b-k])return sum[b-k]/cnt[b-k];if(b+k<NB&&cnt[b+k])return sum[b+k]/cnt[b+k];}return 0;};
   const Ac=A(cut),Rc=th=>{const a=abin(th);for(let k=0;k<NA/2;k++){if(cc[(a+k)%NA])return cs[(a+k)%NA]/cc[(a+k)%NA];if(cc[(a-k+NA)%NA])return cs[(a-k+NA)%NA]/cc[(a-k+NA)%NA];}return Ac;};
   const D=y=>{const f=clamp(y/0.01,0,hd.length-1),j=Math.min(hd.length-2,Math.floor(f));return lerp(hd[j],hd[j+1],f-j);},Dc=D(cut);
+  /* (an open shoe shows the bare foot: near the floor the hem keeps the pattern's width and covers the instep - narrowed,
+     the instep came through its front) */
+  const SH=SHOES[S.shoes.type]||{},bare=!S.shoes.type||S.shoes.type==='none'||SH.open||SH.low>=2;
   let moved=false;
   for(let i=0;i<n;i++){const y=Y[i];if(y>=cut)continue;let Rs=SG.at(TH[i],cut+0.012);if(Rs<0)Rs=SG.nearest(TH[i],cut+0.012);if(Rs<0)continue;
-    const wr=(RR[i]-A(y))-(Rc(TH[i])-Ac),R=Math.max(0.02,Rs-(window.__tIn||0.003)+0.6*wr+D(y)-Dc);
+    const wr=(RR[i]-A(y))-(Rc(TH[i])-Ac),R=lerp(RR[i],Math.max(0.02,Rs-(window.__tIn||0.003)+0.6*wr+D(y)-Dc),bare?smooth((y-0.03)/0.09):1);
     shPoint(ra,TH[i],y,R,q);p.setXYZ(i,q[0],q[1],q[2]);moved=true;}
   if(moved){p.needsUpdate=true;o.geometry.computeVertexNormals();}}
 /* a kept trouser hem: the texture mapped the way the shell's legs are (around the leg axis and by height), so the weave
