@@ -180,27 +180,31 @@ function shLayerFit(L){
    come from are smoother than the body's muscle and fat relief - the top of a full seat came through a skirt as two
    patches, full hips through a shirt's tail over a skirt. Each vertex at least 3 mm out from the nearest body point along
    that point's normal */
-function shSkirtClear(G,sk,spread=true,horiz=false,gap=0.003){const H=poseHash(),B=shellBase(1),BP=B.P,BN=B.N;
+/* move each vertex by D (3 per vertex), the moves spread over the mesh neighbours with a falloff (a vertex never moves less than
+   its own D): no steps where the moved part meets the rest */
+function shSpreadMove(g,D,iters,decay){const p=g.attributes.position,NV=p.count;
+  const can=new Uint32Array(NV),same=new Map(),pa=p.array;for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=same.get(k);if(c===undefined){same.set(k,i);c=i;}can[i]=c;}
+  /* (neighbours in flat arrays: a Map of Sets per vertex made the whole outfit build ~20% slower) */
+  const ix=g.index?g.index.array:null,NT=ix?ix.length:NV,deg=new Uint32Array(NV+1);
+  for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){deg[a+1]++;deg[b+1]++;}}
+  for(let i=0;i<NV;i++)deg[i+1]+=deg[i];const nbr=new Uint32Array(deg[NV]),fill=deg.slice(0,NV);
+  for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){nbr[fill[a]++]=b;nbr[fill[b]++]=a;}}
+  for(let i=0;i<NV;i++){const c=can[i];if(c!==i&&D[i*3]*D[i*3]+D[i*3+1]*D[i*3+1]+D[i*3+2]*D[i*3+2]>D[c*3]*D[c*3]+D[c*3+1]*D[c*3+1]+D[c*3+2]*D[c*3+2])for(let k=0;k<3;k++)D[c*3+k]=D[i*3+k];}
+  for(let it=0;it<iters;it++){const E=D.slice();for(let c=0;c<NV;c++){const d0=deg[c],d1=deg[c+1];if(d1===d0)continue;let x=0,y=0,z=0;for(let q=d0;q<d1;q++){const b=nbr[q];x+=E[b*3];y+=E[b*3+1];z+=E[b*3+2];}const f=decay/(d1-d0);x*=f;y*=f;z*=f;
+    if(x*x+y*y+z*z>E[c*3]*E[c*3]+E[c*3+1]*E[c*3+1]+E[c*3+2]*E[c*3+2]){D[c*3]=x;D[c*3+1]=y;D[c*3+2]=z;}}}
+  for(let i=0;i<NV;i++){const c=can[i];p.setXYZ(i,p.getX(i)+D[c*3],p.getY(i)+D[c*3+1],p.getZ(i)+D[c*3+2]);}
+  p.needsUpdate=true;g.computeVertexNormals();}
+function shSkirtClear(G,sk,spread=true,horiz=false,gap=0.003,maxQ=0){const H=poseHash(),B=shellBase(1),BP=B.P,BN=B.N;
   for(const o of sk){if(!o||!o.geometry)continue;shBake(o,o.parent||G);const g=o.geometry,p=g.attributes.position,NV=p.count,D=new Float32Array(NV*3);let ch=false;
     for(let i=0;i<NV;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),[j]=H.near2(x,y,z);if(j<0)continue;
-      const d=(x-BP[j*3])*BN[j*3]+(y-BP[j*3+1])*BN[j*3+1]+(z-BP[j*3+2])*BN[j*3+2];if(d<gap){const q=gap-d;
+      const d=(x-BP[j*3])*BN[j*3]+(y-BP[j*3+1])*BN[j*3+1]+(z-BP[j*3+2])*BN[j*3+2];if(d<gap){const q=gap-d;if(maxQ&&q>maxQ)continue;
         /* a trouser hem moves sideways where it can: along the instep's normal (pointing up) the hem rose into a notch at the front
            (on top of the instep, where sideways would be too far, along the normal: the skin came through there) */
-        if(horiz){const h=Math.hypot(BN[j*3],BN[j*3+2]);if(h>0.2&&q/h<0.04){D[i*3]=BN[j*3]/h*q/h;D[i*3+2]=BN[j*3+2]/h*q/h;ch=true;continue;}}
+        if(horiz){const h=Math.hypot(BN[j*3],BN[j*3+2]);if(h>0.2&&q/h<(horiz===true?0.04:horiz)){D[i*3]=BN[j*3]/h*q/h;D[i*3+2]=BN[j*3+2]/h*q/h;ch=true;continue;}}
         D[i*3]=BN[j*3]*q;D[i*3+1]=BN[j*3+1]*q;D[i*3+2]=BN[j*3+2]*q;ch=true;}}
     if(!ch)continue;if(!spread){for(let i=0;i<NV;i++)p.setXYZ(i,p.getX(i)+D[i*3],p.getY(i)+D[i*3+1],p.getZ(i)+D[i*3+2]);p.needsUpdate=true;g.computeVertexNormals();continue;}
     /* spread the push to the neighbours with a falloff: pushing single vertices out of a pleat valley left sharp steps */
-    const can=new Uint32Array(NV),same=new Map(),pa=p.array;for(let i=0;i<NV;i++){const k=posKey(pa[i*3],pa[i*3+1],pa[i*3+2]);let c=same.get(k);if(c===undefined){same.set(k,i);c=i;}can[i]=c;}
-    /* (neighbours in flat arrays: a Map of Sets per vertex made the whole outfit build ~20% slower) */
-    const ix=g.index?g.index.array:null,NT=ix?ix.length:NV,deg=new Uint32Array(NV+1);
-    for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){deg[a+1]++;deg[b+1]++;}}
-    for(let i=0;i<NV;i++)deg[i+1]+=deg[i];const nbr=new Uint32Array(deg[NV]),fill=deg.slice(0,NV);
-    for(let t=0;t<NT;t++){const a=can[ix?ix[t]:t],b=can[ix?ix[t-t%3+(t%3+1)%3]:t-t%3+(t%3+1)%3];if(a!==b){nbr[fill[a]++]=b;nbr[fill[b]++]=a;}}
-    for(let i=0;i<NV;i++){const c=can[i];if(c!==i&&D[i*3]*D[i*3]+D[i*3+1]*D[i*3+1]+D[i*3+2]*D[i*3+2]>D[c*3]*D[c*3]+D[c*3+1]*D[c*3+1]+D[c*3+2]*D[c*3+2])for(let k=0;k<3;k++)D[c*3+k]=D[i*3+k];}
-    for(let it=0;it<10;it++){const E=D.slice();for(let c=0;c<NV;c++){const d0=deg[c],d1=deg[c+1];if(d1===d0)continue;let x=0,y=0,z=0;for(let q=d0;q<d1;q++){const b=nbr[q];x+=E[b*3];y+=E[b*3+1];z+=E[b*3+2];}const f=0.88/(d1-d0);x*=f;y*=f;z*=f;
-      if(x*x+y*y+z*z>E[c*3]*E[c*3]+E[c*3+1]*E[c*3+1]+E[c*3+2]*E[c*3+2]){D[c*3]=x;D[c*3+1]=y;D[c*3+2]=z;}}}
-    for(let i=0;i<NV;i++){const c=can[i];p.setXYZ(i,p.getX(i)+D[c*3],p.getY(i)+D[c*3+1],p.getZ(i)+D[c*3+2]);}
-    p.needsUpdate=true;g.computeVertexNormals();}}
+    shSpreadMove(g,D,10,0.88);}}
 function buildShells(G,GS){
   if(!BC.core)return;
   G.updateMatrixWorld(true);
@@ -317,7 +321,8 @@ function buildShells(G,GS){
     if(cut!=null){shKeepBelow(o,cut+0.03);shBake(o,G);FIT_ST=0;conformGeo(o.geometry,o.geometry.userData.axis,0);if(ra>=3){if(!window.__noTaper)shKeptTaper(o,L.newG[ra],ra,cut);shBlendKept(o,L.newG[ra],ra,cut);shUvKept(o,ra);}if(OB&&ra>=3){shKeptOverShoes(o,OB);/* (pushed over the shoes after the blend: a ledge where the shell ends; blended again, then
       clear of the shoe once more - a boot's collar in the blend zone was pulled under; only for shafts reaching the cut:
       at low shoes the second push left sharp bumps) */if(OB.top>cut){shBlendKept(o,L.newG[ra],ra,cut);shKeptOverShoes(o,OB,false);}}/* (clear of the skin too: the instep came through tight leggings at the front of the ankle) */{/* (sideways only in a closed shoe: on a bare foot in a sandal the instep came through the front of the hem - there it
-      rides up the instep) */const SH=SHOES[S.shoes.type]||{},open=!S.shoes.type||S.shoes.type==='none'||!!SH.open;shSkirtClear(G,[o],true,!open,window.__gap||(open?0.003:0.008));}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
+      rides up the instep, by at most 12 mm: deeper in, the hem front stays inside the foot - pushed out of it the front
+      rose in a V 8 cm high) */const SH=SHOES[S.shoes.type]||{},open=!S.shoes.type||S.shoes.type==='none'||!!SH.open;shSkirtClear(G,[o],true,window.__hz!=null?window.__hz:!open,window.__gap||(open?0.003:0.008));}o.userData.conformed=true;const T3=shTrisOf(o,ra);newU[ra].raster(T3,0);L.newG[ra].raster(T3,0);kept.push(o);}}
   const shift=[0,1,2,3,4].map(r=>shShiftGrid(oldU[r],newU[r]));
   for(const L of layers){L.shift=[0,1,2,3,4].map(r=>shShiftGrid(L.grids[r]||new PGrid(r),L.newG[r]));}
   /* shirt tails not taken into a curtain (the shirt ends above the crotch): they continue the fitted shell's outline instead
@@ -727,13 +732,20 @@ function shObstacleGrids(G,GS){
       if(T.length){const sd=r===3?1:-1;let cx=0;for(let i=0;i<n;i++){v.fromBufferAttribute(p,i).applyMatrix4(m);cx+=v.x;}if(cx*sd>0){grids[r].raster(T,0);any=true;}}}};
   G.updateMatrixWorld(true);G.traverse(o=>{if(o.isMesh&&o.userData.obst)add(o,false);});
   if(GS){GS.updateMatrixWorld(true);GS.traverse(o=>{if(o.isMesh)add(o,true);});}
-  if(!any)return null;for(const r of [3,4])grids[r].close();return{grids,top};
+  /* in an open shoe (or barefoot) the bare foot is an obstacle too: the hem rests on the instep, pushed forward over it
+     (cleared only from the skin's normal, which points up there, the front of the hem rose in a V 8 cm high) */
+  const SH=SHOES[S.shoes.type]||{},bare=!S.shoes.type||S.shoes.type==='none'||!!SH.open;let foot=false;
+  if(bare&&!window.__noFootObst){const B=shellBase(1),P=B.P,ix=B.ix,co=new Float32Array(9);
+    for(const r of [3,4]){const sd=r===3?1:-1,T=[];for(let t=0;t<ix.length;t+=3){const a=ix[t],b=ix[t+1],c=ix[t+2];if(Math.max(P[a*3+1],P[b*3+1],P[c*3+1])>0.13||Math.min(P[a*3+1],P[b*3+1],P[c*3+1])<0.015||P[a*3]*sd<=0)continue;
+      for(let k=0;k<3;k++){const v=ix[t+k];shCoord(r,P[v*3],P[v*3+1],P[v*3+2],co,k*3);}for(let k=0;k<9;k++)T.push(co[k]);}
+      if(T.length){grids[r].raster(T,0);any=true;foot=true;}}}
+  if(!any)return null;for(const r of [3,4])grids[r].close();return{grids,top,foot};
 }
 /* trouser pattern parts kept as tubes (hems): rest on the shoe instead of passing through it */
 function shKeptOverShoes(o,OB,spread=true){if(window.__noKOS)return;
   const g=o.geometry,p=g.attributes.position,c=new Float32Array(3),q=new Float32Array(3),rr=o.geometry.userData.axis==='legR'?4:3,G2=OB.grids[rr];
   const N=G2.N,NA=SH_NA,push=new Float32Array(N*NA),cur=new PGrid(rr);cur.raster(shTrisOf(o,rr),0);
-  for(let k=0;k<N*NA;k++)if(G2.R[k]>=0&&cur.R[k]>=0){const d=G2.R[k]+0.004-cur.R[k];push[k]=d>0&&d<(window.__kosCap||0.03)?d:0;}
+  for(let k=0;k<N*NA;k++)if(G2.R[k]>=0&&cur.R[k]>=0){const d=G2.R[k]+0.004-cur.R[k];push[k]=d>0&&d<(window.__kosCap||(OB.foot?0.05:0.03))?d:0;}
   /* spread upwards (the fabric drapes off the shoe) and around; it eases off within a few cm (spread further the hem
      stood out round the ankle in a bell) */
   for(let it=0;it<(spread?14:2);it++){const c0=push.slice();for(let j=0;j<N;j++)for(let i=0;i<NA;i++){const k=j*NA+i;let m=c0[k];if(j>0)m=Math.max(m,c0[k-NA]*0.82);m=Math.max(m,c0[j*NA+(i+1)%NA]*0.9,c0[j*NA+(i+NA-1)%NA]*0.9);push[k]=m;}}
@@ -1201,7 +1213,9 @@ function shKeptTaper(o,SG,ra,cut){const hd=o.geometry.userData.hemD;if(!hd||!SG|
   const SH=SHOES[S.shoes.type]||{},bare=!S.shoes.type||S.shoes.type==='none'||SH.open||SH.low>=2;
   let moved=false;
   for(let i=0;i<n;i++){const y=Y[i];if(y>=cut)continue;let Rs=SG.at(TH[i],cut+0.012);if(Rs<0)Rs=SG.nearest(TH[i],cut+0.012);if(Rs<0)continue;
-    const wr=(RR[i]-A(y))-(Rc(TH[i])-Ac),R=lerp(RR[i],Math.max(0.02,Rs-(window.__tIn||0.003)+0.6*wr+D(y)-Dc),bare?smooth((y-0.03)/0.09):1);
+    /* (the taper and the wrinkles come in over 5 cm under the cut: starting at it, the slope kinked there and the light drew a
+       line round the shin) */
+    const ramp=window.__noRamp?1:smooth((cut-y)/0.05),wr=(RR[i]-A(y))-(Rc(TH[i])-Ac),R=lerp(RR[i],Math.max(0.02,Rs-(window.__tIn||0.003)+(0.6*wr+D(y)-Dc)*ramp),bare?smooth((y-0.03)/0.09):1);
     shPoint(ra,TH[i],y,R,q);p.setXYZ(i,q[0],q[1],q[2]);moved=true;}
   if(moved){p.needsUpdate=true;o.geometry.computeVertexNormals();}}
 /* a kept trouser hem: the texture mapped the way the shell's legs are (around the leg axis and by height), so the weave

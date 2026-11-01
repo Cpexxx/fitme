@@ -625,9 +625,8 @@ na biodrach; palce w szerokich koszulach.
 - **`shKeptTaper` (shell.js):** zachowany dół = promień powłoki tuż nad cięciem (na kąt) + własna zmiana kroju
   `hemD` (buildPants: `pantsLegR(...,design=true)` bez podłogi ciała; jogger: ściągacz) + 0,6 drobnych fal wykroju.
   Po zmianie: dresy 11,2 → 11,4, straight 11,4 → 12,8; bootcut/flared/wide dalej się rozszerzają (tak mają).
-- Dół 1,2 mm pod powłoką (`shBlendKept`, było 3 mm: widoczny uskok na goleni).
-- `shKeptOverShoes`: odsuwa tylko do 12 mm (`__kosCap`); głębsze wejście buta (język, podbicie) zostaje w bucie
-  zamiast rozdymać nogawkę w fartuch.
+- `__tIn` (dół pod powłoką, domyślnie 3 mm) i `__kosCap` (limit `shKeptOverShoes`, domyślnie 30 mm) to tylko flagi do
+  testów: wartości 1,2 mm / 12 mm testowane na zbliżeniach NIE weszły do kodu (sprostowanie z rundy 22).
 - `shSkirtClear` dla zachowanych dołów: `horiz` (odsuwanie w poziomie; wzdłuż normalnej podbicia brzeg nogawki
   podnosił się w trójkąt i było widać wnętrze loafera), tam gdzie poziomo za daleko – wzdłuż normalnej; margines 8 mm
   (`gap`; przy 3 mm skóra nad językiem buta wychodziła między wierzchołkami jako jasna plamka).
@@ -645,3 +644,18 @@ na biodrach; palce w szerokich koszulach.
 - Nie rozwiązane: rnd-7-47 – pasek plisowanej spódnicy wychodzi przed krawędź rozpiętej poły trencza (spódnica jest
   wciskana pod warstwy wyżej, ale przy krawędzi poły to nie działa); rnd-7-81 – widok przez rozcięcie (prawdopodobnie
   fałszywy alarm). Palców w szerokich koszulach nie udało się odtworzyć (stand/relaxed/walk, fat 0,9, mus 0,9).
+
+## Runda 22 (2026-11-01): bosa stopa, przejście na goleni, refaktor
+Prośba: „napraw to” – pozostałe usterki z rundy 21.
+- **Klapki/sandały/boso:** bosa stopa (trójkąty `shellBase(1)` z y 1,5–13 cm, po swojej stronie) jest przeszkodą w
+  `shObstacleGrids` (`OB.foot`), limit `shKeptOverShoes` 5 cm: dół nogawki wypychany promieniowo do przodu leży na
+  podbiciu. Wcześniej przód nogawki był wycięty w odwrócone V do 8 cm (skóra podbicia ma normalną w górę, odsuwanie po
+  niej podnosiło brzeg) albo stopa przebijała tkaninę. `shSkirtClear` dla butów odkrytych: wzdłuż normalnej, 3 mm.
+- **`shKeptTaper`:** zwężenie kroju i fale wykroju wchodzą płynnie przez 5 cm pod cięciem (`ramp`).
+- **`shSpreadMove(g,D,iters,decay)`:** wspólne rozlewanie przesunięć po sąsiadach (z `shSkirtClear`).
+- Sprawdzone i odrzucone: dosadzanie brzegu powłoki na dół nogawki (`__noFlush`) i wygaszanie AO dołu – AO ubrań jest
+  wszędzie 1, a linia na goleni została (prawdopodobnie cień brzegu powłoki); rozlewanie wciskania spódnicy pod
+  warstwy wyżej; dokładanie kolumn kurtyny przy rozcięciu płaszcza (robiło osobny pasek ze szczeliną).
+- Nadal: rnd-7-47 – schodek w krawędzi rozpiętego długiego płaszcza na wysokości `lowerCut` (powłoka sięga dalej niż
+  kurtyna), w nim widać pasek spódnicy; ciemny „dołek” pod paskiem u kobiet (przód wyznacza płaski panel rozporka
+  wyrównany do przodu nogawek, ok. 4 cm przed brzuchem); palców w szerokich koszulach nie udało się odtworzyć.
